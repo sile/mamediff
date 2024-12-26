@@ -1,0 +1,9 @@
+[package]
+name = "mamediff"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+clap = { version = "4.5.23", features = ["derive"] }
+crossterm = { version = "0.28.1", features = ["serde"] }
+orfail = "1.1.0"
