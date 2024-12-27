@@ -39,29 +39,53 @@ impl Git {
 #[derive(Debug)]
 pub struct Diff {}
 
-#[derive(Debug)]
+// https://git-scm.com/docs/diff-format#generate_patch_text_with_p
+#[derive(Debug, Default)]
 pub struct FileDiff {
-    path: Option<PathBuf>,
+    path: PathBuf,
+    phase: FileDiffPhase,
 }
 
 impl FileDiff {
-    pub fn new() -> Self {
-        Self { path: None }
+    pub fn parse_line(&mut self, line: &str) -> orfail::Result<bool> {
+        match self.phase {
+            FileDiffPhase::DiffLine => {
+                let path = line["diff --git a/".len()..].split(' ').next().or_fail()?;
+                self.path = PathBuf::from(path);
+                self.phase = FileDiffPhase::IndexLine;
+            }
+            FileDiffPhase::IndexLine => todo!(),
+        }
+        Ok(true)
     }
-    // pub fn new(line: &str) -> orfail::Result<Self> {
-    //     let path = line["diff --git a/".len()..].split(' ').next().or_fail()?;
-    //     Ok(Self {
-    //         path: PathBuf::from(path),
-    //     })
-    // }
 }
 
+// diff --git a/src/main.rs b/src/main.rs
+// index ee157cb..90ebfea 100644
+// --- a/src/main.rs
+// +++ b/src/main.rs
+// @@ -1,4 +1,6 @@
+//  use clap::Parser;
+// +use mamediff::git::Git;
+// +use orfail::OrFail;
+//
+//  #[derive(Parser)]
+//  #[clap(version)]
+// @@ -6,5 +8,7 @@ struct Args {}
+//
+//  fn main() -> orfail::Result<()> {
+//      let _args = Args::parse();
+// +    let git = Git::new();
+// +    git.diff().or_fail()?;
+//      Ok(())
+//  }
+
 // TODO: rename
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub enum FileDiffPhase {
-    Diff,
-    Index { diff: FileDiff },
-    FromPath { diff: FileDiff },
+    #[default]
+    DiffLine,
+    IndexLine,
 }
 
 #[derive(Debug)]
@@ -76,46 +100,17 @@ impl<'a> DiffParser<'a> {
         Self {
             text,
             diffs: Vec::new(),
-            diff: FileDiff::new(),
+            diff: FileDiff::default(),
         }
     }
 
     fn parse(&mut self) -> orfail::Result<Diff> {
         for line in self.text.lines() {
-            // match &mut self.phase {
-            //     LinePhase::Diff => {
-            //         line.starts_with("diff --git a/").or_fail()?;
-            //         self.phase = LinePhase::Index {
-            //             diff: FileDiff::new(line).or_fail()?,
-            //         };
-            //     }
-            //     LinePhase::Index { diff } => {
-            //         diff.parse_index_line(line).or_fail()?;
-            //         self.phase = LinePhase::FromPath { diff };
-            //     }
-            //     LinePhase::FromPath { diff } => todo!(),
-            // }
+            if self.diff.parse_line(line).or_fail()? {
+                continue;
+            }
+            self.diffs.push(std::mem::take(&mut self.diff));
         }
         todo!()
     }
 }
-
-// diff --git a/src/main.rs b/src/main.rs
-// index ee157cb..90ebfea 100644
-// --- a/src/main.rs
-// +++ b/src/main.rs
-// @@ -1,4 +1,6 @@
-//  use clap::Parser;
-// +use mamediff::git::Git;
-// +use orfail::OrFail;
-
-//  #[derive(Parser)]
-//  #[clap(version)]
-// @@ -6,5 +8,7 @@ struct Args {}
-
-//  fn main() -> orfail::Result<()> {
-//      let _args = Args::parse();
-// +    let git = Git::new();
-// +    git.diff().or_fail()?;
-//      Ok(())
-//  }
