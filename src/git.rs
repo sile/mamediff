@@ -79,7 +79,84 @@ impl FromStr for Diff {
 }
 
 #[derive(Debug, Clone)]
-pub struct ChunkDiff {}
+pub enum LineDiff {
+    Old(String),
+    New(String),
+    Both(String),
+}
+
+impl FromStr for LineDiff {
+    type Err = orfail::Failure;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.chars().next() {
+            Some('-') => Ok(Self::Old(s[1..].to_owned())),
+            Some('+') => Ok(Self::New(s[1..].to_owned())),
+            Some(' ') => Ok(Self::Both(s[1..].to_owned())),
+            None => Ok(Self::Both(String::new())),
+            _ => Err(orfail::Failure::new(format!("Unexpected diff line: {s}"))),
+        }
+    }
+}
+
+impl std::fmt::Display for LineDiff {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            LineDiff::Old(s) => write!(f, "-{s}"),
+            LineDiff::New(s) => write!(f, "+{s}"),
+            LineDiff::Both(s) if s.is_empty() => write!(f, ""),
+            LineDiff::Both(s) => write!(f, " {s}"),
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct ChunkDiff {
+    pub old_start_line: NonZeroUsize,
+    pub new_start_line: NonZeroUsize,
+    pub lines: Vec<LineDiff>,
+}
+
+impl ChunkDiff {
+    pub fn parse(lines: &mut Lines) -> orfail::Result<Option<Self>> {
+        let Some(line) = lines.next() else {
+            return Ok(None);
+        };
+
+        dbg!(line);
+        line.starts_with("@@ -").or_fail()?;
+        line.ends_with(" @@").or_fail()?;
+
+        let line = &line["@@ -".len()..line.len() - 3];
+        let mut tokens = line.splitn(2, " +");
+        let old_range = LineRange::from_str(tokens.next().or_fail()?).or_fail()?;
+        let new_range = LineRange::from_str(tokens.next().or_fail()?).or_fail()?;
+
+        let mut old_remainings = old_range.count.get();
+        let mut new_remainings = new_range.count.get();
+
+        let mut line_diffs = Vec::new();
+        while old_remainings > 0 && new_remainings > 0 {
+            let line = lines.next().or_fail()?;
+            let diff = LineDiff::from_str(line).or_fail()?;
+            match &diff {
+                LineDiff::Old(_) => old_remainings = old_remainings.checked_sub(1).or_fail()?,
+                LineDiff::New(_) => new_remainings = new_remainings.checked_sub(1).or_fail()?,
+                LineDiff::Both(_) => {
+                    old_remainings = old_remainings.checked_sub(1).or_fail()?;
+                    new_remainings = new_remainings.checked_sub(1).or_fail()?;
+                }
+            }
+            line_diffs.push(diff);
+        }
+
+        Ok(Some(Self {
+            old_start_line: old_range.start,
+            new_start_line: new_range.start,
+            lines: line_diffs,
+        }))
+    }
+}
 
 #[derive(Debug, Clone)]
 pub enum FileDiff {
@@ -124,22 +201,26 @@ impl FileDiff {
         let line = lines.next().or_fail()?;
         line.starts_with("+++ b/").or_fail()?;
 
-        let line = lines.next().or_fail()?;
-        line.starts_with("@@ -").or_fail()?;
-        line.ends_with(" @@").or_fail()?;
+        let mut chunks = Vec::new();
+        while let Some(chunk) = ChunkDiff::parse(lines).or_fail()? {
+            chunks.push(chunk);
+        }
 
-        let line = &line["@@ -".len()..line.len() - 3];
-        let mut tokens = line.splitn(2, " +");
-        let old_range = LineRange::from_str(tokens.next().or_fail()?).or_fail()?;
-        let new_range = LineRange::from_str(tokens.next().or_fail()?).or_fail()?;
-        todo!()
+        Ok(Self::Chunks {
+            path,
+            old_hash: index.old_hash,
+            new_hash: index.new_hash,
+            old_mode: None,
+            new_mode: index.mode,
+            chunks,
+        })
     }
 }
 
 #[derive(Debug)]
 pub struct LineRange {
     pub start: NonZeroUsize,
-    pub end: NonZeroUsize,
+    pub count: NonZeroUsize,
 }
 
 impl FromStr for LineRange {
@@ -148,36 +229,16 @@ impl FromStr for LineRange {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let mut tokens = s.splitn(2, ',');
         let start = NonZeroUsize::from_str(tokens.next().or_fail()?).or_fail()?;
-        let end = NonZeroUsize::from_str(tokens.next().or_fail()?).or_fail()?;
-        Ok(Self { start, end })
+        let count = NonZeroUsize::from_str(tokens.next().or_fail()?).or_fail()?;
+        Ok(Self { start, count })
     }
 }
 
 impl std::fmt::Display for LineRange {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{},{}", self.start, self.end)
+        write!(f, "{},{}", self.start, self.count)
     }
 }
-
-// diff --git a/src/main.rs b/src/main.rs
-// index ee157cb..90ebfea 100644
-// --- a/src/main.rs
-// +++ b/src/main.rs
-// @@ -1,4 +1,6 @@
-//  use clap::Parser;
-// +use mamediff::git::Git;
-// +use orfail::OrFail;
-//
-//  #[derive(Parser)]
-//  #[clap(version)]
-// @@ -6,5 +8,7 @@ struct Args {}
-//
-//  fn main() -> orfail::Result<()> {
-//      let _args = Args::parse();
-// +    let git = Git::new();
-// +    git.diff().or_fail()?;
-//      Ok(())
-//  }
 
 // TODO: rename
 #[derive(Debug, Default)]
