@@ -93,7 +93,6 @@ impl FromStr for LineDiff {
             Some('-') => Ok(Self::Old(s[1..].to_owned())),
             Some('+') => Ok(Self::New(s[1..].to_owned())),
             Some(' ') => Ok(Self::Both(s[1..].to_owned())),
-            None => Ok(Self::Both(String::new())),
             _ => Err(orfail::Failure::new(format!("Unexpected diff line: {s}"))),
         }
     }
@@ -104,7 +103,6 @@ impl std::fmt::Display for LineDiff {
         match self {
             LineDiff::Old(s) => write!(f, "-{s}"),
             LineDiff::New(s) => write!(f, "+{s}"),
-            LineDiff::Both(s) if s.is_empty() => write!(f, ""),
             LineDiff::Both(s) => write!(f, " {s}"),
         }
     }
@@ -112,8 +110,9 @@ impl std::fmt::Display for LineDiff {
 
 #[derive(Debug, Clone)]
 pub struct ChunkDiff {
-    pub old_start_line: NonZeroUsize,
-    pub new_start_line: NonZeroUsize,
+    pub old_start_line_number: NonZeroUsize,
+    pub new_start_line_number: NonZeroUsize,
+    pub start_line: String,
     pub lines: Vec<LineDiff>,
 }
 
@@ -123,11 +122,11 @@ impl ChunkDiff {
             return Ok(None);
         };
 
-        dbg!(line);
         line.starts_with("@@ -").or_fail()?;
-        line.ends_with(" @@").or_fail()?;
+        let range_end = line.find(" @@ ").or_fail()?;
+        let start_line = line[range_end + " @@ ".len()..].to_owned();
 
-        let line = &line["@@ -".len()..line.len() - 3];
+        let line = &line["@@ -".len()..range_end];
         let mut tokens = line.splitn(2, " +");
         let old_range = LineRange::from_str(tokens.next().or_fail()?).or_fail()?;
         let new_range = LineRange::from_str(tokens.next().or_fail()?).or_fail()?;
@@ -151,8 +150,9 @@ impl ChunkDiff {
         }
 
         Ok(Some(Self {
-            old_start_line: old_range.start,
-            new_start_line: new_range.start,
+            old_start_line_number: old_range.start,
+            new_start_line_number: new_range.start,
+            start_line,
             lines: line_diffs,
         }))
     }
@@ -466,26 +466,19 @@ mod tests {
 
     #[test]
     fn chunks() -> orfail::Result<()> {
-        let text = r#"diff --git a/src/main.rs b/src/main.rs
-index ee157cb..90ebfea 100644
---- a/src/main.rs
-+++ b/src/main.rs
-@@ -1,4 +1,6 @@
- use clap::Parser;
-+use mamediff::git::Git;
-+use orfail::OrFail;
-
- #[derive(Parser)]
- #[clap(version)]
-@@ -6,5 +8,7 @@
- struct Args {}
-
- fn main() -> orfail::Result<()> {
-     let _args = Args::parse();
-+    let git = Git::new();
-+    git.diff().or_fail()?;
-     Ok(())
- }"#;
+        let text = r#"diff --git a/src/git.rs b/src/git.rs
+index e3bdb24..dd04db5 100644
+--- a/src/git.rs
++++ b/src/git.rs
+@@ -91,7 +91,7 @@ impl FromStr for LineDiff {
+     fn from_str(s: &str) -> Result<Self, Self::Err> {
+         match s.chars().next() {
+             Some('-') => Ok(Self::Old(s[1..].to_owned())),
+-            Some('+') => Ok(Self::New(s[1..].to_owned())),
++            Some('++') => Ok(Self::New(s[1..].to_owned())),
+             Some(' ') => Ok(Self::Both(s[1..].to_owned())),
+             _ => Err(orfail::Failure::new(format!("Unexpected diff line: {s}"))),
+         }"#;
 
         let diff = Diff::from_str(text).or_fail()?;
         assert_eq!(diff.file_diffs.len(), 1);
