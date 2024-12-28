@@ -1,4 +1,8 @@
-use std::{path::PathBuf, process::Command, str::FromStr};
+use std::{
+    path::PathBuf,
+    process::Command,
+    str::{FromStr, Lines},
+};
 
 use orfail::OrFail;
 
@@ -31,32 +35,52 @@ impl Git {
                     .unwrap_or_default()
             )
         })?;
-        let diff_text = String::from_utf8(output.stdout).or_fail()?;
-        DiffParser::new(&diff_text).parse().or_fail()
+        let text = String::from_utf8(output.stdout).or_fail()?;
+        let mut lines = text.lines();
+        let mut file_diffs = Vec::new();
+        while let Some(file_diff) = FileDiff::parse(&mut lines).or_fail()? {
+            file_diffs.push(file_diff);
+        }
+        Ok(Diff { file_diffs })
     }
 }
 
-#[derive(Debug)]
-pub struct Diff {}
+#[derive(Debug, Clone)]
+pub struct Diff {
+    pub file_diffs: Vec<FileDiff>,
+}
 
-// https://git-scm.com/docs/diff-format#generate_patch_text_with_p
-#[derive(Debug, Default)]
+#[derive(Debug, Clone)]
+pub struct ChunkDiff {}
+
+#[derive(Debug, Clone)]
 pub struct FileDiff {
     path: PathBuf,
-    phase: FileDiffPhase,
+    header: Vec<HeaderLine>,
+    chunks: Vec<ChunkDiff>,
 }
 
 impl FileDiff {
-    pub fn parse_line(&mut self, line: &str) -> orfail::Result<bool> {
-        match self.phase {
-            FileDiffPhase::DiffLine => {
-                let path = line["diff --git a/".len()..].split(' ').next().or_fail()?;
-                self.path = PathBuf::from(path);
-                self.phase = FileDiffPhase::IndexLine;
-            }
-            FileDiffPhase::IndexLine => todo!(),
-        }
-        Ok(true)
+    pub fn parse(lines: &mut Lines) -> orfail::Result<Option<Self>> {
+        // match self.phase {
+        //     FileDiffPhase::DiffHeader => {
+        //         let path = line["diff --git a/".len()..].split(' ').next().or_fail()?;
+        //         self.path = PathBuf::from(path);
+        //         self.phase = FileDiffPhase::ExtendedHeader;
+        //     }
+        //     FileDiffPhase::ExtendedHeader if !line.starts_with("--- ") => {
+        //         self.header
+        //             .push(ExtendedHeaderLine::from_str(line).or_fail()?);
+        //     }
+        //     FileDiffPhase::ExtendedHeader => {
+        //         self.phase = FileDiffPhase::Chunk;
+        //     }
+        //     FileDiffPhase::Chunk => {
+        //         todo!()
+        //     }
+        // }
+        // Ok(true)
+        todo!()
     }
 }
 
@@ -84,37 +108,12 @@ impl FileDiff {
 #[derive(Debug, Default)]
 pub enum FileDiffPhase {
     #[default]
-    DiffLine,
-    IndexLine,
+    DiffHeader,
+    ExtendedHeader,
+    Chunk,
 }
 
-#[derive(Debug)]
-pub struct DiffParser<'a> {
-    text: &'a str,
-    diffs: Vec<FileDiff>,
-    diff: FileDiff,
-}
-
-impl<'a> DiffParser<'a> {
-    fn new(text: &'a str) -> Self {
-        Self {
-            text,
-            diffs: Vec::new(),
-            diff: FileDiff::default(),
-        }
-    }
-
-    fn parse(&mut self) -> orfail::Result<Diff> {
-        for line in self.text.lines() {
-            if self.diff.parse_line(line).or_fail()? {
-                continue;
-            }
-            self.diffs.push(std::mem::take(&mut self.diff));
-        }
-        todo!()
-    }
-}
-
+// https://git-scm.com/docs/diff-format#generate_patch_text_with_p
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum HeaderLine {
     OldMode(u32),
