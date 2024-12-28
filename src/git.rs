@@ -482,6 +482,48 @@ index e3bdb24..dd04db5 100644
 
         let diff = Diff::from_str(text).or_fail()?;
         assert_eq!(diff.file_diffs.len(), 1);
+        assert!(matches!(diff.file_diffs[0], FileDiff::Chunks { .. }));
+
+        let text = r#"diff --git a/Cargo.toml b/C.toml
+similarity index 100%
+rename from Cargo.toml
+rename to C.toml
+diff --git a/Cargo.lock b/Cargo.lock
+old mode 100644
+new mode 100755
+diff --git a/README.md b/README.md
+deleted file mode 100644
+index 977a212..0000000
+--- a/README.md
++++ /dev/null
+@@ -1,2 +0,0 @@
+-mamediff
+-========
+diff --git a/foo b/foo
+new file mode 100644
+index 0000000..e69de29
+diff --git a/lib.rs b/lib.rs
+new file mode 100644
+index 0000000..c2bf1c3
+--- /dev/null
++++ b/lib.rs
+@@ -0,0 +1 @@
++pub mod git;"#;
+
+        let text = r#"diff --git a/Cargo.lock b/Cargo.lock
+old mode 100755
+new mode 100644
+index 1961029..12ecda3
+--- a/Cargo.lock
++++ b/Cargo.lock
+@@ -8,7 +8,6 @@ version = "0.6.18"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+ checksum = "8acc5369981196006228e28809f761875c0327210a891e941f4c683b3a99529b"
+ dependencies = [
+- "anstyle",
+  "anstyle-parse",
+  "anstyle-query",
+  "anstyle-wincon","#;
 
         Ok(())
     }
