@@ -1,4 +1,5 @@
 use std::{
+    num::NonZeroUsize,
     path::PathBuf,
     process::Command,
     str::{FromStr, Lines},
@@ -36,12 +37,26 @@ impl Git {
             )
         })?;
         let text = String::from_utf8(output.stdout).or_fail()?;
-        let mut lines = text.lines();
-        let mut file_diffs = Vec::new();
-        while let Some(file_diff) = FileDiff::parse(&mut lines).or_fail()? {
-            file_diffs.push(file_diff);
-        }
-        Ok(Diff { file_diffs })
+        Diff::from_str(&text).or_fail()
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct Mode(pub u32);
+
+impl FromStr for Mode {
+    type Err = orfail::Failure;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        (s.len() == 6).or_fail()?;
+        let mode = u32::from_str_radix(s, 8).or_fail()?;
+        Ok(Self(mode))
+    }
+}
+
+impl std::fmt::Display for Mode {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:06o}", self.0)
     }
 }
 
@@ -50,37 +65,97 @@ pub struct Diff {
     pub file_diffs: Vec<FileDiff>,
 }
 
+impl FromStr for Diff {
+    type Err = orfail::Failure;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let mut lines = s.lines();
+        let mut file_diffs = Vec::new();
+        while let Some(file_diff) = FileDiff::parse(&mut lines).or_fail()? {
+            file_diffs.push(file_diff);
+        }
+        Ok(Self { file_diffs })
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct ChunkDiff {}
 
 #[derive(Debug, Clone)]
-pub struct FileDiff {
-    path: PathBuf,
-    header: Vec<HeaderLine>,
-    chunks: Vec<ChunkDiff>,
+pub enum FileDiff {
+    // TODO: rename, copy, new, delete
+    Chunks {
+        path: PathBuf,
+        old_hash: String,
+        new_hash: String,
+        old_mode: Option<Mode>,
+        new_mode: Mode,
+        chunks: Vec<ChunkDiff>,
+    },
 }
 
 impl FileDiff {
     pub fn parse(lines: &mut Lines) -> orfail::Result<Option<Self>> {
-        // match self.phase {
-        //     FileDiffPhase::DiffHeader => {
-        //         let path = line["diff --git a/".len()..].split(' ').next().or_fail()?;
-        //         self.path = PathBuf::from(path);
-        //         self.phase = FileDiffPhase::ExtendedHeader;
-        //     }
-        //     FileDiffPhase::ExtendedHeader if !line.starts_with("--- ") => {
-        //         self.header
-        //             .push(ExtendedHeaderLine::from_str(line).or_fail()?);
-        //     }
-        //     FileDiffPhase::ExtendedHeader => {
-        //         self.phase = FileDiffPhase::Chunk;
-        //     }
-        //     FileDiffPhase::Chunk => {
-        //         todo!()
-        //     }
-        // }
-        // Ok(true)
+        let Some(line) = lines.next() else {
+            return Ok(None);
+        };
+
+        let path = line["diff --git a/".len()..].split(' ').next().or_fail()?;
+        let path = PathBuf::from(path);
+
+        let line = lines.next().or_fail()?;
+        let this = if line.starts_with("index ") {
+            let index = IndexHeaderLine::from_str(line).or_fail()?;
+            Self::parse_chunks(lines, path, index).or_fail()?
+        } else {
+            todo!()
+        };
+        Ok(Some(this))
+    }
+
+    fn parse_chunks(
+        lines: &mut Lines,
+        path: PathBuf,
+        index: IndexHeaderLine,
+    ) -> orfail::Result<Self> {
+        let line = lines.next().or_fail()?;
+        line.starts_with("--- a/").or_fail()?;
+
+        let line = lines.next().or_fail()?;
+        line.starts_with("+++ b/").or_fail()?;
+
+        let line = lines.next().or_fail()?;
+        line.starts_with("@@ -").or_fail()?;
+        line.ends_with(" @@").or_fail()?;
+
+        let line = &line["@@ -".len()..line.len() - 3];
+        let mut tokens = line.splitn(2, " +");
+        let old_range = LineRange::from_str(tokens.next().or_fail()?).or_fail()?;
+        let new_range = LineRange::from_str(tokens.next().or_fail()?).or_fail()?;
         todo!()
+    }
+}
+
+#[derive(Debug)]
+pub struct LineRange {
+    pub start: NonZeroUsize,
+    pub end: NonZeroUsize,
+}
+
+impl FromStr for LineRange {
+    type Err = orfail::Failure;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let mut tokens = s.splitn(2, ',');
+        let start = NonZeroUsize::from_str(tokens.next().or_fail()?).or_fail()?;
+        let end = NonZeroUsize::from_str(tokens.next().or_fail()?).or_fail()?;
+        Ok(Self { start, end })
+    }
+}
+
+impl std::fmt::Display for LineRange {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{},{}", self.start, self.end)
     }
 }
 
@@ -113,6 +188,44 @@ pub enum FileDiffPhase {
     Chunk,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct IndexHeaderLine {
+    pub old_hash: String,
+    pub new_hash: String,
+    pub mode: Mode,
+}
+
+impl FromStr for IndexHeaderLine {
+    type Err = orfail::Failure;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let s = &s["index ".len()..];
+
+        let mut tokens = s.splitn(2, ' ');
+        let hashes = tokens.next().or_fail()?;
+        let mode = Mode::from_str(tokens.next().or_fail()?).or_fail()?;
+
+        let mut tokens = hashes.splitn(2, "..");
+        let old_hash = tokens.next().or_fail()?.to_owned();
+        let new_hash = tokens.next().or_fail()?.to_owned();
+        Ok(Self {
+            old_hash,
+            new_hash,
+            mode,
+        })
+    }
+}
+
+impl std::fmt::Display for IndexHeaderLine {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "index {}..{} {}",
+            self.old_hash, self.new_hash, self.mode
+        )
+    }
+}
+
 // https://git-scm.com/docs/diff-format#generate_patch_text_with_p
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum HeaderLine {
@@ -126,7 +239,6 @@ pub enum HeaderLine {
     RenameTo(PathBuf),
     SimilarityIndex(u8),
     DissimilarityIndex(u8),
-    Index(String, String, u32),
 }
 
 impl FromStr for HeaderLine {
@@ -175,20 +287,6 @@ impl FromStr for HeaderLine {
                 .parse::<u8>()
                 .or_fail()?;
             Ok(Self::DissimilarityIndex(percentage))
-        } else if s.starts_with("index ") {
-            let s = &s["index ".len()..];
-
-            let mut tokens = s.splitn(2, ' ');
-            let hashes = tokens.next().or_fail()?;
-            let mode = tokens.next().or_fail()?;
-            (mode.len() == 6).or_fail()?;
-            let mode = u32::from_str_radix(mode, 8).or_fail()?;
-
-            let mut tokens = hashes.splitn(2, "..");
-            let before_hash = tokens.next().or_fail()?.to_owned();
-            let after_hash = tokens.next().or_fail()?.to_owned();
-
-            Ok(Self::Index(before_hash, after_hash, mode))
         } else {
             Err(orfail::Failure::new(format!(
                 "Unexpected diff header line: {s}"
@@ -229,9 +327,6 @@ impl std::fmt::Display for HeaderLine {
             }
             Self::DissimilarityIndex(percentage) => {
                 write!(f, "dissimilarity index {}%", percentage)
-            }
-            Self::Index(before_hash, after_hash, mode) => {
-                write!(f, "index {}..{} {:06o}", before_hash, after_hash, mode)
             }
         }
     }
@@ -294,12 +389,45 @@ mod tests {
         assert_eq!(v.to_string(), line);
 
         let line = "index a1b2c3d..4e5f6g7 100644";
-        let v = line.parse::<HeaderLine>().or_fail()?;
+        let v = IndexHeaderLine::from_str(line).or_fail()?;
         assert_eq!(
             v,
-            HeaderLine::Index("a1b2c3d".to_owned(), "4e5f6g7".to_owned(), 0o100644)
+            IndexHeaderLine {
+                old_hash: "a1b2c3d".to_owned(),
+                new_hash: "4e5f6g7".to_owned(),
+                mode: Mode(0o100644)
+            }
         );
         assert_eq!(v.to_string(), line);
+
+        Ok(())
+    }
+
+    #[test]
+    fn chunks() -> orfail::Result<()> {
+        let text = r#"diff --git a/src/main.rs b/src/main.rs
+index ee157cb..90ebfea 100644
+--- a/src/main.rs
++++ b/src/main.rs
+@@ -1,4 +1,6 @@
+ use clap::Parser;
++use mamediff::git::Git;
++use orfail::OrFail;
+
+ #[derive(Parser)]
+ #[clap(version)]
+@@ -6,5 +8,7 @@
+ struct Args {}
+
+ fn main() -> orfail::Result<()> {
+     let _args = Args::parse();
++    let git = Git::new();
++    git.diff().or_fail()?;
+     Ok(())
+ }"#;
+
+        let diff = Diff::from_str(text).or_fail()?;
+        assert_eq!(diff.file_diffs.len(), 1);
 
         Ok(())
     }
