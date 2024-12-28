@@ -525,6 +525,15 @@ index 1961029..12ecda3
   "anstyle-query",
   "anstyle-wincon","#;
 
+        let text = r#"diff --git a/ls b/ls
+new file mode 100755
+index 0000000..baec60b
+Binary files /dev/null and b/ls differ"#;
+
+        let text = r#"diff --git a/ls b/ls
+index baec60b..a53cdf4 100755
+Binary files a/ls and b/ls differ"#;
+
         Ok(())
     }
 }
