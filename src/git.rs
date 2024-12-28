@@ -160,7 +160,7 @@ impl ChunkDiff {
 
 #[derive(Debug, Clone)]
 pub enum FileDiff {
-    // TODO: rename, copy, new, delete
+    // TODO: rename,  new, delete
     Chunks {
         path: PathBuf,
         old_hash: String,
@@ -168,6 +168,13 @@ pub enum FileDiff {
         old_mode: Option<Mode>,
         new_mode: Mode,
         chunks: Vec<ChunkDiff>,
+    },
+    UpdateBinaryFile {
+        path: PathBuf,
+        old_hash: String,
+        new_hash: String,
+        old_mode: Option<Mode>,
+        new_mode: Mode,
     },
 }
 
@@ -183,19 +190,34 @@ impl FileDiff {
         let line = lines.next().or_fail()?;
         let this = if line.starts_with("index ") {
             let index = IndexHeaderLine::from_str(line).or_fail()?;
-            Self::parse_chunks(lines, path, index).or_fail()?
+            Self::parse_with_index(lines, path, index).or_fail()?
         } else {
             todo!()
         };
         Ok(Some(this))
     }
 
-    fn parse_chunks(
+    fn parse_with_index(
         lines: &mut Lines,
         path: PathBuf,
         index: IndexHeaderLine,
     ) -> orfail::Result<Self> {
         let line = lines.next().or_fail()?;
+        if line
+            == format!(
+                "Binary files a/{} and b/{} differ",
+                path.display(),
+                path.display()
+            )
+        {
+            return Ok(Self::UpdateBinaryFile {
+                path,
+                old_hash: index.old_hash,
+                new_hash: index.new_hash,
+                old_mode: None,
+                new_mode: index.mode,
+            });
+        }
         line.starts_with("--- a/").or_fail()?;
 
         let line = lines.next().or_fail()?;
@@ -533,6 +555,13 @@ Binary files /dev/null and b/ls differ"#;
         let text = r#"diff --git a/ls b/ls
 index baec60b..a53cdf4 100755
 Binary files a/ls and b/ls differ"#;
+
+        let diff = Diff::from_str(text).or_fail()?;
+        assert_eq!(diff.file_diffs.len(), 1);
+        assert!(matches!(
+            diff.file_diffs[0],
+            FileDiff::UpdateBinaryFile { .. }
+        ));
 
         Ok(())
     }
