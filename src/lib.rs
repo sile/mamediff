@@ -1,2 +1,2 @@
+pub mod diff;
 pub mod git;
-// TODO: diff module
