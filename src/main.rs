@@ -1,5 +1,5 @@
 use clap::Parser;
-use mamediff::{git::Git, terminal::Terminal};
+use mamediff::{app::App, git::Git, terminal::Terminal};
 use orfail::OrFail;
 
 #[derive(Parser)]
@@ -8,11 +8,7 @@ struct Args {}
 
 fn main() -> orfail::Result<()> {
     let _args = Args::parse();
-    let _terminal = Terminal::new();
-    let git = Git::new();
-    let _diff = git.diff().or_fail()?;
-
-    let _diff = git.diff_cached().or_fail()?;
-
+    let app = App::new().or_fail()?;
+    app.run().or_fail()?;
     Ok(())
 }
