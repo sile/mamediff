@@ -89,7 +89,7 @@ impl std::fmt::Display for Mode {
 
 #[derive(Debug, Clone)]
 pub struct Diff {
-    pub file_diffs: Vec<FileDiff>,
+    pub files: Vec<FileDiff>,
 }
 
 impl FromStr for Diff {
@@ -101,7 +101,7 @@ impl FromStr for Diff {
         while let Some(file_diff) = FileDiff::parse(&mut lines).or_fail()? {
             file_diffs.push(file_diff);
         }
-        Ok(Self { file_diffs })
+        Ok(Self { files: file_diffs })
     }
 }
 
@@ -723,8 +723,8 @@ index e3bdb24..dd04db5 100644
          }"#;
 
         let diff = Diff::from_str(text).or_fail()?;
-        assert_eq!(diff.file_diffs.len(), 1);
-        assert!(matches!(diff.file_diffs[0], FileDiff::Update { .. }));
+        assert_eq!(diff.files.len(), 1);
+        assert!(matches!(diff.files[0], FileDiff::Update { .. }));
 
         let text = r#"diff --git a/Cargo.toml b/C.toml
 similarity index 100%
@@ -753,12 +753,12 @@ index 0000000..c2bf1c3
 +pub mod git;"#;
 
         let diff = Diff::from_str(text).or_fail()?;
-        assert_eq!(diff.file_diffs.len(), 5);
-        assert!(matches!(diff.file_diffs[0], FileDiff::Rename { .. }));
-        assert!(matches!(diff.file_diffs[1], FileDiff::Chmod { .. }));
-        assert!(matches!(diff.file_diffs[2], FileDiff::Delete { .. }));
-        assert!(matches!(diff.file_diffs[3], FileDiff::New { .. }));
-        assert!(matches!(diff.file_diffs[4], FileDiff::New { .. }));
+        assert_eq!(diff.files.len(), 5);
+        assert!(matches!(diff.files[0], FileDiff::Rename { .. }));
+        assert!(matches!(diff.files[1], FileDiff::Chmod { .. }));
+        assert!(matches!(diff.files[2], FileDiff::Delete { .. }));
+        assert!(matches!(diff.files[3], FileDiff::New { .. }));
+        assert!(matches!(diff.files[4], FileDiff::New { .. }));
 
         let text = r#"diff --git a/Cargo.lock b/Cargo.lock
 old mode 100755
@@ -776,8 +776,8 @@ index 1961029..12ecda3
   "anstyle-wincon","#;
 
         let diff = Diff::from_str(text).or_fail()?;
-        assert_eq!(diff.file_diffs.len(), 1);
-        assert!(matches!(diff.file_diffs[0], FileDiff::Update { .. }));
+        assert_eq!(diff.files.len(), 1);
+        assert!(matches!(diff.files[0], FileDiff::Update { .. }));
 
         let text = r#"diff --git a/ls b/ls
 new file mode 100755
@@ -785,16 +785,16 @@ index 0000000..baec60b
 Binary files /dev/null and b/ls differ"#;
 
         let diff = Diff::from_str(text).or_fail()?;
-        assert_eq!(diff.file_diffs.len(), 1);
-        assert!(matches!(diff.file_diffs[0], FileDiff::New { .. }));
+        assert_eq!(diff.files.len(), 1);
+        assert!(matches!(diff.files[0], FileDiff::New { .. }));
 
         let text = r#"diff --git a/ls b/ls
 index baec60b..a53cdf4 100755
 Binary files a/ls and b/ls differ"#;
 
         let diff = Diff::from_str(text).or_fail()?;
-        assert_eq!(diff.file_diffs.len(), 1);
-        assert!(matches!(diff.file_diffs[0], FileDiff::Update { .. }));
+        assert_eq!(diff.files.len(), 1);
+        assert!(matches!(diff.files[0], FileDiff::Update { .. }));
 
         Ok(())
     }
