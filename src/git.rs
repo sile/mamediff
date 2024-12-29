@@ -322,6 +322,36 @@ pub enum FileDiffPhase {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct SimilarityIndexHeaderLine {
+    pub percentage: u8,
+}
+
+impl SimilarityIndexHeaderLine {
+    const PREFIX: &'static str = "similarity index ";
+}
+
+impl FromStr for SimilarityIndexHeaderLine {
+    type Err = orfail::Failure;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        s.starts_with(Self::PREFIX).or_fail()?;
+        s.ends_with('%').or_fail()?;
+        let s = &s[Self::PREFIX.len()..];
+        let percentage = s["similarity index ".len()..s.len() - 1]
+            .parse::<u8>()
+            .or_fail()?;
+        (percentage <= 100).or_fail()?;
+        Ok(Self { percentage })
+    }
+}
+
+impl std::fmt::Display for SimilarityIndexHeaderLine {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}{}%", Self::PREFIX, self.percentage)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct NewModeHeaderLine {
     pub mode: Mode,
 }
@@ -449,8 +479,6 @@ pub enum HeaderLine {
     CopyTo(PathBuf),
     RenameFrom(PathBuf),
     RenameTo(PathBuf),
-    SimilarityIndex(u8),
-    DissimilarityIndex(u8),
 }
 
 impl FromStr for HeaderLine {
@@ -474,16 +502,6 @@ impl FromStr for HeaderLine {
         } else if s.starts_with("rename to ") {
             let path = PathBuf::from(&s["rename to ".len()..]);
             Ok(Self::RenameTo(path))
-        } else if s.starts_with("similarity index ") && s.ends_with("%") {
-            let percentage = s["similarity index ".len()..s.len() - 1]
-                .parse::<u8>()
-                .or_fail()?;
-            Ok(Self::SimilarityIndex(percentage))
-        } else if s.starts_with("dissimilarity index ") && s.ends_with("%") {
-            let percentage = s["dissimilarity index ".len()..s.len() - 1]
-                .parse::<u8>()
-                .or_fail()?;
-            Ok(Self::DissimilarityIndex(percentage))
         } else {
             Err(orfail::Failure::new(format!(
                 "Unexpected diff header line: {s}"
@@ -509,12 +527,6 @@ impl std::fmt::Display for HeaderLine {
             }
             Self::RenameTo(path) => {
                 write!(f, "rename to {}", path.display())
-            }
-            Self::SimilarityIndex(percentage) => {
-                write!(f, "similarity index {}%", percentage)
-            }
-            Self::DissimilarityIndex(percentage) => {
-                write!(f, "dissimilarity index {}%", percentage)
             }
         }
     }
@@ -567,13 +579,8 @@ mod tests {
         assert_eq!(v.to_string(), line);
 
         let line = "similarity index 85%";
-        let v = line.parse::<HeaderLine>().or_fail()?;
-        assert_eq!(v, HeaderLine::SimilarityIndex(85));
-        assert_eq!(v.to_string(), line);
-
-        let line = "dissimilarity index 15%";
-        let v = line.parse::<HeaderLine>().or_fail()?;
-        assert_eq!(v, HeaderLine::DissimilarityIndex(15));
+        let v = SimilarityIndexHeaderLine::from_str(line).or_fail()?;
+        assert_eq!(v.percentage, 85);
         assert_eq!(v.to_string(), line);
 
         let line = "index a1b2c3d..4e5f6g7 100644";
