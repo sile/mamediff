@@ -1,0 +1,8 @@
+{
+  "execute": {
+    "command": "cargo",
+    "args": [
+      "run"
+    ]
+  }
+}
