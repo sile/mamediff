@@ -1,4 +1,9 @@
-use crossterm::terminal::{EnterAlternateScreen, LeaveAlternateScreen};
+use std::time::Duration;
+
+use crossterm::{
+    event::Event,
+    terminal::{EnterAlternateScreen, LeaveAlternateScreen},
+};
 use orfail::OrFail;
 
 #[derive(Debug)]
@@ -9,6 +14,12 @@ impl Terminal {
         crossterm::execute!(std::io::stdout(), EnterAlternateScreen).or_fail()?;
         crossterm::terminal::enable_raw_mode().or_fail()?;
         Ok(Self {})
+    }
+
+    pub fn next_event(&mut self) -> orfail::Result<Event> {
+        let timeout = Duration::from_secs(1);
+        while !crossterm::event::poll(timeout).or_fail()? {}
+        crossterm::event::read().or_fail()
     }
 }
 
