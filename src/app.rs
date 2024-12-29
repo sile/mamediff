@@ -43,7 +43,18 @@ impl App {
 
     fn render(&mut self) -> orfail::Result<()> {
         let mut canvas = Canvas::new();
-        canvas.draw_text(Text::new("Hello").or_fail()?);
+
+        canvas.draw_text(
+            Text::new(&format!("Unstaged changes ({})", self.unstaged_diff.len())).or_fail()?,
+        );
+        canvas.draw_newline();
+        canvas.draw_newline();
+
+        canvas.draw_text(
+            Text::new(&format!("Staged changes ({})", self.staged_diff.len())).or_fail()?,
+        );
+        canvas.draw_newline();
+
         self.terminal.render(canvas).or_fail()?;
         Ok(())
     }

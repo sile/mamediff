@@ -61,7 +61,12 @@ pub struct Terminal {
 
 impl Terminal {
     pub fn new() -> orfail::Result<Self> {
-        crossterm::execute!(std::io::stdout(), EnterAlternateScreen).or_fail()?;
+        crossterm::execute!(
+            std::io::stdout(),
+            EnterAlternateScreen,
+            crossterm::cursor::MoveTo(0, 0)
+        )
+        .or_fail()?;
         crossterm::terminal::enable_raw_mode().or_fail()?;
 
         let size = Size::current().or_fail()?;

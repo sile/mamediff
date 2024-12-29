@@ -30,6 +30,12 @@ pub struct Diff {
     pub files: Vec<FileDiff>,
 }
 
+impl Diff {
+    pub fn len(&self) -> usize {
+        self.files.len()
+    }
+}
+
 impl FromStr for Diff {
     type Err = orfail::Failure;
 
