@@ -90,7 +90,7 @@ impl App {
                 todo!()
             }
             KeyCode::Char('r') => {
-                todo!()
+                self.reload_diff().or_fail()?;
             }
             KeyCode::Char('u') => {
                 todo!()
@@ -118,6 +118,13 @@ impl App {
             }
             _ => {}
         }
+        Ok(())
+    }
+
+    fn reload_diff(&mut self) -> orfail::Result<()> {
+        self.unstaged_diff = self.git.diff().or_fail()?;
+        self.staged_diff = self.git.diff_cached().or_fail()?;
+        self.render().or_fail()?;
         Ok(())
     }
 }
