@@ -118,9 +118,13 @@ pub struct ChunkDiff {
 
 impl ChunkDiff {
     pub fn parse(lines: &mut Peekable<Lines>) -> orfail::Result<Option<Self>> {
-        let Some(line) = lines.next() else {
+        let Some(line) = lines.peek() else {
             return Ok(None);
         };
+        if line.starts_with("diff ") {
+            return Ok(None);
+        }
+        let line = lines.next().expect("infallible");
 
         line.starts_with("@@ -").or_fail()?;
 
@@ -137,21 +141,14 @@ impl ChunkDiff {
         let old_range = LineRange::from_str(tokens.next().or_fail()?).or_fail()?;
         let new_range = LineRange::from_str(tokens.next().or_fail()?).or_fail()?;
 
-        let mut old_remainings = old_range.count;
-        let mut new_remainings = new_range.count;
-
         let mut line_diffs = Vec::new();
-        while old_remainings > 0 && new_remainings > 0 {
+        while lines
+            .peek()
+            .and_then(|line| line.chars().next())
+            .is_some_and(|c| matches!(c, ' ' | '-' | '+'))
+        {
             let line = lines.next().or_fail()?;
             let diff = LineDiff::from_str(line).or_fail()?;
-            match &diff {
-                LineDiff::Old(_) => old_remainings = old_remainings.checked_sub(1).or_fail()?,
-                LineDiff::New(_) => new_remainings = new_remainings.checked_sub(1).or_fail()?,
-                LineDiff::Both(_) => {
-                    old_remainings = old_remainings.checked_sub(1).or_fail()?;
-                    new_remainings = new_remainings.checked_sub(1).or_fail()?;
-                }
-            }
             line_diffs.push(diff);
         }
 
@@ -168,10 +165,15 @@ impl ChunkDiff {
 pub enum ContentDiff {
     Text { chunks: Vec<ChunkDiff> },
     Binary { message: String },
+    Empty,
 }
 
 impl ContentDiff {
     pub fn parse(lines: &mut Peekable<Lines>) -> orfail::Result<Self> {
+        if lines.peek().map_or(true, |line| line.starts_with("diff ")) {
+            return Ok(Self::Empty);
+        }
+
         let line = lines.next().or_fail()?;
         if line.starts_with("Binary files ") {
             return Ok(Self::Binary {
@@ -195,15 +197,11 @@ impl ContentDiff {
 
 #[derive(Debug, Clone)]
 pub enum FileDiff {
-    Rename {
-        old_path: PathBuf,
-        new_path: PathBuf,
-        similarity_index: SimilarityIndexHeaderLine,
-    },
-    ChangeMode {
+    New {
         path: PathBuf,
-        old_mode: Mode,
-        new_mode: Mode,
+        hash: String,
+        mode: Mode,
+        content: ContentDiff,
     },
     Delete {
         path: PathBuf,
@@ -211,7 +209,7 @@ pub enum FileDiff {
         mode: Mode,
         content: ContentDiff,
     },
-    Chunks {
+    Update {
         path: PathBuf,
         old_hash: String,
         new_hash: String,
@@ -219,10 +217,15 @@ pub enum FileDiff {
         new_mode: Mode,
         content: ContentDiff,
     },
-    NewBinary {
+    Rename {
+        old_path: PathBuf,
+        new_path: PathBuf,
+        similarity_index: SimilarityIndexHeaderLine,
+    },
+    Chmod {
         path: PathBuf,
-        hash: String,
-        mode: Mode,
+        old_mode: Mode,
+        new_mode: Mode,
     },
 }
 
@@ -286,7 +289,7 @@ impl FileDiff {
         let new_mode = NewModeHeaderLine::from_str(line).or_fail()?;
 
         if lines.peek().is_some_and(|line| line.starts_with("diff")) {
-            return Ok(Self::ChangeMode {
+            return Ok(Self::Chmod {
                 path,
                 old_mode: old_mode.mode,
                 new_mode: new_mode.mode,
@@ -311,16 +314,13 @@ impl FileDiff {
         index.mode.is_none().or_fail()?;
         (index.old_hash == "0000000").or_fail()?;
 
-        let line = lines.next().or_fail()?;
-        if line == format!("Binary files /dev/null and b/{} differ", path.display()) {
-            return Ok(Self::NewBinary {
-                path,
-                hash: index.new_hash,
-                mode: new_file_mode.mode,
-            });
-        }
-
-        todo!()
+        let content = ContentDiff::parse(lines).or_fail()?;
+        Ok(Self::New {
+            path,
+            hash: index.new_hash,
+            mode: new_file_mode.mode,
+            content,
+        })
     }
 
     fn parse_with_deleted_file_mode(
@@ -349,7 +349,7 @@ impl FileDiff {
         old_mode: Option<Mode>,
     ) -> orfail::Result<Self> {
         let content = ContentDiff::parse(lines).or_fail()?;
-        Ok(Self::Chunks {
+        Ok(Self::Update {
             path,
             old_hash: index.old_hash,
             new_hash: index.new_hash,
@@ -363,7 +363,7 @@ impl FileDiff {
 #[derive(Debug)]
 pub struct LineRange {
     pub start: usize,
-    pub count: usize,
+    pub count: Option<usize>,
 }
 
 impl FromStr for LineRange {
@@ -372,14 +372,18 @@ impl FromStr for LineRange {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let mut tokens = s.splitn(2, ',');
         let start = usize::from_str(tokens.next().or_fail()?).or_fail()?;
-        let count = usize::from_str(tokens.next().or_fail()?).or_fail()?;
+        let count = tokens.next().map(usize::from_str).transpose().or_fail()?;
         Ok(Self { start, count })
     }
 }
 
 impl std::fmt::Display for LineRange {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{},{}", self.start, self.count)
+        if let Some(count) = self.count {
+            write!(f, "{},{}", self.start, count)
+        } else {
+            write!(f, "{}", self.start)
+        }
     }
 }
 
@@ -693,7 +697,7 @@ index e3bdb24..dd04db5 100644
 
         let diff = Diff::from_str(text).or_fail()?;
         assert_eq!(diff.file_diffs.len(), 1);
-        assert!(matches!(diff.file_diffs[0], FileDiff::Chunks { .. }));
+        assert!(matches!(diff.file_diffs[0], FileDiff::Update { .. }));
 
         let text = r#"diff --git a/Cargo.toml b/C.toml
 similarity index 100%
@@ -721,9 +725,13 @@ index 0000000..c2bf1c3
 @@ -0,0 +1 @@
 +pub mod git;"#;
 
-        // let diff = Diff::from_str(text).or_fail()?;
-        // assert_eq!(diff.file_diffs.len(), 1);
-        // assert!(matches!(diff.file_diffs[0], FileDiff::Chunks { .. }));
+        let diff = Diff::from_str(text).or_fail()?;
+        assert_eq!(diff.file_diffs.len(), 5);
+        assert!(matches!(diff.file_diffs[0], FileDiff::Rename { .. }));
+        assert!(matches!(diff.file_diffs[1], FileDiff::Chmod { .. }));
+        assert!(matches!(diff.file_diffs[2], FileDiff::Delete { .. }));
+        assert!(matches!(diff.file_diffs[3], FileDiff::New { .. }));
+        assert!(matches!(diff.file_diffs[4], FileDiff::New { .. }));
 
         let text = r#"diff --git a/Cargo.lock b/Cargo.lock
 old mode 100755
@@ -742,7 +750,7 @@ index 1961029..12ecda3
 
         let diff = Diff::from_str(text).or_fail()?;
         assert_eq!(diff.file_diffs.len(), 1);
-        assert!(matches!(diff.file_diffs[0], FileDiff::Chunks { .. }));
+        assert!(matches!(diff.file_diffs[0], FileDiff::Update { .. }));
 
         let text = r#"diff --git a/ls b/ls
 new file mode 100755
@@ -751,7 +759,7 @@ Binary files /dev/null and b/ls differ"#;
 
         let diff = Diff::from_str(text).or_fail()?;
         assert_eq!(diff.file_diffs.len(), 1);
-        assert!(matches!(diff.file_diffs[0], FileDiff::NewBinary { .. }));
+        assert!(matches!(diff.file_diffs[0], FileDiff::New { .. }));
 
         let text = r#"diff --git a/ls b/ls
 index baec60b..a53cdf4 100755
@@ -759,7 +767,7 @@ Binary files a/ls and b/ls differ"#;
 
         let diff = Diff::from_str(text).or_fail()?;
         assert_eq!(diff.file_diffs.len(), 1);
-        assert!(matches!(diff.file_diffs[0], FileDiff::Chunks { .. }));
+        assert!(matches!(diff.file_diffs[0], FileDiff::Update { .. }));
 
         Ok(())
     }
