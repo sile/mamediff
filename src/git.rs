@@ -195,14 +195,33 @@ impl FileDiff {
         let line = lines.next().or_fail()?;
         let this = if line.starts_with("index ") {
             let index = IndexHeaderLine::from_str(line).or_fail()?;
-            Self::parse_with_index(lines, path, index).or_fail()?
+            Self::parse_with_index(lines, path, index, None).or_fail()?
         } else if line.starts_with("new file mode ") {
             let new_file_mode = NewFileModeHeaderLine::from_str(line).or_fail()?;
             Self::parse_with_new_file_mode(lines, path, new_file_mode).or_fail()?
+        } else if line.starts_with("old mode ") {
+            let old_mode = OldModeHeaderLine::from_str(line).or_fail()?;
+            Self::parse_with_old_mode(lines, path, old_mode).or_fail()?
         } else {
             todo!()
         };
         Ok(Some(this))
+    }
+
+    fn parse_with_old_mode(
+        lines: &mut Lines,
+        path: PathBuf,
+        old_mode: OldModeHeaderLine,
+    ) -> orfail::Result<Self> {
+        let line = lines.next().or_fail()?;
+        let new_mode = NewModeHeaderLine::from_str(line).or_fail()?;
+
+        let line = lines.next().or_fail()?;
+        let mut index = IndexHeaderLine::from_str(line).or_fail()?;
+        index.mode.is_none().or_fail()?;
+        index.mode = Some(new_mode.mode);
+
+        Self::parse_with_index(lines, path, index, Some(old_mode.mode)).or_fail()
     }
 
     fn parse_with_new_file_mode(
@@ -231,6 +250,7 @@ impl FileDiff {
         lines: &mut Lines,
         path: PathBuf,
         index: IndexHeaderLine,
+        old_mode: Option<Mode>,
     ) -> orfail::Result<Self> {
         let line = lines.next().or_fail()?;
         if line
@@ -244,7 +264,7 @@ impl FileDiff {
                 path,
                 old_hash: index.old_hash,
                 new_hash: index.new_hash,
-                old_mode: None,
+                old_mode,
                 new_mode: index.mode.or_fail()?,
             });
         }
@@ -262,7 +282,7 @@ impl FileDiff {
             path,
             old_hash: index.old_hash,
             new_hash: index.new_hash,
-            old_mode: None,
+            old_mode,
             new_mode: index.mode.or_fail()?,
             chunks,
         })
@@ -299,6 +319,50 @@ pub enum FileDiffPhase {
     DiffHeader,
     ExtendedHeader,
     Chunk,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct NewModeHeaderLine {
+    pub mode: Mode,
+}
+
+impl FromStr for NewModeHeaderLine {
+    type Err = orfail::Failure;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        s.starts_with("new mode ").or_fail()?;
+        let s = &s["new mode ".len()..];
+        let mode = Mode::from_str(s).or_fail()?;
+        Ok(Self { mode })
+    }
+}
+
+impl std::fmt::Display for NewModeHeaderLine {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "new mode {}", self.mode)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct OldModeHeaderLine {
+    pub mode: Mode,
+}
+
+impl FromStr for OldModeHeaderLine {
+    type Err = orfail::Failure;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        s.starts_with("old mode ").or_fail()?;
+        let s = &s["old mode ".len()..];
+        let mode = Mode::from_str(s).or_fail()?;
+        Ok(Self { mode })
+    }
+}
+
+impl std::fmt::Display for OldModeHeaderLine {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "old mode {}", self.mode)
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -585,6 +649,10 @@ index 1961029..12ecda3
   "anstyle-parse",
   "anstyle-query",
   "anstyle-wincon","#;
+
+        let diff = Diff::from_str(text).or_fail()?;
+        assert_eq!(diff.file_diffs.len(), 1);
+        assert!(matches!(diff.file_diffs[0], FileDiff::Chunks { .. }));
 
         let text = r#"diff --git a/ls b/ls
 new file mode 100755
