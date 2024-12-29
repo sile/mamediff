@@ -100,6 +100,12 @@ impl Terminal {
         )
         .or_fail()?;
 
+        // crossterm::queue!(
+        //     writer,
+        //     crossterm::style::SetAttribute(crossterm::style::Attribute::Reverse)
+        // )
+        // .or_fail()?;
+
         for (row_i, row) in canvas.rows.into_iter().enumerate() {
             crossterm::queue!(writer, crossterm::cursor::MoveTo(0, row_i as u16)).or_fail()?;
 

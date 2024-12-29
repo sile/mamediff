@@ -4,7 +4,7 @@ use orfail::OrFail;
 use crate::{
     diff::Diff,
     git::Git,
-    terminal::{Canvas, Position, Terminal, Text},
+    terminal::{Canvas, Terminal, Text},
 };
 
 #[derive(Debug)]
@@ -12,32 +12,24 @@ pub struct App {
     terminal: Terminal,
     exit: bool,
     git: Git,
-    unstaged_diff: Diff,
-    staged_diff: Diff,
-    cursor: Position,
-    row_offset: usize,
+    widgets: Vec<DiffWidget>,
 }
 
 impl App {
     pub fn new() -> orfail::Result<Self> {
         let git = Git::new();
-        let unstaged_diff = git.diff().or_fail()?;
-        let staged_diff = git.diff_cached().or_fail()?;
-
         let terminal = Terminal::new().or_fail()?;
         Ok(Self {
             terminal,
             exit: false,
             git,
-            unstaged_diff,
-            staged_diff,
-            cursor: Position::default(),
-            row_offset: 0,
+            widgets: vec![DiffWidget::new(false), DiffWidget::new(true)],
         })
     }
 
     pub fn run(mut self) -> orfail::Result<()> {
-        self.render().or_fail()?;
+        self.reload_diff().or_fail()?;
+
         while !self.exit {
             let event = self.terminal.next_event().or_fail()?;
             self.handle_event(event).or_fail()?;
@@ -47,18 +39,10 @@ impl App {
 
     fn render(&mut self) -> orfail::Result<()> {
         let mut canvas = Canvas::new();
-
-        canvas.draw_text(
-            Text::new(&format!("Unstaged changes ({})", self.unstaged_diff.len())).or_fail()?,
-        );
-        canvas.draw_newline();
-        canvas.draw_newline();
-
-        canvas.draw_text(
-            Text::new(&format!("Staged changes ({})", self.staged_diff.len())).or_fail()?,
-        );
-        canvas.draw_newline();
-
+        for widget in &mut self.widgets {
+            widget.render(&mut canvas).or_fail()?;
+            canvas.draw_newline();
+        }
         self.terminal.render(canvas).or_fail()?;
         Ok(())
     }
@@ -122,9 +106,47 @@ impl App {
     }
 
     fn reload_diff(&mut self) -> orfail::Result<()> {
-        self.unstaged_diff = self.git.diff().or_fail()?;
-        self.staged_diff = self.git.diff_cached().or_fail()?;
+        for widget in &mut self.widgets {
+            widget.reload(&self.git).or_fail()?;
+        }
         self.render().or_fail()?;
+        Ok(())
+    }
+}
+
+#[derive(Debug)]
+pub struct DiffWidget {
+    staged: bool,
+    diff: Diff,
+}
+
+impl DiffWidget {
+    pub fn new(staged: bool) -> Self {
+        Self {
+            staged,
+            diff: Diff::default(),
+        }
+    }
+
+    pub fn reload(&mut self, git: &Git) -> orfail::Result<()> {
+        self.diff = if self.staged {
+            git.diff_cached().or_fail()?
+        } else {
+            git.diff().or_fail()?
+        };
+        Ok(())
+    }
+
+    pub fn render(&self, canvas: &mut Canvas) -> orfail::Result<()> {
+        canvas.draw_text(
+            Text::new(&format!(
+                " {} changes ({})",
+                if self.staged { "Staged" } else { "Unstaged" },
+                self.diff.len()
+            ))
+            .or_fail()?,
+        );
+        canvas.draw_newline();
         Ok(())
     }
 }

@@ -25,7 +25,7 @@ impl std::fmt::Display for Mode {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Default, Clone)]
 pub struct Diff {
     pub files: Vec<FileDiff>,
 }
