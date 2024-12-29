@@ -193,13 +193,13 @@ impl FileDiff {
         let path = PathBuf::from(path);
 
         let line = lines.next().or_fail()?;
-        let this = if line.starts_with("index ") {
+        let this = if line.starts_with(IndexHeaderLine::PREFIX) {
             let index = IndexHeaderLine::from_str(line).or_fail()?;
             Self::parse_with_index(lines, path, index, None).or_fail()?
-        } else if line.starts_with("new file mode ") {
+        } else if line.starts_with(NewFileModeHeaderLine::PREFIX) {
             let new_file_mode = NewFileModeHeaderLine::from_str(line).or_fail()?;
             Self::parse_with_new_file_mode(lines, path, new_file_mode).or_fail()?
-        } else if line.starts_with("old mode ") {
+        } else if line.starts_with(OldModeHeaderLine::PREFIX) {
             let old_mode = OldModeHeaderLine::from_str(line).or_fail()?;
             Self::parse_with_old_mode(lines, path, old_mode).or_fail()?
         } else {
@@ -326,12 +326,16 @@ pub struct NewModeHeaderLine {
     pub mode: Mode,
 }
 
+impl NewModeHeaderLine {
+    const PREFIX: &'static str = "new mode ";
+}
+
 impl FromStr for NewModeHeaderLine {
     type Err = orfail::Failure;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        s.starts_with("new mode ").or_fail()?;
-        let s = &s["new mode ".len()..];
+        s.starts_with(Self::PREFIX).or_fail()?;
+        let s = &s[Self::PREFIX.len()..];
         let mode = Mode::from_str(s).or_fail()?;
         Ok(Self { mode })
     }
@@ -339,7 +343,7 @@ impl FromStr for NewModeHeaderLine {
 
 impl std::fmt::Display for NewModeHeaderLine {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "new mode {}", self.mode)
+        write!(f, "{}{}", Self::PREFIX, self.mode)
     }
 }
 
@@ -348,12 +352,16 @@ pub struct OldModeHeaderLine {
     pub mode: Mode,
 }
 
+impl OldModeHeaderLine {
+    const PREFIX: &'static str = "old mode ";
+}
+
 impl FromStr for OldModeHeaderLine {
     type Err = orfail::Failure;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        s.starts_with("old mode ").or_fail()?;
-        let s = &s["old mode ".len()..];
+        s.starts_with(Self::PREFIX).or_fail()?;
+        let s = &s[Self::PREFIX.len()..];
         let mode = Mode::from_str(s).or_fail()?;
         Ok(Self { mode })
     }
@@ -361,7 +369,7 @@ impl FromStr for OldModeHeaderLine {
 
 impl std::fmt::Display for OldModeHeaderLine {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "old mode {}", self.mode)
+        write!(f, "{}{}", Self::PREFIX, self.mode)
     }
 }
 
@@ -370,12 +378,16 @@ pub struct NewFileModeHeaderLine {
     pub mode: Mode,
 }
 
+impl NewFileModeHeaderLine {
+    const PREFIX: &'static str = "new file mode ";
+}
+
 impl FromStr for NewFileModeHeaderLine {
     type Err = orfail::Failure;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        s.starts_with("new file mode ").or_fail()?;
-        let s = &s["new file mode ".len()..];
+        s.starts_with(Self::PREFIX).or_fail()?;
+        let s = &s[Self::PREFIX.len()..];
         let mode = Mode::from_str(s).or_fail()?;
         Ok(Self { mode })
     }
@@ -383,7 +395,7 @@ impl FromStr for NewFileModeHeaderLine {
 
 impl std::fmt::Display for NewFileModeHeaderLine {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "new file mode {}", self.mode)
+        write!(f, "{}{}", Self::PREFIX, self.mode)
     }
 }
 
@@ -394,12 +406,16 @@ pub struct IndexHeaderLine {
     pub mode: Option<Mode>,
 }
 
+impl IndexHeaderLine {
+    const PREFIX: &'static str = "index ";
+}
+
 impl FromStr for IndexHeaderLine {
     type Err = orfail::Failure;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        s.starts_with("index ").or_fail()?;
-        let s = &s["index ".len()..];
+        s.starts_with(Self::PREFIX).or_fail()?;
+        let s = &s[Self::PREFIX.len()..];
 
         let mut tokens = s.splitn(2, ' ');
         let hashes = tokens.next().or_fail()?;
@@ -418,7 +434,7 @@ impl FromStr for IndexHeaderLine {
 
 impl std::fmt::Display for IndexHeaderLine {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "index {}..{}", self.old_hash, self.new_hash)?;
+        write!(f, "{}{}..{}", Self::PREFIX, self.old_hash, self.new_hash)?;
         if let Some(mode) = self.mode {
             write!(f, " {mode}")?;
         }
@@ -426,11 +442,8 @@ impl std::fmt::Display for IndexHeaderLine {
     }
 }
 
-// https://git-scm.com/docs/diff-format#generate_patch_text_with_p
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum HeaderLine {
-    OldMode(u32),
-    NewMode(u32),
     DeleteFileMode(u32),
     CopyFrom(PathBuf),
     CopyTo(PathBuf),
@@ -444,17 +457,7 @@ impl FromStr for HeaderLine {
     type Err = orfail::Failure;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        if s.starts_with("old mode ") {
-            let mode = &s["old mode ".len()..];
-            (mode.len() == 6).or_fail()?;
-            let mode = u32::from_str_radix(mode, 8).or_fail()?;
-            Ok(Self::OldMode(mode))
-        } else if s.starts_with("new mode ") {
-            let mode = &s["new mode ".len()..];
-            (mode.len() == 6).or_fail()?;
-            let mode = u32::from_str_radix(mode, 8).or_fail()?;
-            Ok(Self::NewMode(mode))
-        } else if s.starts_with("delete file mode ") {
+        if s.starts_with("delete file mode ") {
             let mode = &s["delete file mode ".len()..];
             (mode.len() == 6).or_fail()?;
             let mode = u32::from_str_radix(mode, 8).or_fail()?;
@@ -492,12 +495,6 @@ impl FromStr for HeaderLine {
 impl std::fmt::Display for HeaderLine {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::OldMode(mode) => {
-                write!(f, "old mode {:06o}", mode)
-            }
-            Self::NewMode(mode) => {
-                write!(f, "new mode {:06o}", mode)
-            }
             Self::DeleteFileMode(mode) => {
                 write!(f, "delete file mode {:06o}", mode)
             }
@@ -530,13 +527,13 @@ mod tests {
     #[test]
     fn parse_header_line() -> orfail::Result<()> {
         let line = "old mode 100644";
-        let v = line.parse::<HeaderLine>().or_fail()?;
-        assert_eq!(v, HeaderLine::OldMode(0o100644));
+        let v = OldModeHeaderLine::from_str(line).or_fail()?;
+        assert_eq!(v.mode.0, 0o100644);
         assert_eq!(v.to_string(), line);
 
         let line = "new mode 100755";
-        let v = line.parse::<HeaderLine>().or_fail()?;
-        assert_eq!(v, HeaderLine::NewMode(0o100755));
+        let v = NewModeHeaderLine::from_str(line).or_fail()?;
+        assert_eq!(v.mode.0, 0o100755);
         assert_eq!(v.to_string(), line);
 
         let line = "delete file mode 100644";
@@ -584,6 +581,13 @@ mod tests {
         assert_eq!(v.old_hash, "a1b2c3d");
         assert_eq!(v.new_hash, "4e5f6g7");
         assert_eq!(v.mode, Some(Mode(0o100644)));
+        assert_eq!(v.to_string(), line);
+
+        let line = "index a1b2c3d..4e5f6g7";
+        let v = IndexHeaderLine::from_str(line).or_fail()?;
+        assert_eq!(v.old_hash, "a1b2c3d");
+        assert_eq!(v.new_hash, "4e5f6g7");
+        assert_eq!(v.mode, None);
         assert_eq!(v.to_string(), line);
 
         Ok(())
@@ -634,6 +638,10 @@ index 0000000..c2bf1c3
 +++ b/lib.rs
 @@ -0,0 +1 @@
 +pub mod git;"#;
+
+        let diff = Diff::from_str(text).or_fail()?;
+        assert_eq!(diff.file_diffs.len(), 1);
+        assert!(matches!(diff.file_diffs[0], FileDiff::Chunks { .. }));
 
         let text = r#"diff --git a/Cargo.lock b/Cargo.lock
 old mode 100755
