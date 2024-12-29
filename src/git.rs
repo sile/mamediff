@@ -169,6 +169,11 @@ pub enum FileDiff {
         new_mode: Mode,
         chunks: Vec<ChunkDiff>,
     },
+    Rename {
+        old_path: PathBuf,
+        new_path: PathBuf,
+        similarity_index: SimilarityIndexHeaderLine,
+    },
     NewBinaryFile {
         path: PathBuf,
         hash: String,
@@ -202,10 +207,31 @@ impl FileDiff {
         } else if line.starts_with(OldModeHeaderLine::PREFIX) {
             let old_mode = OldModeHeaderLine::from_str(line).or_fail()?;
             Self::parse_with_old_mode(lines, path, old_mode).or_fail()?
+        } else if line.starts_with(SimilarityIndexHeaderLine::PREFIX) {
+            let similarity_index = SimilarityIndexHeaderLine::from_str(line).or_fail()?;
+            Self::parse_with_similarity_index(lines, path, similarity_index).or_fail()?
         } else {
             todo!()
         };
         Ok(Some(this))
+    }
+
+    fn parse_with_similarity_index(
+        lines: &mut Lines,
+        _path: PathBuf,
+        similarity_index: SimilarityIndexHeaderLine,
+    ) -> orfail::Result<Self> {
+        let line = lines.next().or_fail()?;
+        let rename_from = RenameFromHeaderLine::from_str(line).or_fail()?;
+
+        let line = lines.next().or_fail()?;
+        let rename_to = RenameToHeaderLine::from_str(line).or_fail()?;
+
+        Ok(Self::Rename {
+            old_path: rename_from.path,
+            new_path: rename_to.path,
+            similarity_index,
+        })
     }
 
     fn parse_with_old_mode(
@@ -336,10 +362,8 @@ impl FromStr for SimilarityIndexHeaderLine {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         s.starts_with(Self::PREFIX).or_fail()?;
         s.ends_with('%').or_fail()?;
-        let s = &s[Self::PREFIX.len()..];
-        let percentage = s["similarity index ".len()..s.len() - 1]
-            .parse::<u8>()
-            .or_fail()?;
+        let s = &s[Self::PREFIX.len()..s.len() - 1];
+        let percentage = s.parse::<u8>().or_fail()?;
         (percentage <= 100).or_fail()?;
         Ok(Self { percentage })
     }
@@ -348,6 +372,56 @@ impl FromStr for SimilarityIndexHeaderLine {
 impl std::fmt::Display for SimilarityIndexHeaderLine {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}{}%", Self::PREFIX, self.percentage)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct RenameFromHeaderLine {
+    pub path: PathBuf,
+}
+
+impl RenameFromHeaderLine {
+    const PREFIX: &'static str = "rename from ";
+}
+
+impl FromStr for RenameFromHeaderLine {
+    type Err = orfail::Failure;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        s.starts_with(Self::PREFIX).or_fail()?;
+        let path = PathBuf::from(&s[Self::PREFIX.len()..]);
+        Ok(Self { path })
+    }
+}
+
+impl std::fmt::Display for RenameFromHeaderLine {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}{}", Self::PREFIX, self.path.display())
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct RenameToHeaderLine {
+    pub path: PathBuf,
+}
+
+impl RenameToHeaderLine {
+    const PREFIX: &'static str = "rename to ";
+}
+
+impl FromStr for RenameToHeaderLine {
+    type Err = orfail::Failure;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        s.starts_with(Self::PREFIX).or_fail()?;
+        let path = PathBuf::from(&s[Self::PREFIX.len()..]);
+        Ok(Self { path })
+    }
+}
+
+impl std::fmt::Display for RenameToHeaderLine {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}{}", Self::PREFIX, self.path.display())
     }
 }
 
@@ -477,8 +551,6 @@ pub enum HeaderLine {
     DeleteFileMode(u32),
     CopyFrom(PathBuf),
     CopyTo(PathBuf),
-    RenameFrom(PathBuf),
-    RenameTo(PathBuf),
 }
 
 impl FromStr for HeaderLine {
@@ -496,12 +568,6 @@ impl FromStr for HeaderLine {
         } else if s.starts_with("copy to ") {
             let path = PathBuf::from(&s["copy to ".len()..]);
             Ok(Self::CopyTo(path))
-        } else if s.starts_with("rename from ") {
-            let path = PathBuf::from(&s["rename from ".len()..]);
-            Ok(Self::RenameFrom(path))
-        } else if s.starts_with("rename to ") {
-            let path = PathBuf::from(&s["rename to ".len()..]);
-            Ok(Self::RenameTo(path))
         } else {
             Err(orfail::Failure::new(format!(
                 "Unexpected diff header line: {s}"
@@ -521,12 +587,6 @@ impl std::fmt::Display for HeaderLine {
             }
             Self::CopyTo(path) => {
                 write!(f, "copy to {}", path.display())
-            }
-            Self::RenameFrom(path) => {
-                write!(f, "rename from {}", path.display())
-            }
-            Self::RenameTo(path) => {
-                write!(f, "rename to {}", path.display())
             }
         }
     }
@@ -569,13 +629,13 @@ mod tests {
         assert_eq!(v.to_string(), line);
 
         let line = "rename from old_name.txt";
-        let v = line.parse::<HeaderLine>().or_fail()?;
-        assert_eq!(v, HeaderLine::RenameFrom(PathBuf::from("old_name.txt")));
+        let v = RenameFromHeaderLine::from_str(line).or_fail()?;
+        assert_eq!(v.path, PathBuf::from("old_name.txt"));
         assert_eq!(v.to_string(), line);
 
         let line = "rename to new_name.txt";
-        let v = line.parse::<HeaderLine>().or_fail()?;
-        assert_eq!(v, HeaderLine::RenameTo(PathBuf::from("new_name.txt")));
+        let v = RenameToHeaderLine::from_str(line).or_fail()?;
+        assert_eq!(v.path, PathBuf::from("new_name.txt"));
         assert_eq!(v.to_string(), line);
 
         let line = "similarity index 85%";
