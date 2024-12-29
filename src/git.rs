@@ -1,4 +1,5 @@
 use std::{
+    iter::Peekable,
     num::NonZeroUsize,
     path::PathBuf,
     process::Command,
@@ -69,7 +70,7 @@ impl FromStr for Diff {
     type Err = orfail::Failure;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let mut lines = s.lines();
+        let mut lines = s.lines().peekable();
         let mut file_diffs = Vec::new();
         while let Some(file_diff) = FileDiff::parse(&mut lines).or_fail()? {
             file_diffs.push(file_diff);
@@ -117,7 +118,7 @@ pub struct ChunkDiff {
 }
 
 impl ChunkDiff {
-    pub fn parse(lines: &mut Lines) -> orfail::Result<Option<Self>> {
+    pub fn parse(lines: &mut Peekable<Lines>) -> orfail::Result<Option<Self>> {
         let Some(line) = lines.next() else {
             return Ok(None);
         };
@@ -174,12 +175,17 @@ pub enum FileDiff {
         new_path: PathBuf,
         similarity_index: SimilarityIndexHeaderLine,
     },
-    NewBinaryFile {
+    ChangeMode {
+        path: PathBuf,
+        old_mode: Mode,
+        new_mode: Mode,
+    },
+    NewBinary {
         path: PathBuf,
         hash: String,
         mode: Mode,
     },
-    UpdateBinaryFile {
+    UpdateBinary {
         path: PathBuf,
         old_hash: String,
         new_hash: String,
@@ -189,7 +195,7 @@ pub enum FileDiff {
 }
 
 impl FileDiff {
-    pub fn parse(lines: &mut Lines) -> orfail::Result<Option<Self>> {
+    pub fn parse(lines: &mut Peekable<Lines>) -> orfail::Result<Option<Self>> {
         let Some(line) = lines.next() else {
             return Ok(None);
         };
@@ -217,7 +223,7 @@ impl FileDiff {
     }
 
     fn parse_with_similarity_index(
-        lines: &mut Lines,
+        lines: &mut Peekable<Lines>,
         _path: PathBuf,
         similarity_index: SimilarityIndexHeaderLine,
     ) -> orfail::Result<Self> {
@@ -235,12 +241,20 @@ impl FileDiff {
     }
 
     fn parse_with_old_mode(
-        lines: &mut Lines,
+        lines: &mut Peekable<Lines>,
         path: PathBuf,
         old_mode: OldModeHeaderLine,
     ) -> orfail::Result<Self> {
         let line = lines.next().or_fail()?;
         let new_mode = NewModeHeaderLine::from_str(line).or_fail()?;
+
+        if lines.peek().is_some_and(|line| line.starts_with("diff")) {
+            return Ok(Self::ChangeMode {
+                path,
+                old_mode: old_mode.mode,
+                new_mode: new_mode.mode,
+            });
+        }
 
         let line = lines.next().or_fail()?;
         let mut index = IndexHeaderLine::from_str(line).or_fail()?;
@@ -251,7 +265,7 @@ impl FileDiff {
     }
 
     fn parse_with_new_file_mode(
-        lines: &mut Lines,
+        lines: &mut Peekable<Lines>,
         path: PathBuf,
         new_file_mode: NewFileModeHeaderLine,
     ) -> orfail::Result<Self> {
@@ -262,7 +276,7 @@ impl FileDiff {
 
         let line = lines.next().or_fail()?;
         if line == format!("Binary files /dev/null and b/{} differ", path.display()) {
-            return Ok(Self::NewBinaryFile {
+            return Ok(Self::NewBinary {
                 path,
                 hash: index.new_hash,
                 mode: new_file_mode.mode,
@@ -273,7 +287,7 @@ impl FileDiff {
     }
 
     fn parse_with_index(
-        lines: &mut Lines,
+        lines: &mut Peekable<Lines>,
         path: PathBuf,
         index: IndexHeaderLine,
         old_mode: Option<Mode>,
@@ -286,7 +300,7 @@ impl FileDiff {
                 path.display()
             )
         {
-            return Ok(Self::UpdateBinaryFile {
+            return Ok(Self::UpdateBinary {
                 path,
                 old_hash: index.old_hash,
                 new_hash: index.new_hash,
@@ -736,7 +750,7 @@ Binary files /dev/null and b/ls differ"#;
 
         let diff = Diff::from_str(text).or_fail()?;
         assert_eq!(diff.file_diffs.len(), 1);
-        assert!(matches!(diff.file_diffs[0], FileDiff::NewBinaryFile { .. }));
+        assert!(matches!(diff.file_diffs[0], FileDiff::NewBinary { .. }));
 
         let text = r#"diff --git a/ls b/ls
 index baec60b..a53cdf4 100755
@@ -744,10 +758,7 @@ Binary files a/ls and b/ls differ"#;
 
         let diff = Diff::from_str(text).or_fail()?;
         assert_eq!(diff.file_diffs.len(), 1);
-        assert!(matches!(
-            diff.file_diffs[0],
-            FileDiff::UpdateBinaryFile { .. }
-        ));
+        assert!(matches!(diff.file_diffs[0], FileDiff::UpdateBinary { .. }));
 
         Ok(())
     }
