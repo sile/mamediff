@@ -9,7 +9,11 @@ struct Args {}
 fn main() -> orfail::Result<()> {
     let _args = Args::parse();
     let git = Git::new();
-    git.diff().or_fail()?;
+    let diff = git.diff().or_fail()?;
+    dbg!(diff);
+
+    let diff = git.diff_staged().or_fail()?;
+    dbg!(diff);
 
     Ok(())
 }
