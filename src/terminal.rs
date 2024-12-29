@@ -137,7 +137,7 @@ impl Size {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 pub struct Position {
     pub row: usize,
     pub col: usize,

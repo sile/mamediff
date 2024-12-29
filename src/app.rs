@@ -1,10 +1,10 @@
-use crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind};
+use crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use orfail::OrFail;
 
 use crate::{
     diff::Diff,
     git::Git,
-    terminal::{Canvas, Terminal, Text},
+    terminal::{Canvas, Position, Terminal, Text},
 };
 
 #[derive(Debug)]
@@ -14,6 +14,8 @@ pub struct App {
     git: Git,
     unstaged_diff: Diff,
     staged_diff: Diff,
+    cursor: Position,
+    row_offset: usize,
 }
 
 impl App {
@@ -29,6 +31,8 @@ impl App {
             git,
             unstaged_diff,
             staged_diff,
+            cursor: Position::default(),
+            row_offset: 0,
         })
     }
 
@@ -81,6 +85,36 @@ impl App {
         match event.code {
             KeyCode::Char('q') => {
                 self.exit = true;
+            }
+            KeyCode::Char('h') => {
+                todo!()
+            }
+            KeyCode::Char('r') => {
+                todo!()
+            }
+            KeyCode::Char('u') => {
+                todo!()
+            }
+            KeyCode::Char('s') => {
+                todo!()
+            }
+            KeyCode::Char('k') => {
+                todo!()
+            }
+            KeyCode::Char(' ') if event.modifiers.contains(KeyModifiers::CONTROL) => {
+                todo!()
+            }
+            KeyCode::Char('g') if event.modifiers.contains(KeyModifiers::CONTROL) => {
+                todo!()
+            }
+            KeyCode::Tab => {
+                todo!()
+            }
+            KeyCode::Up => {
+                //
+            }
+            KeyCode::Down => {
+                //
             }
             _ => {}
         }
