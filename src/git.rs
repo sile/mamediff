@@ -169,6 +169,11 @@ pub enum FileDiff {
         new_mode: Mode,
         chunks: Vec<ChunkDiff>,
     },
+    NewBinaryFile {
+        path: PathBuf,
+        hash: String,
+        mode: Mode,
+    },
     UpdateBinaryFile {
         path: PathBuf,
         old_hash: String,
@@ -191,10 +196,35 @@ impl FileDiff {
         let this = if line.starts_with("index ") {
             let index = IndexHeaderLine::from_str(line).or_fail()?;
             Self::parse_with_index(lines, path, index).or_fail()?
+        } else if line.starts_with("new file mode ") {
+            let new_file_mode = NewFileModeHeaderLine::from_str(line).or_fail()?;
+            Self::parse_with_new_file_mode(lines, path, new_file_mode).or_fail()?
         } else {
             todo!()
         };
         Ok(Some(this))
+    }
+
+    fn parse_with_new_file_mode(
+        lines: &mut Lines,
+        path: PathBuf,
+        new_file_mode: NewFileModeHeaderLine,
+    ) -> orfail::Result<Self> {
+        let line = lines.next().or_fail()?;
+        let index = IndexHeaderLine::from_str(line).or_fail()?;
+        index.mode.is_none().or_fail()?;
+        (index.old_hash == "0000000").or_fail()?;
+
+        let line = lines.next().or_fail()?;
+        if line == format!("Binary files /dev/null and b/{} differ", path.display()) {
+            return Ok(Self::NewBinaryFile {
+                path,
+                hash: index.new_hash,
+                mode: new_file_mode.mode,
+            });
+        }
+
+        todo!()
     }
 
     fn parse_with_index(
@@ -215,7 +245,7 @@ impl FileDiff {
                 old_hash: index.old_hash,
                 new_hash: index.new_hash,
                 old_mode: None,
-                new_mode: index.mode,
+                new_mode: index.mode.or_fail()?,
             });
         }
         line.starts_with("--- a/").or_fail()?;
@@ -233,7 +263,7 @@ impl FileDiff {
             old_hash: index.old_hash,
             new_hash: index.new_hash,
             old_mode: None,
-            new_mode: index.mode,
+            new_mode: index.mode.or_fail()?,
             chunks,
         })
     }
@@ -272,21 +302,44 @@ pub enum FileDiffPhase {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct NewFileModeHeaderLine {
+    pub mode: Mode,
+}
+
+impl FromStr for NewFileModeHeaderLine {
+    type Err = orfail::Failure;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        s.starts_with("new file mode ").or_fail()?;
+        let s = &s["new file mode ".len()..];
+        let mode = Mode::from_str(s).or_fail()?;
+        Ok(Self { mode })
+    }
+}
+
+impl std::fmt::Display for NewFileModeHeaderLine {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "new file mode {}", self.mode)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct IndexHeaderLine {
     pub old_hash: String,
     pub new_hash: String,
-    pub mode: Mode,
+    pub mode: Option<Mode>,
 }
 
 impl FromStr for IndexHeaderLine {
     type Err = orfail::Failure;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
+        s.starts_with("index ").or_fail()?;
         let s = &s["index ".len()..];
 
         let mut tokens = s.splitn(2, ' ');
         let hashes = tokens.next().or_fail()?;
-        let mode = Mode::from_str(tokens.next().or_fail()?).or_fail()?;
+        let mode = tokens.next().map(Mode::from_str).transpose().or_fail()?;
 
         let mut tokens = hashes.splitn(2, "..");
         let old_hash = tokens.next().or_fail()?.to_owned();
@@ -301,11 +354,11 @@ impl FromStr for IndexHeaderLine {
 
 impl std::fmt::Display for IndexHeaderLine {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "index {}..{} {}",
-            self.old_hash, self.new_hash, self.mode
-        )
+        write!(f, "index {}..{}", self.old_hash, self.new_hash)?;
+        if let Some(mode) = self.mode {
+            write!(f, " {mode}")?;
+        }
+        Ok(())
     }
 }
 
@@ -315,7 +368,6 @@ pub enum HeaderLine {
     OldMode(u32),
     NewMode(u32),
     DeleteFileMode(u32),
-    NewFileMode(u32),
     CopyFrom(PathBuf),
     CopyTo(PathBuf),
     RenameFrom(PathBuf),
@@ -343,11 +395,6 @@ impl FromStr for HeaderLine {
             (mode.len() == 6).or_fail()?;
             let mode = u32::from_str_radix(mode, 8).or_fail()?;
             Ok(Self::DeleteFileMode(mode))
-        } else if s.starts_with("new file mode ") {
-            let mode = &s["new file mode ".len()..];
-            (mode.len() == 6).or_fail()?;
-            let mode = u32::from_str_radix(mode, 8).or_fail()?;
-            Ok(Self::NewFileMode(mode))
         } else if s.starts_with("copy from ") {
             let path = PathBuf::from(&s["copy from ".len()..]);
             Ok(Self::CopyFrom(path))
@@ -389,9 +436,6 @@ impl std::fmt::Display for HeaderLine {
             }
             Self::DeleteFileMode(mode) => {
                 write!(f, "delete file mode {:06o}", mode)
-            }
-            Self::NewFileMode(mode) => {
-                write!(f, "new file mode {:06o}", mode)
             }
             Self::CopyFrom(path) => {
                 write!(f, "copy from {}", path.display())
@@ -437,8 +481,8 @@ mod tests {
         assert_eq!(v.to_string(), line);
 
         let line = "new file mode 100644";
-        let v = line.parse::<HeaderLine>().or_fail()?;
-        assert_eq!(v, HeaderLine::NewFileMode(0o100644));
+        let v = NewFileModeHeaderLine::from_str(line).or_fail()?;
+        assert_eq!(v.mode.0, 0o100644);
         assert_eq!(v.to_string(), line);
 
         let line = "copy from src/file.txt";
@@ -473,14 +517,9 @@ mod tests {
 
         let line = "index a1b2c3d..4e5f6g7 100644";
         let v = IndexHeaderLine::from_str(line).or_fail()?;
-        assert_eq!(
-            v,
-            IndexHeaderLine {
-                old_hash: "a1b2c3d".to_owned(),
-                new_hash: "4e5f6g7".to_owned(),
-                mode: Mode(0o100644)
-            }
-        );
+        assert_eq!(v.old_hash, "a1b2c3d");
+        assert_eq!(v.new_hash, "4e5f6g7");
+        assert_eq!(v.mode, Some(Mode(0o100644)));
         assert_eq!(v.to_string(), line);
 
         Ok(())
@@ -551,6 +590,10 @@ index 1961029..12ecda3
 new file mode 100755
 index 0000000..baec60b
 Binary files /dev/null and b/ls differ"#;
+
+        let diff = Diff::from_str(text).or_fail()?;
+        assert_eq!(diff.file_diffs.len(), 1);
+        assert!(matches!(diff.file_diffs[0], FileDiff::NewBinaryFile { .. }));
 
         let text = r#"diff --git a/ls b/ls
 index baec60b..a53cdf4 100755
