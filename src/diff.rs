@@ -140,6 +140,13 @@ pub enum ContentDiff {
 }
 
 impl ContentDiff {
+    pub fn chunks(&self) -> impl '_ + Iterator<Item = &ChunkDiff> {
+        match self {
+            ContentDiff::Text { chunks } => Some(chunks.iter()).into_iter().flatten(),
+            ContentDiff::Binary { .. } | ContentDiff::Empty => None.into_iter().flatten(),
+        }
+    }
+
     pub fn parse(lines: &mut Peekable<Lines>) -> orfail::Result<Self> {
         if lines.peek().map_or(true, |line| line.starts_with("diff ")) {
             return Ok(Self::Empty);
@@ -201,6 +208,27 @@ pub enum FileDiff {
 }
 
 impl FileDiff {
+    pub fn path(&self) -> &PathBuf {
+        match self {
+            FileDiff::New { path, .. }
+            | FileDiff::Delete { path, .. }
+            | FileDiff::Update { path, .. }
+            | FileDiff::Rename { new_path: path, .. }
+            | FileDiff::Chmod { path, .. } => path,
+        }
+    }
+
+    pub fn chunks(&self) -> impl '_ + Iterator<Item = &ChunkDiff> {
+        match self {
+            FileDiff::Delete { content, .. } | FileDiff::Update { content, .. } => {
+                Some(content.chunks()).into_iter().flatten()
+            }
+            FileDiff::New { .. } | FileDiff::Rename { .. } | FileDiff::Chmod { .. } => {
+                None.into_iter().flatten()
+            }
+        }
+    }
+
     pub fn parse(lines: &mut Peekable<Lines>) -> orfail::Result<Option<Self>> {
         let Some(line) = lines.next() else {
             return Ok(None);

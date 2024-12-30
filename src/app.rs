@@ -2,7 +2,7 @@ use crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use orfail::OrFail;
 
 use crate::{
-    diff::Diff,
+    diff::{ChunkDiff, Diff, FileDiff},
     git::Git,
     terminal::{Canvas, Terminal, Text},
 };
@@ -116,16 +116,23 @@ impl App {
     }
 
     fn handle_expand(&mut self) -> orfail::Result<()> {
-        todo!()
+        let widget = self
+            .widgets
+            .iter_mut()
+            .find(|w| w.focused)
+            .expect("infallible");
+        widget.toggle_expand();
+        Ok(())
     }
 
     fn handle_up(&mut self) -> orfail::Result<()> {
         for widget in self.widgets.iter_mut().rev().skip_while(|w| !w.focused) {
             widget.focus_prev();
             if widget.focused {
-                break;
+                return Ok(());
             }
         }
+        self.widgets[0].focus_next();
         Ok(())
     }
 
@@ -133,9 +140,10 @@ impl App {
         for widget in self.widgets.iter_mut().skip_while(|w| !w.focused) {
             widget.focus_next();
             if widget.focused {
-                break;
+                return Ok(());
             }
         }
+        self.widgets.last_mut().expect("infallible").focus_prev();
         Ok(())
     }
 
@@ -171,16 +179,28 @@ impl DiffWidget {
     pub fn focus_next(&mut self) {
         if !self.focused {
             self.focused = true;
-        } else if !self.staged {
-            self.focused = false;
+            return;
         }
+
+        if self.expanded {
+            todo!()
+        }
+
+        self.focused = false;
     }
 
     pub fn focus_prev(&mut self) {
         if !self.focused {
             self.focused = true;
-        } else if self.staged {
-            self.focused = false;
+            return;
+        }
+
+        self.focused = false;
+    }
+
+    pub fn toggle_expand(&mut self) {
+        if self.diff.len() != 0 {
+            self.expanded = !self.expanded;
         }
     }
 
@@ -190,6 +210,17 @@ impl DiffWidget {
         } else {
             git.diff().or_fail()?
         };
+
+        if self.diff.files.is_empty() {
+            self.expanded = false;
+        }
+
+        // TODO: merge old state (e.g., focused, expanded)
+        self.children.clear();
+        for file in &self.diff.files {
+            self.children.push(FileDiffWidget::new(file));
+        }
+
         Ok(())
     }
 
@@ -200,17 +231,23 @@ impl DiffWidget {
                 if self.focused { ">" } else { " " },
                 if self.staged { "Staged" } else { "Unstaged" },
                 self.diff.len(),
-                if self.diff.len() == 0 { "" } else { "…" }
+                if self.diff.len() == 0 || self.expanded {
+                    ""
+                } else {
+                    "…"
+                }
             ))
             .or_fail()?,
         );
         canvas.draw_newline();
+
+        if self.expanded {
+            for (child, diff) in self.children.iter().zip(self.diff.files.iter()) {
+                child.render(canvas, diff).or_fail()?;
+            }
+        }
         canvas.draw_newline();
         Ok(())
-    }
-
-    pub fn rows(&self) -> usize {
-        1
     }
 }
 
@@ -221,8 +258,42 @@ pub struct FileDiffWidget {
     pub children: Vec<ChunkDiffWidget>,
 }
 
+impl FileDiffWidget {
+    pub fn new(diff: &FileDiff) -> Self {
+        Self {
+            focused: false,
+            expanded: false,
+            children: diff.chunks().map(ChunkDiffWidget::new).collect(),
+        }
+    }
+
+    pub fn render(&self, canvas: &mut Canvas, diff: &FileDiff) -> orfail::Result<()> {
+        // TODO: nename handling
+        canvas.draw_text(
+            Text::new(&format!(
+                "  {} modified {}{}",
+                if self.focused { ">" } else { " " },
+                diff.path().display(),
+                if self.expanded { "" } else { "…" }
+            ))
+            .or_fail()?,
+        );
+        canvas.draw_newline();
+        Ok(())
+    }
+}
+
 #[derive(Debug, Default)]
 pub struct ChunkDiffWidget {
     pub focused: bool,
     pub expanded: bool,
+}
+
+impl ChunkDiffWidget {
+    pub fn new(_diff: &ChunkDiff) -> Self {
+        Self {
+            focused: false,
+            expanded: false,
+        }
+    }
 }
