@@ -64,7 +64,8 @@ impl Terminal {
         crossterm::execute!(
             std::io::stdout(),
             EnterAlternateScreen,
-            crossterm::cursor::MoveTo(0, 0)
+            crossterm::cursor::MoveTo(0, 0),
+            crossterm::cursor::Hide,
         )
         .or_fail()?;
         crossterm::terminal::enable_raw_mode().or_fail()?;
@@ -95,7 +96,6 @@ impl Terminal {
         let mut writer = stdout.lock();
         crossterm::queue!(
             writer,
-            crossterm::cursor::SavePosition,
             crossterm::terminal::Clear(crossterm::terminal::ClearType::All)
         )
         .or_fail()?;
@@ -114,7 +114,6 @@ impl Terminal {
             }
         }
 
-        crossterm::queue!(writer, crossterm::cursor::RestorePosition,).or_fail()?;
         writer.flush().or_fail()?;
         Ok(())
     }

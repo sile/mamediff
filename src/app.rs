@@ -41,7 +41,6 @@ impl App {
         let mut canvas = Canvas::new();
         for widget in &mut self.widgets {
             widget.render(&mut canvas).or_fail()?;
-            canvas.draw_newline();
         }
         self.terminal.render(canvas).or_fail()?;
         Ok(())
@@ -94,13 +93,43 @@ impl App {
             KeyCode::Tab => {
                 todo!()
             }
+            KeyCode::Char('p') if event.modifiers.contains(KeyModifiers::CONTROL) => {
+                self.handle_up().or_fail()?;
+                self.render().or_fail()?;
+            }
             KeyCode::Up => {
-                //
+                self.handle_up().or_fail()?;
+                self.render().or_fail()?;
+            }
+            KeyCode::Char('n') if event.modifiers.contains(KeyModifiers::CONTROL) => {
+                self.handle_down().or_fail()?;
+                self.render().or_fail()?;
             }
             KeyCode::Down => {
-                //
+                self.handle_down().or_fail()?;
+                self.render().or_fail()?;
             }
             _ => {}
+        }
+        Ok(())
+    }
+
+    fn handle_up(&mut self) -> orfail::Result<()> {
+        for widget in self.widgets.iter_mut().rev().skip_while(|w| !w.focused) {
+            widget.focus_prev();
+            if widget.focused {
+                break;
+            }
+        }
+        Ok(())
+    }
+
+    fn handle_down(&mut self) -> orfail::Result<()> {
+        for widget in self.widgets.iter_mut().skip_while(|w| !w.focused) {
+            widget.focus_next();
+            if widget.focused {
+                break;
+            }
         }
         Ok(())
     }
@@ -118,13 +147,31 @@ impl App {
 pub struct DiffWidget {
     staged: bool,
     diff: Diff,
+    focused: bool,
 }
 
 impl DiffWidget {
     pub fn new(staged: bool) -> Self {
         Self {
             staged,
+            focused: !staged,
             diff: Diff::default(),
+        }
+    }
+
+    pub fn focus_next(&mut self) {
+        if !self.focused {
+            self.focused = true;
+        } else if !self.staged {
+            self.focused = false;
+        }
+    }
+
+    pub fn focus_prev(&mut self) {
+        if !self.focused {
+            self.focused = true;
+        } else if self.staged {
+            self.focused = false;
         }
     }
 
@@ -140,13 +187,20 @@ impl DiffWidget {
     pub fn render(&self, canvas: &mut Canvas) -> orfail::Result<()> {
         canvas.draw_text(
             Text::new(&format!(
-                " {} changes ({})",
+                "{} {} changes ({}){}",
+                if self.focused { ">" } else { " " },
                 if self.staged { "Staged" } else { "Unstaged" },
-                self.diff.len()
+                self.diff.len(),
+                if self.diff.len() == 0 { "" } else { "…" }
             ))
             .or_fail()?,
         );
         canvas.draw_newline();
+        canvas.draw_newline();
         Ok(())
+    }
+
+    pub fn rows(&self) -> usize {
+        1
     }
 }
