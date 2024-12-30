@@ -183,19 +183,48 @@ impl DiffWidget {
         }
 
         if self.expanded {
-            todo!()
+            if self.children.iter().all(|c| !c.focused) {
+                self.children[0].focused = true;
+                return;
+            }
+
+            for child in self.children.iter_mut().skip_while(|c| !c.focused) {
+                child.focus_next();
+                if child.focused {
+                    return;
+                }
+            }
         }
 
         self.focused = false;
     }
 
     pub fn focus_prev(&mut self) {
-        if !self.focused {
-            self.focused = true;
-            return;
+        if self.expanded {
+            let child_focused = self.child_focused();
+            if !self.focused && !child_focused {
+                self.focused = true;
+                self.children.last_mut().expect("infallible").focused = true;
+                return;
+            }
+
+            for child in self.children.iter_mut().rev().skip_while(|c| !c.focused) {
+                child.focus_prev();
+                if child.focused {
+                    return;
+                }
+            }
+
+            if child_focused {
+                return;
+            }
         }
 
-        self.focused = false;
+        self.focused = !self.focused;
+    }
+
+    fn child_focused(&self) -> bool {
+        self.children.iter().any(|c| c.focused)
     }
 
     pub fn toggle_expand(&mut self) {
@@ -228,7 +257,11 @@ impl DiffWidget {
         canvas.draw_text(
             Text::new(&format!(
                 "{} {} changes ({}){}",
-                if self.focused { ">" } else { " " },
+                if self.focused && !self.child_focused() {
+                    ">"
+                } else {
+                    " "
+                },
                 if self.staged { "Staged" } else { "Unstaged" },
                 self.diff.len(),
                 if self.diff.len() == 0 || self.expanded {
@@ -280,6 +313,16 @@ impl FileDiffWidget {
         );
         canvas.draw_newline();
         Ok(())
+    }
+
+    pub fn focus_next(&mut self) {
+        // TODO: children handling
+        self.focused = !self.focused;
+    }
+
+    pub fn focus_prev(&mut self) {
+        // TODO: children handling
+        self.focused = !self.focused;
     }
 }
 
