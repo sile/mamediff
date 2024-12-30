@@ -91,7 +91,8 @@ impl App {
                 todo!()
             }
             KeyCode::Tab => {
-                todo!()
+                self.handle_expand().or_fail()?;
+                self.render().or_fail()?;
             }
             KeyCode::Char('p') if event.modifiers.contains(KeyModifiers::CONTROL) => {
                 self.handle_up().or_fail()?;
@@ -112,6 +113,10 @@ impl App {
             _ => {}
         }
         Ok(())
+    }
+
+    fn handle_expand(&mut self) -> orfail::Result<()> {
+        todo!()
     }
 
     fn handle_up(&mut self) -> orfail::Result<()> {
