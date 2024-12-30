@@ -13,6 +13,7 @@ pub struct App {
     exit: bool,
     git: Git,
     widgets: Vec<DiffWidget>,
+    cursor: Cursor,
 }
 
 impl App {
@@ -24,6 +25,7 @@ impl App {
             exit: false,
             git,
             widgets: vec![DiffWidget::new(false), DiffWidget::new(true)],
+            cursor: Cursor::new(),
         })
     }
 
@@ -40,7 +42,7 @@ impl App {
     fn render(&mut self) -> orfail::Result<()> {
         let mut canvas = Canvas::new();
         for widget in &mut self.widgets {
-            widget.render(&mut canvas).or_fail()?;
+            widget.render(&mut canvas, &self.cursor).or_fail()?;
         }
         self.terminal.render(canvas).or_fail()?;
         Ok(())
@@ -106,30 +108,52 @@ impl App {
                 self.handle_down().or_fail()?;
                 self.render().or_fail()?;
             }
+            KeyCode::Char('f') if event.modifiers.contains(KeyModifiers::CONTROL) => {
+                self.handle_right().or_fail()?;
+                self.render().or_fail()?;
+            }
+            KeyCode::Right => {
+                self.handle_right().or_fail()?;
+                self.render().or_fail()?;
+            }
+            KeyCode::Char('b') if event.modifiers.contains(KeyModifiers::CONTROL) => {
+                self.handle_left().or_fail()?;
+                self.render().or_fail()?;
+            }
+            KeyCode::Left => {
+                self.handle_left().or_fail()?;
+                self.render().or_fail()?;
+            }
             _ => {}
         }
         Ok(())
     }
 
     fn handle_up(&mut self) -> orfail::Result<()> {
-        for widget in self.widgets.iter_mut().rev().skip_while(|w| !w.focused) {
-            widget.focus_prev();
-            if widget.focused {
-                return Ok(());
-            }
+        for widget in &mut self.widgets {
+            widget.handle_up(&mut self.cursor).or_fail()?;
         }
-        self.widgets[0].focus_next();
         Ok(())
     }
 
     fn handle_down(&mut self) -> orfail::Result<()> {
-        for widget in self.widgets.iter_mut().skip_while(|w| !w.focused) {
-            widget.focus_next();
-            if widget.focused {
-                return Ok(());
-            }
+        for widget in &mut self.widgets {
+            widget.handle_down(&mut self.cursor).or_fail()?;
         }
-        self.widgets.last_mut().expect("infallible").focus_prev();
+        Ok(())
+    }
+
+    fn handle_right(&mut self) -> orfail::Result<()> {
+        for widget in &mut self.widgets {
+            widget.handle_right(&mut self.cursor).or_fail()?;
+        }
+        Ok(())
+    }
+
+    fn handle_left(&mut self) -> orfail::Result<()> {
+        for widget in &mut self.widgets {
+            widget.handle_left(&mut self.cursor).or_fail()?;
+        }
         Ok(())
     }
 
@@ -144,67 +168,83 @@ impl App {
 
 #[derive(Debug)]
 pub struct DiffWidget {
+    widget_path: WidgetPath,
     staged: bool,
     diff: Diff,
-    focused: bool,
+    next_focus_child: usize,
     children: Vec<FileDiffWidget>,
 }
 
 impl DiffWidget {
     pub fn new(staged: bool) -> Self {
+        let index = if staged { 1 } else { 0 };
         Self {
+            widget_path: WidgetPath::new(vec![index]),
             staged,
-            focused: !staged,
+            next_focus_child: 0,
             diff: Diff::default(),
             children: Vec::new(),
         }
     }
 
-    pub fn focus_next(&mut self) {
-        if !self.focused {
-            self.focused = true;
-            return;
+    pub fn handle_left(&mut self, cursor: &mut Cursor) -> orfail::Result<()> {
+        (cursor.path.len() >= 1).or_fail()?;
+
+        if cursor.path[0] == self.widget_path.last_index() && cursor.path.len() > 1 {
+            cursor.path.pop();
         }
 
-        if self.children.iter().all(|c| !c.focused) {
-            self.children[0].focused = true;
-            return;
+        Ok(())
+    }
+
+    pub fn handle_right(&mut self, cursor: &mut Cursor) -> orfail::Result<()> {
+        (cursor.path.len() >= 1).or_fail()?;
+
+        if cursor.path[0] != self.widget_path.last_index() {
+            return Ok(());
         }
 
-        for child in self.children.iter_mut().skip_while(|c| !c.focused) {
-            child.focus_next();
-            if child.focused {
-                return;
+        if cursor.path.len() == 1 {
+            cursor.path.push(self.next_focus_child);
+        } else if !self.children.is_empty() {
+            for child in &mut self.children {
+                child.handle_right(cursor).or_fail()?;
             }
         }
 
-        self.focused = false;
+        Ok(())
     }
 
-    pub fn focus_prev(&mut self) {
-        let child_focused = self.child_focused();
-        if !self.focused && !child_focused {
-            self.focused = true;
-            self.children.last_mut().expect("infallible").focus_prev();
-            return;
-        }
+    pub fn handle_down(&mut self, cursor: &mut Cursor) -> orfail::Result<()> {
+        (cursor.path.len() >= 1).or_fail()?;
 
-        for child in self.children.iter_mut().rev().skip_while(|c| !c.focused) {
-            child.focus_prev();
-            if child.focused {
-                return;
+        if cursor.path.len() == 1 {
+            if self.widget_path.last_index() == cursor.path[0] + 1 {
+                cursor.path[0] += 1;
+            }
+        } else if self.widget_path.last_index() == cursor.path[0] {
+            for child in self.children.iter_mut().rev() {
+                child.handle_down(cursor).or_fail()?;
             }
         }
 
-        if child_focused {
-            return;
-        }
-
-        self.focused = !self.focused;
+        Ok(())
     }
 
-    fn child_focused(&self) -> bool {
-        self.children.iter().any(|c| c.focused)
+    pub fn handle_up(&mut self, cursor: &mut Cursor) -> orfail::Result<()> {
+        (cursor.path.len() >= 1).or_fail()?;
+
+        if cursor.path.len() == 1 {
+            if Some(self.widget_path.last_index()) == cursor.path[0].checked_sub(1) {
+                cursor.path[0] -= 1;
+            }
+        } else if self.widget_path.last_index() == cursor.path[0] {
+            for child in &mut self.children {
+                child.handle_up(cursor).or_fail()?;
+            }
+        }
+
+        Ok(())
     }
 
     pub fn reload(&mut self, git: &Git) -> orfail::Result<()> {
@@ -216,18 +256,19 @@ impl DiffWidget {
 
         // TODO: merge old state (e.g., focused)
         self.children.clear();
-        for file in &self.diff.files {
-            self.children.push(FileDiffWidget::new(file));
+        for (i, file) in self.diff.files.iter().enumerate() {
+            self.children
+                .push(FileDiffWidget::new(file, self.widget_path.join(i)));
         }
 
         Ok(())
     }
 
-    pub fn render(&self, canvas: &mut Canvas) -> orfail::Result<()> {
+    pub fn render(&self, canvas: &mut Canvas, cursor: &Cursor) -> orfail::Result<()> {
         canvas.draw_text(
             Text::new(&format!(
                 "{} {} changes ({})",
-                if self.focused && !self.child_focused() {
+                if self.widget_path.path == cursor.path {
                     ">"
                 } else {
                     " "
@@ -240,33 +281,44 @@ impl DiffWidget {
         canvas.draw_newline();
 
         for (child, diff) in self.children.iter().zip(self.diff.files.iter()) {
-            child.render(canvas, diff).or_fail()?;
+            child.render(canvas, diff, cursor).or_fail()?;
         }
-        canvas.draw_newline();
         Ok(())
     }
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct FileDiffWidget {
-    pub focused: bool,
+    pub widget_path: WidgetPath,
     pub children: Vec<ChunkDiffWidget>,
+    pub next_focus_child: usize,
 }
 
 impl FileDiffWidget {
-    pub fn new(diff: &FileDiff) -> Self {
+    pub fn new(diff: &FileDiff, widget_path: WidgetPath) -> Self {
+        let children = diff
+            .chunks()
+            .enumerate()
+            .map(|(i, c)| ChunkDiffWidget::new(c, widget_path.join(i)))
+            .collect();
         Self {
-            focused: false,
-            children: diff.chunks().map(ChunkDiffWidget::new).collect(),
+            widget_path,
+            children,
+            next_focus_child: 0,
         }
     }
 
-    pub fn render(&self, canvas: &mut Canvas, diff: &FileDiff) -> orfail::Result<()> {
+    pub fn render(
+        &self,
+        canvas: &mut Canvas,
+        diff: &FileDiff,
+        cursor: &Cursor,
+    ) -> orfail::Result<()> {
         // TODO: nename handling
         canvas.draw_text(
             Text::new(&format!(
                 "  {} modified {} ({})",
-                if self.focused && !self.child_focused() {
+                if self.widget_path.path == cursor.path {
                     ">"
                 } else {
                     " "
@@ -279,75 +331,95 @@ impl FileDiffWidget {
         canvas.draw_newline();
 
         for (child, chunk) in self.children.iter().zip(diff.chunks()) {
-            child.render(canvas, chunk).or_fail()?;
+            child.render(canvas, chunk, cursor).or_fail()?;
         }
 
         Ok(())
     }
 
-    pub fn focus_next(&mut self) {
-        if !self.focused {
-            self.focused = true;
-            return;
+    pub const LEVEL: usize = 2;
+
+    pub fn handle_right(&mut self, cursor: &mut Cursor) -> orfail::Result<()> {
+        (cursor.path.len() >= Self::LEVEL).or_fail()?;
+
+        if cursor.path[Self::LEVEL - 1] != self.widget_path.last_index() {
+            return Ok(());
         }
 
-        if self.children.iter().all(|c| !c.focused) {
-            self.children[0].focused = true;
-            return;
-        }
-
-        for child in self.children.iter_mut().skip_while(|c| !c.focused) {
-            child.focus_next();
-            if child.focused {
-                return;
+        if cursor.path.len() == Self::LEVEL {
+            cursor.path.push(self.next_focus_child);
+        } else if !self.children.is_empty() {
+            for child in &mut self.children {
+                child.handle_right(cursor).or_fail()?;
             }
         }
 
-        self.focused = false;
+        Ok(())
     }
 
-    pub fn focus_prev(&mut self) {
-        let child_focused = self.child_focused();
-        if !self.focused && !child_focused {
-            self.focused = true;
-            self.children.last_mut().expect("infallible").focused = true;
-            return;
-        }
+    pub fn handle_down(&mut self, cursor: &mut Cursor) -> orfail::Result<()> {
+        (cursor.path.len() >= Self::LEVEL).or_fail()?;
 
-        for child in self.children.iter_mut().rev().skip_while(|c| !c.focused) {
-            child.focus_prev();
-            if child.focused {
-                return;
+        if cursor.path.len() == Self::LEVEL {
+            if self.widget_path.last_index() == cursor.path[Self::LEVEL - 1] + 1 {
+                cursor.path[Self::LEVEL - 1] += 1;
+            }
+        } else if self.widget_path.last_index() == cursor.path[Self::LEVEL - 1] {
+            for child in self.children.iter_mut().rev() {
+                child.handle_down(cursor).or_fail()?;
             }
         }
 
-        if child_focused {
-            return;
-        }
+        // TODO: next higher level item if the last item of the level is reached.
 
-        self.focused = !self.focused;
+        Ok(())
     }
 
-    fn child_focused(&self) -> bool {
-        self.children.iter().any(|c| c.focused)
+    pub fn handle_up(&mut self, cursor: &mut Cursor) -> orfail::Result<()> {
+        (cursor.path.len() >= Self::LEVEL).or_fail()?;
+
+        if cursor.path.len() == Self::LEVEL {
+            if Some(self.widget_path.last_index()) == cursor.path[Self::LEVEL - 1].checked_sub(1) {
+                cursor.path[Self::LEVEL - 1] -= 1;
+            }
+        } else if self.widget_path.last_index() == cursor.path[Self::LEVEL - 1] {
+            for child in &mut self.children {
+                child.handle_up(cursor).or_fail()?;
+            }
+        }
+
+        Ok(())
     }
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct ChunkDiffWidget {
-    pub focused: bool,
+    pub widget_path: WidgetPath,
+    pub next_focus_child: usize,
 }
 
 impl ChunkDiffWidget {
-    pub fn new(_diff: &ChunkDiff) -> Self {
-        Self { focused: false }
+    pub fn new(_diff: &ChunkDiff, widget_path: WidgetPath) -> Self {
+        Self {
+            widget_path,
+            next_focus_child: 0,
+        }
     }
 
-    pub fn render(&self, canvas: &mut Canvas, diff: &ChunkDiff) -> orfail::Result<()> {
+    pub fn render(
+        &self,
+        canvas: &mut Canvas,
+        diff: &ChunkDiff,
+        cursor: &Cursor,
+    ) -> orfail::Result<()> {
         canvas.draw_text(
             Text::new(&format!(
                 "    {} {}",
-                if self.focused { ">" } else { " " },
+                if self.widget_path.path == cursor.path {
+                    ">"
+                } else {
+                    " "
+                },
                 diff.head_line(),
             ))
             .or_fail()?,
@@ -356,11 +428,100 @@ impl ChunkDiffWidget {
         Ok(())
     }
 
-    pub fn focus_next(&mut self) {
-        self.focused = !self.focused;
+    pub const LEVEL: usize = 3;
+
+    pub fn handle_right(&mut self, cursor: &mut Cursor) -> orfail::Result<()> {
+        (cursor.path.len() >= Self::LEVEL).or_fail()?;
+
+        if cursor.path[Self::LEVEL - 1] != self.widget_path.last_index() {
+            return Ok(());
+        }
+
+        if cursor.path.len() == Self::LEVEL {
+            cursor.path.push(self.next_focus_child);
+        } //else if !self.children.is_empty() {
+          // let i = cursor.path.get(Self::LEVEL - 1).copied().or_fail()?;
+          // self.children
+          //     .get_mut(i)
+          //     .or_fail()?
+          //     .handle_right(cursor)
+          //     .or_fail()?;
+          //todo!()
+          //}
+
+        Ok(())
     }
 
-    pub fn focus_prev(&mut self) {
-        self.focused = !self.focused;
+    pub fn handle_down(&mut self, cursor: &mut Cursor) -> orfail::Result<()> {
+        (cursor.path.len() >= Self::LEVEL).or_fail()?;
+
+        if cursor.path.len() == Self::LEVEL {
+            if self.widget_path.last_index() == cursor.path[Self::LEVEL - 1] + 1 {
+                cursor.path[Self::LEVEL - 1] += 1;
+            }
+        } else if self.widget_path.last_index() == cursor.path[Self::LEVEL - 1] {
+            // let i = cursor.path.get(Self::LEVEL - 1).copied().or_fail()?;
+            // self.children
+            //     .get_mut(i)
+            //     .or_fail()?
+            //     .handle_down(cursor)
+            //     .or_fail()?;
+            todo!()
+        }
+
+        Ok(())
+    }
+
+    pub fn handle_up(&mut self, cursor: &mut Cursor) -> orfail::Result<()> {
+        (cursor.path.len() >= Self::LEVEL).or_fail()?;
+
+        if cursor.path.len() == Self::LEVEL {
+            if Some(self.widget_path.last_index()) == cursor.path[Self::LEVEL - 1].checked_sub(1) {
+                cursor.path[Self::LEVEL - 1] -= 1;
+            }
+        } else if self.widget_path.last_index() == cursor.path[Self::LEVEL - 1] {
+            // let i = cursor.path.get(Self::LEVEL - 1).copied().or_fail()?;
+            // self.children
+            //     .get_mut(i)
+            //     .or_fail()?
+            //     .handle_up(cursor)
+            //     .or_fail()?;
+            todo!()
+        }
+
+        Ok(())
+    }
+}
+
+#[derive(Debug)]
+pub struct WidgetPath {
+    pub path: Vec<usize>,
+}
+
+impl WidgetPath {
+    pub fn new(path: Vec<usize>) -> Self {
+        Self { path }
+    }
+
+    pub fn last_index(&self) -> usize {
+        // TODO:
+        self.path[self.path.len() - 1]
+    }
+
+    pub fn join(&self, index: usize) -> Self {
+        let mut path = self.path.clone();
+        path.push(index);
+        Self::new(path)
+    }
+}
+
+#[derive(Debug)]
+pub struct Cursor {
+    pub path: Vec<usize>,
+}
+
+impl Cursor {
+    pub fn new() -> Self {
+        Self { path: vec![0] }
     }
 }
