@@ -148,6 +148,8 @@ pub struct DiffWidget {
     staged: bool,
     diff: Diff,
     focused: bool,
+    expanded: bool,
+    children: Vec<FileDiffWidget>,
 }
 
 impl DiffWidget {
@@ -155,7 +157,9 @@ impl DiffWidget {
         Self {
             staged,
             focused: !staged,
+            expanded: false,
             diff: Diff::default(),
+            children: Vec::new(),
         }
     }
 
@@ -203,4 +207,17 @@ impl DiffWidget {
     pub fn rows(&self) -> usize {
         1
     }
+}
+
+#[derive(Debug, Default)]
+pub struct FileDiffWidget {
+    pub focused: bool,
+    pub expanded: bool,
+    pub children: Vec<ChunkDiffWidget>,
+}
+
+#[derive(Debug, Default)]
+pub struct ChunkDiffWidget {
+    pub focused: bool,
+    pub expanded: bool,
 }
