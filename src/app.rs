@@ -2,7 +2,7 @@ use crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use orfail::OrFail;
 
 use crate::{
-    diff::{ChunkDiff, Diff, FileDiff},
+    diff::{ChunkDiff, Diff, FileDiff, LineDiff},
     git::Git,
     terminal::{Canvas, Terminal, Text},
 };
@@ -171,7 +171,6 @@ pub struct DiffWidget {
     widget_path: WidgetPath,
     staged: bool,
     diff: Diff,
-    next_focus_child: usize,
     children: Vec<FileDiffWidget>,
 }
 
@@ -181,7 +180,6 @@ impl DiffWidget {
         Self {
             widget_path: WidgetPath::new(vec![index]),
             staged,
-            next_focus_child: 0,
             diff: Diff::default(),
             children: Vec::new(),
         }
@@ -197,16 +195,20 @@ impl DiffWidget {
         Ok(())
     }
 
-    pub fn handle_right(&mut self, cursor: &mut Cursor) -> orfail::Result<()> {
-        (cursor.path.len() >= 1).or_fail()?;
+    // TODO: factor out
+    pub const LEVEL: usize = 1;
 
-        if cursor.path[0] != self.widget_path.last_index() {
+    pub fn handle_right(&mut self, cursor: &mut Cursor) -> orfail::Result<()> {
+        (cursor.path.len() >= Self::LEVEL).or_fail()?;
+
+        if self.children.is_empty() || cursor.path[Self::LEVEL - 1] != self.widget_path.last_index()
+        {
             return Ok(());
         }
 
-        if cursor.path.len() == 1 {
-            cursor.path.push(self.next_focus_child);
-        } else if !self.children.is_empty() {
+        if cursor.path.len() == Self::LEVEL {
+            cursor.path.push(0);
+        } else {
             for child in &mut self.children {
                 child.handle_right(cursor).or_fail()?;
             }
@@ -216,29 +218,31 @@ impl DiffWidget {
     }
 
     pub fn handle_down(&mut self, cursor: &mut Cursor) -> orfail::Result<()> {
-        (cursor.path.len() >= 1).or_fail()?;
+        (cursor.path.len() >= Self::LEVEL).or_fail()?;
 
-        if cursor.path.len() == 1 {
-            if self.widget_path.last_index() == cursor.path[0] + 1 {
-                cursor.path[0] += 1;
+        if cursor.path.len() == Self::LEVEL {
+            if self.widget_path.last_index() == cursor.path[Self::LEVEL - 1] + 1 {
+                cursor.path[Self::LEVEL - 1] += 1;
             }
-        } else if self.widget_path.last_index() == cursor.path[0] {
+        } else if self.widget_path.last_index() == cursor.path[Self::LEVEL - 1] {
             for child in self.children.iter_mut().rev() {
                 child.handle_down(cursor).or_fail()?;
             }
         }
 
+        // TODO: next higher level item if the last item of the level is reached.
+
         Ok(())
     }
 
     pub fn handle_up(&mut self, cursor: &mut Cursor) -> orfail::Result<()> {
-        (cursor.path.len() >= 1).or_fail()?;
+        (cursor.path.len() >= Self::LEVEL).or_fail()?;
 
-        if cursor.path.len() == 1 {
-            if Some(self.widget_path.last_index()) == cursor.path[0].checked_sub(1) {
-                cursor.path[0] -= 1;
+        if cursor.path.len() == Self::LEVEL {
+            if Some(self.widget_path.last_index()) == cursor.path[Self::LEVEL - 1].checked_sub(1) {
+                cursor.path[Self::LEVEL - 1] -= 1;
             }
-        } else if self.widget_path.last_index() == cursor.path[0] {
+        } else if self.widget_path.last_index() == cursor.path[Self::LEVEL - 1] {
             for child in &mut self.children {
                 child.handle_up(cursor).or_fail()?;
             }
@@ -267,7 +271,7 @@ impl DiffWidget {
     pub fn render(&self, canvas: &mut Canvas, cursor: &Cursor) -> orfail::Result<()> {
         canvas.draw_text(
             Text::new(&format!(
-                "{} {} changes ({})",
+                "{} {} changes ({} files)",
                 if self.widget_path.path == cursor.path {
                     ">"
                 } else {
@@ -291,7 +295,6 @@ impl DiffWidget {
 pub struct FileDiffWidget {
     pub widget_path: WidgetPath,
     pub children: Vec<ChunkDiffWidget>,
-    pub next_focus_child: usize,
 }
 
 impl FileDiffWidget {
@@ -304,7 +307,6 @@ impl FileDiffWidget {
         Self {
             widget_path,
             children,
-            next_focus_child: 0,
         }
     }
 
@@ -314,10 +316,10 @@ impl FileDiffWidget {
         diff: &FileDiff,
         cursor: &Cursor,
     ) -> orfail::Result<()> {
-        // TODO: nename handling
+        // TODO: rename handling
         canvas.draw_text(
             Text::new(&format!(
-                "  {} modified {} ({})",
+                "  {} modified {} ({} chunks)",
                 if self.widget_path.path == cursor.path {
                     ">"
                 } else {
@@ -342,13 +344,14 @@ impl FileDiffWidget {
     pub fn handle_right(&mut self, cursor: &mut Cursor) -> orfail::Result<()> {
         (cursor.path.len() >= Self::LEVEL).or_fail()?;
 
-        if cursor.path[Self::LEVEL - 1] != self.widget_path.last_index() {
+        if self.children.is_empty() || cursor.path[Self::LEVEL - 1] != self.widget_path.last_index()
+        {
             return Ok(());
         }
 
         if cursor.path.len() == Self::LEVEL {
-            cursor.path.push(self.next_focus_child);
-        } else if !self.children.is_empty() {
+            cursor.path.push(0);
+        } else {
             for child in &mut self.children {
                 child.handle_right(cursor).or_fail()?;
             }
@@ -395,14 +398,20 @@ impl FileDiffWidget {
 #[derive(Debug)]
 pub struct ChunkDiffWidget {
     pub widget_path: WidgetPath,
-    pub next_focus_child: usize,
+    pub children: Vec<LineDiffWidget>,
 }
 
 impl ChunkDiffWidget {
-    pub fn new(_diff: &ChunkDiff, widget_path: WidgetPath) -> Self {
+    pub fn new(diff: &ChunkDiff, widget_path: WidgetPath) -> Self {
+        let children = diff
+            .lines
+            .iter()
+            .enumerate()
+            .map(|(i, l)| LineDiffWidget::new(l, widget_path.join(i)))
+            .collect();
         Self {
             widget_path,
-            next_focus_child: 0,
+            children,
         }
     }
 
@@ -425,6 +434,11 @@ impl ChunkDiffWidget {
             .or_fail()?,
         );
         canvas.draw_newline();
+
+        for (child, line) in self.children.iter().zip(diff.lines.iter()) {
+            child.render(canvas, line, cursor).or_fail()?;
+        }
+
         Ok(())
     }
 
@@ -433,21 +447,18 @@ impl ChunkDiffWidget {
     pub fn handle_right(&mut self, cursor: &mut Cursor) -> orfail::Result<()> {
         (cursor.path.len() >= Self::LEVEL).or_fail()?;
 
-        if cursor.path[Self::LEVEL - 1] != self.widget_path.last_index() {
+        if self.children.is_empty() || cursor.path[Self::LEVEL - 1] != self.widget_path.last_index()
+        {
             return Ok(());
         }
 
         if cursor.path.len() == Self::LEVEL {
-            cursor.path.push(self.next_focus_child);
-        } //else if !self.children.is_empty() {
-          // let i = cursor.path.get(Self::LEVEL - 1).copied().or_fail()?;
-          // self.children
-          //     .get_mut(i)
-          //     .or_fail()?
-          //     .handle_right(cursor)
-          //     .or_fail()?;
-          //todo!()
-          //}
+            cursor.path.push(0);
+        } else {
+            for child in self.children.iter_mut() {
+                child.handle_right(cursor).or_fail()?;
+            }
+        }
 
         Ok(())
     }
@@ -460,13 +471,9 @@ impl ChunkDiffWidget {
                 cursor.path[Self::LEVEL - 1] += 1;
             }
         } else if self.widget_path.last_index() == cursor.path[Self::LEVEL - 1] {
-            // let i = cursor.path.get(Self::LEVEL - 1).copied().or_fail()?;
-            // self.children
-            //     .get_mut(i)
-            //     .or_fail()?
-            //     .handle_down(cursor)
-            //     .or_fail()?;
-            todo!()
+            for child in self.children.iter_mut().rev() {
+                child.handle_down(cursor).or_fail()?;
+            }
         }
 
         Ok(())
@@ -480,15 +487,10 @@ impl ChunkDiffWidget {
                 cursor.path[Self::LEVEL - 1] -= 1;
             }
         } else if self.widget_path.last_index() == cursor.path[Self::LEVEL - 1] {
-            // let i = cursor.path.get(Self::LEVEL - 1).copied().or_fail()?;
-            // self.children
-            //     .get_mut(i)
-            //     .or_fail()?
-            //     .handle_up(cursor)
-            //     .or_fail()?;
-            todo!()
+            for child in self.children.iter_mut() {
+                child.handle_up(cursor).or_fail()?;
+            }
         }
-
         Ok(())
     }
 }
@@ -523,5 +525,70 @@ pub struct Cursor {
 impl Cursor {
     pub fn new() -> Self {
         Self { path: vec![0] }
+    }
+}
+
+#[derive(Debug)]
+pub struct LineDiffWidget {
+    pub widget_path: WidgetPath,
+}
+
+impl LineDiffWidget {
+    pub fn new(_diff: &LineDiff, widget_path: WidgetPath) -> Self {
+        Self { widget_path }
+    }
+
+    pub fn render(
+        &self,
+        canvas: &mut Canvas,
+        diff: &LineDiff,
+        cursor: &Cursor,
+    ) -> orfail::Result<()> {
+        canvas.draw_text(
+            Text::new(&format!(
+                "      {} {}",
+                if self.widget_path.path == cursor.path {
+                    ">"
+                } else {
+                    " "
+                },
+                diff
+            ))
+            .or_fail()?,
+        );
+        canvas.draw_newline();
+
+        Ok(())
+    }
+
+    pub const LEVEL: usize = 4;
+
+    pub fn handle_right(&mut self, cursor: &mut Cursor) -> orfail::Result<()> {
+        (cursor.path.len() >= Self::LEVEL).or_fail()?;
+        Ok(())
+    }
+
+    pub fn handle_down(&mut self, cursor: &mut Cursor) -> orfail::Result<()> {
+        (cursor.path.len() >= Self::LEVEL).or_fail()?;
+
+        if cursor.path.len() == Self::LEVEL {
+            if self.widget_path.last_index() == cursor.path[Self::LEVEL - 1] + 1 {
+                cursor.path[Self::LEVEL - 1] += 1;
+            }
+        }
+
+        Ok(())
+    }
+
+    pub fn handle_up(&mut self, cursor: &mut Cursor) -> orfail::Result<()> {
+        (cursor.path.len() >= Self::LEVEL).or_fail()?;
+
+        if cursor.path.len() == Self::LEVEL {
+            if Some(self.widget_path.last_index()) == cursor.path[Self::LEVEL - 1].checked_sub(1) {
+                cursor.path[Self::LEVEL - 1] -= 1;
+            }
+        }
+
+        Ok(())
     }
 }
