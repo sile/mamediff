@@ -125,7 +125,18 @@ impl App {
                 self.handle_left().or_fail()?;
                 self.render().or_fail()?;
             }
+            KeyCode::Tab => {
+                self.handle_tab().or_fail()?;
+                self.render().or_fail()?;
+            }
             _ => {}
+        }
+        Ok(())
+    }
+
+    fn handle_tab(&mut self) -> orfail::Result<()> {
+        for widget in &mut self.widgets {
+            widget.toggle(&self.cursor).or_fail()?;
         }
         Ok(())
     }
@@ -186,6 +197,25 @@ impl DiffWidget {
             children: Vec::new(),
             expanded: true,
         }
+    }
+
+    pub fn toggle(&mut self, cursor: &Cursor) -> orfail::Result<()> {
+        (cursor.path.len() >= Self::LEVEL).or_fail()?;
+
+        if self.children.is_empty() || cursor.path[Self::LEVEL - 1] != self.widget_path.last_index()
+        {
+            return Ok(());
+        }
+
+        if cursor.path.len() == Self::LEVEL {
+            self.expanded = !self.expanded;
+        } else {
+            for child in &mut self.children {
+                child.toggle(cursor).or_fail()?;
+            }
+        }
+
+        Ok(())
     }
 
     pub fn handle_left(&mut self, cursor: &mut Cursor) -> orfail::Result<()> {
@@ -351,6 +381,25 @@ impl FileDiffWidget {
         Ok(())
     }
 
+    pub fn toggle(&mut self, cursor: &Cursor) -> orfail::Result<()> {
+        (cursor.path.len() >= Self::LEVEL).or_fail()?;
+
+        if self.children.is_empty() || cursor.path[Self::LEVEL - 1] != self.widget_path.last_index()
+        {
+            return Ok(());
+        }
+
+        if cursor.path.len() == Self::LEVEL {
+            self.expanded = !self.expanded;
+        } else {
+            for child in &mut self.children {
+                child.toggle(cursor).or_fail()?;
+            }
+        }
+
+        Ok(())
+    }
+
     pub const LEVEL: usize = 2;
 
     pub fn handle_right(&mut self, cursor: &mut Cursor) -> orfail::Result<()> {
@@ -455,6 +504,19 @@ impl ChunkDiffWidget {
                 child.render(canvas, line, cursor).or_fail()?;
             }
         }
+
+        Ok(())
+    }
+
+    pub fn toggle(&mut self, cursor: &Cursor) -> orfail::Result<()> {
+        (cursor.path.len() >= Self::LEVEL).or_fail()?;
+
+        if self.children.is_empty() || cursor.path[Self::LEVEL - 1] != self.widget_path.last_index()
+        {
+            return Ok(());
+        }
+
+        self.expanded = !self.expanded;
 
         Ok(())
     }
