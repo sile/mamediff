@@ -88,6 +88,36 @@ pub struct ChunkDiff {
 }
 
 impl ChunkDiff {
+    pub fn head_line(&self) -> String {
+        let mut s = String::new();
+        s.push_str(&format!(
+            "@@ -{},{} +{},{} @@",
+            self.old_start_line_number,
+            self.old_columns(),
+            self.new_start_line_number,
+            self.new_columns()
+        ));
+        if let Some(line) = &self.start_line {
+            s.push(' ');
+            s.push_str(line);
+        }
+        s
+    }
+
+    fn old_columns(&self) -> usize {
+        self.lines
+            .iter()
+            .filter(|line| matches!(line, LineDiff::Both(_) | LineDiff::Old(_)))
+            .count()
+    }
+
+    fn new_columns(&self) -> usize {
+        self.lines
+            .iter()
+            .filter(|line| matches!(line, LineDiff::Both(_) | LineDiff::New(_)))
+            .count()
+    }
+
     pub fn parse(lines: &mut Peekable<Lines>) -> orfail::Result<Option<Self>> {
         let Some(line) = lines.peek() else {
             return Ok(None);

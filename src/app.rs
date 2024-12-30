@@ -204,7 +204,7 @@ impl DiffWidget {
             let child_focused = self.child_focused();
             if !self.focused && !child_focused {
                 self.focused = true;
-                self.children.last_mut().expect("infallible").focused = true;
+                self.children.last_mut().expect("infallible").focus_prev();
                 return;
             }
 
@@ -228,7 +228,9 @@ impl DiffWidget {
     }
 
     pub fn toggle_expand(&mut self) {
-        if self.diff.len() != 0 {
+        if let Some(child) = self.children.iter_mut().find(|c| c.focused) {
+            child.toggle_expand();
+        } else if self.diff.len() != 0 {
             self.expanded = !self.expanded;
         }
     }
@@ -305,24 +307,83 @@ impl FileDiffWidget {
         canvas.draw_text(
             Text::new(&format!(
                 "  {} modified {}{}",
-                if self.focused { ">" } else { " " },
+                if self.focused && !self.child_focused() {
+                    ">"
+                } else {
+                    " "
+                },
                 diff.path().display(),
                 if self.expanded { "" } else { "…" }
             ))
             .or_fail()?,
         );
         canvas.draw_newline();
+
+        if self.expanded {
+            for (child, chunk) in self.children.iter().zip(diff.chunks()) {
+                child.render(canvas, chunk).or_fail()?;
+            }
+        }
+
         Ok(())
     }
 
     pub fn focus_next(&mut self) {
-        // TODO: children handling
-        self.focused = !self.focused;
+        if !self.focused {
+            self.focused = true;
+            return;
+        }
+
+        if self.expanded {
+            if self.children.iter().all(|c| !c.focused) {
+                self.children[0].focused = true;
+                return;
+            }
+
+            for child in self.children.iter_mut().skip_while(|c| !c.focused) {
+                child.focus_next();
+                if child.focused {
+                    return;
+                }
+            }
+        }
+
+        self.focused = false;
     }
 
     pub fn focus_prev(&mut self) {
-        // TODO: children handling
+        if self.expanded {
+            let child_focused = self.child_focused();
+            if !self.focused && !child_focused {
+                self.focused = true;
+                self.children.last_mut().expect("infallible").focused = true;
+                return;
+            }
+
+            for child in self.children.iter_mut().rev().skip_while(|c| !c.focused) {
+                child.focus_prev();
+                if child.focused {
+                    return;
+                }
+            }
+
+            if child_focused {
+                return;
+            }
+        }
+
         self.focused = !self.focused;
+    }
+
+    fn child_focused(&self) -> bool {
+        self.children.iter().any(|c| c.focused)
+    }
+
+    pub fn toggle_expand(&mut self) {
+        if self.children.is_empty() {
+            return;
+        }
+        self.expanded = !self.expanded;
     }
 }
 
@@ -338,5 +399,27 @@ impl ChunkDiffWidget {
             focused: false,
             expanded: false,
         }
+    }
+
+    pub fn render(&self, canvas: &mut Canvas, diff: &ChunkDiff) -> orfail::Result<()> {
+        canvas.draw_text(
+            Text::new(&format!(
+                "    {} {}{}",
+                if self.focused { ">" } else { " " },
+                diff.head_line(),
+                if self.expanded { "" } else { "…" }
+            ))
+            .or_fail()?,
+        );
+        canvas.draw_newline();
+        Ok(())
+    }
+
+    pub fn focus_next(&mut self) {
+        self.focused = !self.focused;
+    }
+
+    pub fn focus_prev(&mut self) {
+        self.focused = !self.focused;
     }
 }
