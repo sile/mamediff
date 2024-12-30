@@ -24,6 +24,7 @@ impl App {
             terminal,
             exit: false,
             git,
+            // TODO: untrack files
             widgets: vec![DiffWidget::new(false), DiffWidget::new(true)],
             cursor: Cursor::new(),
         })
@@ -172,6 +173,7 @@ pub struct DiffWidget {
     staged: bool,
     diff: Diff,
     children: Vec<FileDiffWidget>,
+    expanded: bool,
 }
 
 impl DiffWidget {
@@ -182,6 +184,7 @@ impl DiffWidget {
             staged,
             diff: Diff::default(),
             children: Vec::new(),
+            expanded: true,
         }
     }
 
@@ -271,22 +274,26 @@ impl DiffWidget {
     pub fn render(&self, canvas: &mut Canvas, cursor: &Cursor) -> orfail::Result<()> {
         canvas.draw_text(
             Text::new(&format!(
-                "{} {} changes ({} files)",
+                "{} {} changes ({} files){}",
                 if self.widget_path.path == cursor.path {
                     ">"
                 } else {
                     " "
                 },
                 if self.staged { "Staged" } else { "Unstaged" },
-                self.diff.len()
+                self.diff.len(),
+                if self.expanded { "" } else { "…" }
             ))
             .or_fail()?,
         );
         canvas.draw_newline();
 
-        for (child, diff) in self.children.iter().zip(self.diff.files.iter()) {
-            child.render(canvas, diff, cursor).or_fail()?;
+        if self.expanded {
+            for (child, diff) in self.children.iter().zip(self.diff.files.iter()) {
+                child.render(canvas, diff, cursor).or_fail()?;
+            }
         }
+
         Ok(())
     }
 }
@@ -295,6 +302,7 @@ impl DiffWidget {
 pub struct FileDiffWidget {
     pub widget_path: WidgetPath,
     pub children: Vec<ChunkDiffWidget>,
+    pub expanded: bool,
 }
 
 impl FileDiffWidget {
@@ -307,6 +315,7 @@ impl FileDiffWidget {
         Self {
             widget_path,
             children,
+            expanded: false,
         }
     }
 
@@ -319,21 +328,24 @@ impl FileDiffWidget {
         // TODO: rename handling
         canvas.draw_text(
             Text::new(&format!(
-                "  {} modified {} ({} chunks)",
+                "  {} modified {} ({} chunks){}",
                 if self.widget_path.path == cursor.path {
                     ">"
                 } else {
                     " "
                 },
                 diff.path().display(),
-                self.children.len()
+                self.children.len(),
+                if self.expanded { "" } else { "…" }
             ))
             .or_fail()?,
         );
         canvas.draw_newline();
 
-        for (child, chunk) in self.children.iter().zip(diff.chunks()) {
-            child.render(canvas, chunk, cursor).or_fail()?;
+        if self.expanded {
+            for (child, chunk) in self.children.iter().zip(diff.chunks()) {
+                child.render(canvas, chunk, cursor).or_fail()?;
+            }
         }
 
         Ok(())
@@ -399,6 +411,7 @@ impl FileDiffWidget {
 pub struct ChunkDiffWidget {
     pub widget_path: WidgetPath,
     pub children: Vec<LineDiffWidget>,
+    pub expanded: bool,
 }
 
 impl ChunkDiffWidget {
@@ -412,6 +425,7 @@ impl ChunkDiffWidget {
         Self {
             widget_path,
             children,
+            expanded: true,
         }
     }
 
@@ -423,20 +437,23 @@ impl ChunkDiffWidget {
     ) -> orfail::Result<()> {
         canvas.draw_text(
             Text::new(&format!(
-                "    {} {}",
+                "    {} {}{}",
                 if self.widget_path.path == cursor.path {
                     ">"
                 } else {
                     " "
                 },
                 diff.head_line(),
+                if self.expanded { "" } else { "…" }
             ))
             .or_fail()?,
         );
         canvas.draw_newline();
 
-        for (child, line) in self.children.iter().zip(diff.lines.iter()) {
-            child.render(canvas, line, cursor).or_fail()?;
+        if self.expanded {
+            for (child, line) in self.children.iter().zip(diff.lines.iter()) {
+                child.render(canvas, line, cursor).or_fail()?;
+            }
         }
 
         Ok(())

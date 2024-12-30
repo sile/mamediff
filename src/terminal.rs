@@ -66,6 +66,7 @@ impl Terminal {
             EnterAlternateScreen,
             crossterm::cursor::MoveTo(0, 0),
             crossterm::cursor::Hide,
+            crossterm::terminal::DisableLineWrap
         )
         .or_fail()?;
         crossterm::terminal::enable_raw_mode().or_fail()?;
