@@ -90,10 +90,6 @@ impl App {
             KeyCode::Char('g') if event.modifiers.contains(KeyModifiers::CONTROL) => {
                 todo!()
             }
-            KeyCode::Tab => {
-                self.handle_expand().or_fail()?;
-                self.render().or_fail()?;
-            }
             KeyCode::Char('p') if event.modifiers.contains(KeyModifiers::CONTROL) => {
                 self.handle_up().or_fail()?;
                 self.render().or_fail()?;
@@ -112,16 +108,6 @@ impl App {
             }
             _ => {}
         }
-        Ok(())
-    }
-
-    fn handle_expand(&mut self) -> orfail::Result<()> {
-        let widget = self
-            .widgets
-            .iter_mut()
-            .find(|w| w.focused)
-            .expect("infallible");
-        widget.toggle_expand();
         Ok(())
     }
 
@@ -161,7 +147,6 @@ pub struct DiffWidget {
     staged: bool,
     diff: Diff,
     focused: bool,
-    expanded: bool,
     children: Vec<FileDiffWidget>,
 }
 
@@ -170,7 +155,6 @@ impl DiffWidget {
         Self {
             staged,
             focused: !staged,
-            expanded: false,
             diff: Diff::default(),
             children: Vec::new(),
         }
@@ -182,17 +166,15 @@ impl DiffWidget {
             return;
         }
 
-        if self.expanded {
-            if self.children.iter().all(|c| !c.focused) {
-                self.children[0].focused = true;
-                return;
-            }
+        if self.children.iter().all(|c| !c.focused) {
+            self.children[0].focused = true;
+            return;
+        }
 
-            for child in self.children.iter_mut().skip_while(|c| !c.focused) {
-                child.focus_next();
-                if child.focused {
-                    return;
-                }
+        for child in self.children.iter_mut().skip_while(|c| !c.focused) {
+            child.focus_next();
+            if child.focused {
+                return;
             }
         }
 
@@ -200,24 +182,22 @@ impl DiffWidget {
     }
 
     pub fn focus_prev(&mut self) {
-        if self.expanded {
-            let child_focused = self.child_focused();
-            if !self.focused && !child_focused {
-                self.focused = true;
-                self.children.last_mut().expect("infallible").focus_prev();
+        let child_focused = self.child_focused();
+        if !self.focused && !child_focused {
+            self.focused = true;
+            self.children.last_mut().expect("infallible").focus_prev();
+            return;
+        }
+
+        for child in self.children.iter_mut().rev().skip_while(|c| !c.focused) {
+            child.focus_prev();
+            if child.focused {
                 return;
             }
+        }
 
-            for child in self.children.iter_mut().rev().skip_while(|c| !c.focused) {
-                child.focus_prev();
-                if child.focused {
-                    return;
-                }
-            }
-
-            if child_focused {
-                return;
-            }
+        if child_focused {
+            return;
         }
 
         self.focused = !self.focused;
@@ -227,14 +207,6 @@ impl DiffWidget {
         self.children.iter().any(|c| c.focused)
     }
 
-    pub fn toggle_expand(&mut self) {
-        if let Some(child) = self.children.iter_mut().find(|c| c.focused) {
-            child.toggle_expand();
-        } else if self.diff.len() != 0 {
-            self.expanded = !self.expanded;
-        }
-    }
-
     pub fn reload(&mut self, git: &Git) -> orfail::Result<()> {
         self.diff = if self.staged {
             git.diff_cached().or_fail()?
@@ -242,11 +214,7 @@ impl DiffWidget {
             git.diff().or_fail()?
         };
 
-        if self.diff.files.is_empty() {
-            self.expanded = false;
-        }
-
-        // TODO: merge old state (e.g., focused, expanded)
+        // TODO: merge old state (e.g., focused)
         self.children.clear();
         for file in &self.diff.files {
             self.children.push(FileDiffWidget::new(file));
@@ -258,28 +226,21 @@ impl DiffWidget {
     pub fn render(&self, canvas: &mut Canvas) -> orfail::Result<()> {
         canvas.draw_text(
             Text::new(&format!(
-                "{} {} changes ({}){}",
+                "{} {} changes ({})",
                 if self.focused && !self.child_focused() {
                     ">"
                 } else {
                     " "
                 },
                 if self.staged { "Staged" } else { "Unstaged" },
-                self.diff.len(),
-                if self.diff.len() == 0 || self.expanded {
-                    ""
-                } else {
-                    "…"
-                }
+                self.diff.len()
             ))
             .or_fail()?,
         );
         canvas.draw_newline();
 
-        if self.expanded {
-            for (child, diff) in self.children.iter().zip(self.diff.files.iter()) {
-                child.render(canvas, diff).or_fail()?;
-            }
+        for (child, diff) in self.children.iter().zip(self.diff.files.iter()) {
+            child.render(canvas, diff).or_fail()?;
         }
         canvas.draw_newline();
         Ok(())
@@ -289,7 +250,6 @@ impl DiffWidget {
 #[derive(Debug, Default)]
 pub struct FileDiffWidget {
     pub focused: bool,
-    pub expanded: bool,
     pub children: Vec<ChunkDiffWidget>,
 }
 
@@ -297,7 +257,6 @@ impl FileDiffWidget {
     pub fn new(diff: &FileDiff) -> Self {
         Self {
             focused: false,
-            expanded: false,
             children: diff.chunks().map(ChunkDiffWidget::new).collect(),
         }
     }
@@ -306,23 +265,21 @@ impl FileDiffWidget {
         // TODO: nename handling
         canvas.draw_text(
             Text::new(&format!(
-                "  {} modified {}{}",
+                "  {} modified {} ({})",
                 if self.focused && !self.child_focused() {
                     ">"
                 } else {
                     " "
                 },
                 diff.path().display(),
-                if self.expanded { "" } else { "…" }
+                self.children.len()
             ))
             .or_fail()?,
         );
         canvas.draw_newline();
 
-        if self.expanded {
-            for (child, chunk) in self.children.iter().zip(diff.chunks()) {
-                child.render(canvas, chunk).or_fail()?;
-            }
+        for (child, chunk) in self.children.iter().zip(diff.chunks()) {
+            child.render(canvas, chunk).or_fail()?;
         }
 
         Ok(())
@@ -334,17 +291,15 @@ impl FileDiffWidget {
             return;
         }
 
-        if self.expanded {
-            if self.children.iter().all(|c| !c.focused) {
-                self.children[0].focused = true;
-                return;
-            }
+        if self.children.iter().all(|c| !c.focused) {
+            self.children[0].focused = true;
+            return;
+        }
 
-            for child in self.children.iter_mut().skip_while(|c| !c.focused) {
-                child.focus_next();
-                if child.focused {
-                    return;
-                }
+        for child in self.children.iter_mut().skip_while(|c| !c.focused) {
+            child.focus_next();
+            if child.focused {
+                return;
             }
         }
 
@@ -352,24 +307,22 @@ impl FileDiffWidget {
     }
 
     pub fn focus_prev(&mut self) {
-        if self.expanded {
-            let child_focused = self.child_focused();
-            if !self.focused && !child_focused {
-                self.focused = true;
-                self.children.last_mut().expect("infallible").focused = true;
+        let child_focused = self.child_focused();
+        if !self.focused && !child_focused {
+            self.focused = true;
+            self.children.last_mut().expect("infallible").focused = true;
+            return;
+        }
+
+        for child in self.children.iter_mut().rev().skip_while(|c| !c.focused) {
+            child.focus_prev();
+            if child.focused {
                 return;
             }
+        }
 
-            for child in self.children.iter_mut().rev().skip_while(|c| !c.focused) {
-                child.focus_prev();
-                if child.focused {
-                    return;
-                }
-            }
-
-            if child_focused {
-                return;
-            }
+        if child_focused {
+            return;
         }
 
         self.focused = !self.focused;
@@ -378,36 +331,24 @@ impl FileDiffWidget {
     fn child_focused(&self) -> bool {
         self.children.iter().any(|c| c.focused)
     }
-
-    pub fn toggle_expand(&mut self) {
-        if self.children.is_empty() {
-            return;
-        }
-        self.expanded = !self.expanded;
-    }
 }
 
 #[derive(Debug, Default)]
 pub struct ChunkDiffWidget {
     pub focused: bool,
-    pub expanded: bool,
 }
 
 impl ChunkDiffWidget {
     pub fn new(_diff: &ChunkDiff) -> Self {
-        Self {
-            focused: false,
-            expanded: false,
-        }
+        Self { focused: false }
     }
 
     pub fn render(&self, canvas: &mut Canvas, diff: &ChunkDiff) -> orfail::Result<()> {
         canvas.draw_text(
             Text::new(&format!(
-                "    {} {}{}",
+                "    {} {}",
                 if self.focused { ">" } else { " " },
                 diff.head_line(),
-                if self.expanded { "" } else { "…" }
             ))
             .or_fail()?,
         );
