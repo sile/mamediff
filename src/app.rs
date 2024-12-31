@@ -395,12 +395,13 @@ impl DiffWidget {
     pub fn render(&self, canvas: &mut Canvas, cursor: &Cursor) -> orfail::Result<()> {
         canvas.draw_text(
             Text::new(&format!(
-                "{} {} changes ({} files){}",
+                "{}{} {} changes ({} files){}",
                 if self.widget_path.path == cursor.path {
                     ">"
                 } else {
                     " "
                 },
+                if cursor.path.len() == 1 { "|" } else { " " },
                 if self.staged { "Staged" } else { "Unstaged" },
                 self.diff.len(),
                 if self.expanded { "" } else { COLLAPSED_MARK }
@@ -449,11 +450,17 @@ impl FileDiffWidget {
         // TODO: rename handling
         canvas.draw_text(
             Text::new(&format!(
-                "  {} modified {} ({} chunks){}",
+                "{}{} modified {} ({} chunks){}",
+                match cursor.path.len() {
+                    1 => " .",
+                    _ => "  ",
+                },
                 if self.widget_path.path == cursor.path {
-                    ">"
+                    ">|"
+                } else if cursor.path.len() == 2 {
+                    " |"
                 } else {
-                    " "
+                    "  "
                 },
                 diff.path().display(),
                 self.children.len(),
@@ -608,11 +615,18 @@ impl ChunkDiffWidget {
     ) -> orfail::Result<()> {
         canvas.draw_text(
             Text::new(&format!(
-                "    {} {}{}",
+                "{}{} {}{}",
+                match cursor.path.len() {
+                    1 => " .  ",
+                    2 => "   .",
+                    _ => "    ",
+                },
                 if self.widget_path.path == cursor.path {
-                    ">"
+                    ">|"
+                } else if cursor.path.len() == 3 {
+                    " |"
                 } else {
-                    " "
+                    "  "
                 },
                 diff.head_line(),
                 if self.expanded { "" } else { COLLAPSED_MARK }
@@ -784,12 +798,25 @@ impl LineDiffWidget {
     ) -> orfail::Result<()> {
         canvas.draw_text(
             Text::new(&format!(
-                "      {} {}",
-                if self.widget_path.path == cursor.path {
-                    ">"
-                } else {
-                    " "
+                "{}{} {}",
+                match cursor.path.len() {
+                    1 => " .    ",
+                    2 => "   .  ",
+                    3 => "     .",
+                    _ => "      ",
                 },
+                if self.widget_path.path == cursor.path {
+                    ">|"
+                } else if cursor.path.len() == 4 {
+                    " |"
+                } else {
+                    "  "
+                },
+                // if self.widget_path.path == cursor.path {
+                //     ">"
+                // } else {
+                //     " "
+                // },
                 diff
             ))
             .or_fail()?,
