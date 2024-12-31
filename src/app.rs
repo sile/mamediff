@@ -55,20 +55,26 @@ impl App {
         Ok(())
     }
 
+    fn is_togglable(&self) -> bool {
+        self.widgets.iter().any(|w| w.is_togglable(&self.cursor))
+    }
+
     fn render_legend(&mut self, canvas: &mut Canvas) -> orfail::Result<()> {
         let mut tmp = Canvas::new();
-        let mut cols = 14;
-        if self.show_legend {
-            tmp.draw_textl(Text::new("|            ").or_fail()?);
-            tmp.draw_textl(Text::new("| (q)uit     ").or_fail()?);
-            tmp.draw_textl(Text::new("| (t)oggle   ").or_fail()?);
-            tmp.draw_textl(Text::new("|            ").or_fail()?);
-            tmp.draw_textl(Text::new("+- (h)ide ---").or_fail()?);
+        let cols = if self.show_legend {
+            tmp.draw_textl(Text::new("|                  ").or_fail()?);
+            tmp.draw_textl(Text::new("| (q)uit [ESC, C-c]").or_fail()?);
+            if self.is_togglable() {
+                tmp.draw_textl(Text::new("| (t)oggle    [TAB]").or_fail()?);
+            }
+            tmp.draw_textl(Text::new("|                  ").or_fail()?);
+            tmp.draw_textl(Text::new("+- (h)ide ---------").or_fail()?);
+            20
         } else {
-            tmp.draw_textl(Text::new("|       ").or_fail()?);
-            tmp.draw_textl(Text::new("+- (h) -").or_fail()?);
-            cols = 8;
-        }
+            tmp.draw_textl(Text::new("|          ").or_fail()?);
+            tmp.draw_textl(Text::new("+- s(h)ow -").or_fail()?);
+            11
+        };
         tmp.draw_newline();
 
         canvas.draw_canvas(
@@ -226,6 +232,16 @@ impl DiffWidget {
             diff: Diff::default(),
             children: Vec::new(),
             expanded: true,
+        }
+    }
+
+    pub fn is_togglable(&self, cursor: &Cursor) -> bool {
+        if self.widget_path.path == cursor.path {
+            !self.children.is_empty()
+        } else if cursor.path.starts_with(&self.widget_path.path) {
+            self.children.iter().any(|w| w.is_togglable(cursor))
+        } else {
+            false
         }
     }
 
@@ -432,6 +448,16 @@ impl FileDiffWidget {
         Ok(())
     }
 
+    pub fn is_togglable(&self, cursor: &Cursor) -> bool {
+        if self.widget_path.path == cursor.path {
+            !self.children.is_empty()
+        } else if cursor.path.starts_with(&self.widget_path.path) {
+            self.children.iter().any(|w| w.is_togglable(cursor))
+        } else {
+            false
+        }
+    }
+
     pub const LEVEL: usize = 2;
 
     pub fn handle_right(&mut self, cursor: &mut Cursor) -> orfail::Result<()> {
@@ -558,6 +584,16 @@ impl ChunkDiffWidget {
 
     pub const LEVEL: usize = 3;
 
+    pub fn is_togglable(&self, cursor: &Cursor) -> bool {
+        if self.widget_path.path == cursor.path {
+            !self.children.is_empty()
+        } else if cursor.path.starts_with(&self.widget_path.path) {
+            self.children.iter().any(|w| w.is_togglable(cursor))
+        } else {
+            false
+        }
+    }
+
     pub fn handle_right(&mut self, cursor: &mut Cursor) -> orfail::Result<()> {
         (cursor.path.len() >= Self::LEVEL).or_fail()?;
 
@@ -677,6 +713,10 @@ impl LineDiffWidget {
     }
 
     pub const LEVEL: usize = 4;
+
+    pub fn is_togglable(&self, _cursor: &Cursor) -> bool {
+        false
+    }
 
     pub fn handle_right(&mut self, cursor: &mut Cursor) -> orfail::Result<()> {
         (cursor.path.len() >= Self::LEVEL).or_fail()?;

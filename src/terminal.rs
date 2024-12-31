@@ -35,7 +35,7 @@ impl Row {
                 continue;
             }
             text.text.truncate(col - n);
-            break;
+            n = col;
         }
         if col > n {
             let mut padding = String::new();
