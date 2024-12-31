@@ -452,7 +452,12 @@ impl FileDiffWidget {
             Text::new(&format!(
                 "{}{} modified {} ({} chunks){}",
                 match cursor.path.len() {
-                    1 => " .",
+                    1 =>
+                        if self.widget_path.path.starts_with(&cursor.path[..1]) {
+                            " :"
+                        } else {
+                            " ."
+                        },
                     _ => "  ",
                 },
                 if self.widget_path.path == cursor.path {
@@ -617,8 +622,18 @@ impl ChunkDiffWidget {
             Text::new(&format!(
                 "{}{} {}{}",
                 match cursor.path.len() {
-                    1 => " .  ",
-                    2 => "   .",
+                    1 =>
+                        if self.widget_path.path.starts_with(&cursor.path[..1]) {
+                            " :  "
+                        } else {
+                            " .  "
+                        },
+                    2 =>
+                        if self.widget_path.path.starts_with(&cursor.path[..2]) {
+                            "   :"
+                        } else {
+                            "   ."
+                        },
                     _ => "    ",
                 },
                 if self.widget_path.path == cursor.path {
@@ -800,9 +815,24 @@ impl LineDiffWidget {
             Text::new(&format!(
                 "{}{} {}",
                 match cursor.path.len() {
-                    1 => " .    ",
-                    2 => "   .  ",
-                    3 => "     .",
+                    1 =>
+                        if self.widget_path.path.starts_with(&cursor.path[..1]) {
+                            " :    "
+                        } else {
+                            " .    "
+                        },
+                    2 =>
+                        if self.widget_path.path.starts_with(&cursor.path[..2]) {
+                            "   :  "
+                        } else {
+                            "   .  "
+                        },
+                    3 =>
+                        if self.widget_path.path.starts_with(&cursor.path[..3]) {
+                            "     :"
+                        } else {
+                            "     ."
+                        },
                     _ => "      ",
                 },
                 if self.widget_path.path == cursor.path {
@@ -812,11 +842,6 @@ impl LineDiffWidget {
                 } else {
                     "  "
                 },
-                // if self.widget_path.path == cursor.path {
-                //     ">"
-                // } else {
-                //     " "
-                // },
                 diff
             ))
             .or_fail()?,
