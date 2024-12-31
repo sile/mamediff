@@ -4,8 +4,11 @@ use orfail::OrFail;
 use crate::{
     diff::{ChunkDiff, Diff, FileDiff, LineDiff},
     git::Git,
-    terminal::{Canvas, Terminal, Text},
+    terminal::{Canvas, Position, Terminal, Text},
 };
+
+// const COLLAPSED_MARK: &str = "…";
+const COLLAPSED_MARK: &str = "...";
 
 #[derive(Debug)]
 pub struct App {
@@ -14,6 +17,7 @@ pub struct App {
     git: Git,
     widgets: Vec<DiffWidget>,
     cursor: Cursor,
+    show_legend: bool,
 }
 
 impl App {
@@ -27,6 +31,7 @@ impl App {
             // TODO: untrack files
             widgets: vec![DiffWidget::new(false), DiffWidget::new(true)],
             cursor: Cursor::new(),
+            show_legend: true,
         })
     }
 
@@ -45,7 +50,31 @@ impl App {
         for widget in &mut self.widgets {
             widget.render(&mut canvas, &self.cursor).or_fail()?;
         }
+        self.render_legend(&mut canvas).or_fail()?;
         self.terminal.render(canvas).or_fail()?;
+        Ok(())
+    }
+
+    fn render_legend(&mut self, canvas: &mut Canvas) -> orfail::Result<()> {
+        let mut tmp = Canvas::new();
+        let mut cols = 14;
+        if self.show_legend {
+            tmp.draw_textl(Text::new("|            ").or_fail()?);
+            tmp.draw_textl(Text::new("| (q)uit     ").or_fail()?);
+            tmp.draw_textl(Text::new("| (t)oggle   ").or_fail()?);
+            tmp.draw_textl(Text::new("|            ").or_fail()?);
+            tmp.draw_textl(Text::new("+- (h)ide ---").or_fail()?);
+        } else {
+            tmp.draw_textl(Text::new("|       ").or_fail()?);
+            tmp.draw_textl(Text::new("+- (h) -").or_fail()?);
+            cols = 8;
+        }
+        tmp.draw_newline();
+
+        canvas.draw_canvas(
+            Position::new(0, self.terminal.size().cols.saturating_sub(cols)),
+            tmp,
+        );
         Ok(())
     }
 
@@ -90,6 +119,10 @@ impl App {
             KeyCode::Char('l') => {
                 todo!()
             }
+            KeyCode::Char('h') => {
+                self.show_legend = !self.show_legend;
+                self.render().or_fail()?;
+            }
             KeyCode::Char('p') if event.modifiers.contains(KeyModifiers::CONTROL) => {
                 self.handle_up().or_fail()?;
                 self.render().or_fail()?;
@@ -122,7 +155,7 @@ impl App {
                 self.handle_left().or_fail()?;
                 self.render().or_fail()?;
             }
-            KeyCode::Tab => {
+            KeyCode::Char('t') | KeyCode::Tab => {
                 self.handle_tab().or_fail()?;
                 self.render().or_fail()?;
             }
@@ -311,7 +344,7 @@ impl DiffWidget {
                 },
                 if self.staged { "Staged" } else { "Unstaged" },
                 self.diff.len(),
-                if self.expanded { "" } else { "…" }
+                if self.expanded { "" } else { COLLAPSED_MARK }
             ))
             .or_fail()?,
         );
@@ -365,7 +398,7 @@ impl FileDiffWidget {
                 },
                 diff.path().display(),
                 self.children.len(),
-                if self.expanded { "" } else { "…" }
+                if self.expanded { "" } else { COLLAPSED_MARK }
             ))
             .or_fail()?,
         );
@@ -493,7 +526,7 @@ impl ChunkDiffWidget {
                     " "
                 },
                 diff.head_line(),
-                if self.expanded { "" } else { "…" }
+                if self.expanded { "" } else { COLLAPSED_MARK }
             ))
             .or_fail()?,
         );

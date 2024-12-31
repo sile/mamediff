@@ -25,6 +25,29 @@ pub struct Row {
     pub texts: Vec<Text>,
 }
 
+impl Row {
+    pub fn replace(&mut self, col: usize, src: Row) {
+        // TODO: consider multi byte char
+        let mut n = 0;
+        for text in &mut self.texts {
+            if n + text.text.len() < col {
+                n += text.text.len();
+                continue;
+            }
+            text.text.truncate(col - n);
+            break;
+        }
+        if col > n {
+            let mut padding = String::new();
+            for _ in n..col {
+                padding.push(' ');
+            }
+            self.texts.push(Text::new(&padding).expect("infallible"));
+        }
+        self.texts.extend(src.texts);
+    }
+}
+
 // TODO: rename
 #[derive(Debug)]
 pub struct Canvas {
@@ -40,8 +63,25 @@ impl Canvas {
         }
     }
 
+    pub fn draw_canvas(&mut self, position: Position, canvas: Canvas) {
+        for (row_i, src_row) in canvas.rows.into_iter().enumerate() {
+            let row_i = row_i + position.row;
+            while self.rows.len() <= row_i {
+                self.rows.push(Row::default());
+            }
+
+            let dst_row = &mut self.rows[row_i];
+            dst_row.replace(position.col, src_row);
+        }
+    }
+
     pub fn draw_text(&mut self, text: Text) {
         self.current_row.texts.push(text);
+    }
+
+    pub fn draw_textl(&mut self, text: Text) {
+        self.draw_text(text);
+        self.draw_newline();
     }
 
     pub fn draw_newline(&mut self) {
