@@ -69,11 +69,11 @@ impl App {
         }
 
         match event.code {
-            KeyCode::Char('q') => {
+            KeyCode::Char('q') | KeyCode::Esc => {
                 self.exit = true;
             }
-            KeyCode::Char('h') => {
-                todo!()
+            KeyCode::Char('c') if event.modifiers.contains(KeyModifiers::CONTROL) => {
+                self.exit = true;
             }
             KeyCode::Char('r') => {
                 self.reload_diff().or_fail()?;
@@ -84,13 +84,10 @@ impl App {
             KeyCode::Char('s') => {
                 todo!()
             }
-            KeyCode::Char('k') => {
+            KeyCode::Char('D') => {
                 todo!()
             }
-            KeyCode::Char(' ') if event.modifiers.contains(KeyModifiers::CONTROL) => {
-                todo!()
-            }
-            KeyCode::Char('g') if event.modifiers.contains(KeyModifiers::CONTROL) => {
+            KeyCode::Char('l') => {
                 todo!()
             }
             KeyCode::Char('p') if event.modifiers.contains(KeyModifiers::CONTROL) => {
@@ -241,6 +238,7 @@ impl DiffWidget {
 
         if cursor.path.len() == Self::LEVEL {
             cursor.path.push(0);
+            self.expanded = true;
         } else {
             for child in &mut self.children {
                 child.handle_right(cursor).or_fail()?;
@@ -285,6 +283,7 @@ impl DiffWidget {
     }
 
     pub fn reload(&mut self, git: &Git) -> orfail::Result<()> {
+        // TODO: Execute in parallel
         self.diff = if self.staged {
             git.diff_cached().or_fail()?
         } else {
@@ -412,6 +411,7 @@ impl FileDiffWidget {
 
         if cursor.path.len() == Self::LEVEL {
             cursor.path.push(0);
+            self.expanded = true;
         } else {
             for child in &mut self.children {
                 child.handle_right(cursor).or_fail()?;
@@ -511,7 +511,9 @@ impl ChunkDiffWidget {
     pub fn toggle(&mut self, cursor: &Cursor) -> orfail::Result<()> {
         (cursor.path.len() >= Self::LEVEL).or_fail()?;
 
-        if self.children.is_empty() || cursor.path[Self::LEVEL - 1] != self.widget_path.last_index()
+        if self.children.is_empty()
+            || cursor.path.len() > Self::LEVEL
+            || cursor.path[Self::LEVEL - 1] != self.widget_path.last_index()
         {
             return Ok(());
         }
@@ -533,6 +535,7 @@ impl ChunkDiffWidget {
 
         if cursor.path.len() == Self::LEVEL {
             cursor.path.push(0);
+            self.expanded = true;
         } else {
             for child in self.children.iter_mut() {
                 child.handle_right(cursor).or_fail()?;
