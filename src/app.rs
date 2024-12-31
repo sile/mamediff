@@ -64,6 +64,7 @@ impl App {
         let cols = if self.show_legend {
             tmp.draw_textl(Text::new("|                  ").or_fail()?);
             tmp.draw_textl(Text::new("| (q)uit [ESC, C-c]").or_fail()?);
+            tmp.draw_textl(Text::new("| (r)load          ").or_fail()?);
             if self.is_togglable() {
                 tmp.draw_textl(Text::new("| (t)oggle    [TAB]").or_fail()?);
             }
