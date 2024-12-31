@@ -135,7 +135,7 @@ impl App {
                 todo!()
             }
             KeyCode::Char('s') => {
-                todo!()
+                self.handle_stage().or_fail()?;
             }
             KeyCode::Char('D') => {
                 todo!()
@@ -226,6 +226,10 @@ impl App {
         }
         self.render().or_fail()?;
         Ok(())
+    }
+
+    fn handle_stage(&mut self) -> orfail::Result<()> {
+        false.or_fail()
     }
 }
 
