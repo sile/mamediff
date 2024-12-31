@@ -72,7 +72,7 @@ impl App {
         let cols = if self.show_legend {
             tmp.draw_textl(Text::new("|                  ").or_fail()?);
             tmp.draw_textl(Text::new("| (q)uit [ESC, C-c]").or_fail()?);
-            tmp.draw_textl(Text::new("| (r)load          ").or_fail()?);
+            tmp.draw_textl(Text::new("| (r)eload         ").or_fail()?);
             if self.is_togglable() {
                 tmp.draw_textl(Text::new("| (t)oggle    [TAB]").or_fail()?);
             }
@@ -107,7 +107,7 @@ impl App {
             Event::FocusGained => Ok(()),
             Event::FocusLost => Ok(()),
             Event::Key(event) => self.handle_key_event(event).or_fail(),
-            Event::Mouse(_) => Ok(()),
+            Event::Mouse(_) => Ok(()), // TODO: Add handling
             Event::Paste(_) => Ok(()),
             Event::Resize(_, _) => {
                 self.terminal.on_resized().or_fail()?;
