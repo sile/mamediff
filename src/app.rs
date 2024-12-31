@@ -140,9 +140,6 @@ impl App {
             KeyCode::Char('D') => {
                 todo!()
             }
-            KeyCode::Char('l') => {
-                todo!()
-            }
             KeyCode::Char('h') => {
                 self.show_legend = !self.show_legend;
                 self.render().or_fail()?;
