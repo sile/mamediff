@@ -59,6 +59,14 @@ impl App {
         self.widgets.iter().any(|w| w.is_togglable(&self.cursor))
     }
 
+    fn can_stage(&self) -> bool {
+        self.widgets.iter().any(|w| w.can_stage(&self.cursor))
+    }
+
+    fn can_unstage(&self) -> bool {
+        self.widgets.iter().any(|w| w.can_unstage(&self.cursor))
+    }
+
     fn render_legend(&mut self, canvas: &mut Canvas) -> orfail::Result<()> {
         let mut tmp = Canvas::new();
         let cols = if self.show_legend {
@@ -67,6 +75,15 @@ impl App {
             tmp.draw_textl(Text::new("| (r)load          ").or_fail()?);
             if self.is_togglable() {
                 tmp.draw_textl(Text::new("| (t)oggle    [TAB]").or_fail()?);
+            }
+            if self.can_stage() {
+                tmp.draw_textl(Text::new("| (s)tage          ").or_fail()?);
+            }
+            if self.can_stage() {
+                tmp.draw_textl(Text::new("| (D)iscard        ").or_fail()?);
+            }
+            if self.can_unstage() {
+                tmp.draw_textl(Text::new("| (u)nstage        ").or_fail()?);
             }
             tmp.draw_textl(Text::new("|                  ").or_fail()?);
             tmp.draw_textl(Text::new("+- (h)ide ---------").or_fail()?);
@@ -241,6 +258,30 @@ impl DiffWidget {
             !self.children.is_empty()
         } else if cursor.path.starts_with(&self.widget_path.path) {
             self.children.iter().any(|w| w.is_togglable(cursor))
+        } else {
+            false
+        }
+    }
+
+    pub fn can_stage(&self, cursor: &Cursor) -> bool {
+        if self.staged {
+            false
+        } else if self.widget_path.path == cursor.path {
+            !self.children.is_empty()
+        } else if cursor.path.starts_with(&self.widget_path.path) {
+            self.children.iter().any(|w| w.can_stage(cursor))
+        } else {
+            false
+        }
+    }
+
+    pub fn can_unstage(&self, cursor: &Cursor) -> bool {
+        if !self.staged {
+            false
+        } else if self.widget_path.path == cursor.path {
+            !self.children.is_empty()
+        } else if cursor.path.starts_with(&self.widget_path.path) {
+            self.children.iter().any(|w| w.can_unstage(cursor))
         } else {
             false
         }
@@ -459,6 +500,26 @@ impl FileDiffWidget {
         }
     }
 
+    pub fn can_stage(&self, cursor: &Cursor) -> bool {
+        if self.widget_path.path == cursor.path {
+            !self.children.is_empty()
+        } else if cursor.path.starts_with(&self.widget_path.path) {
+            self.children.iter().any(|w| w.can_stage(cursor))
+        } else {
+            false
+        }
+    }
+
+    pub fn can_unstage(&self, cursor: &Cursor) -> bool {
+        if self.widget_path.path == cursor.path {
+            !self.children.is_empty()
+        } else if cursor.path.starts_with(&self.widget_path.path) {
+            self.children.iter().any(|w| w.can_unstage(cursor))
+        } else {
+            false
+        }
+    }
+
     pub const LEVEL: usize = 2;
 
     pub fn handle_right(&mut self, cursor: &mut Cursor) -> orfail::Result<()> {
@@ -585,6 +646,26 @@ impl ChunkDiffWidget {
 
     pub const LEVEL: usize = 3;
 
+    pub fn can_stage(&self, cursor: &Cursor) -> bool {
+        if self.widget_path.path == cursor.path {
+            !self.children.is_empty()
+        } else if cursor.path.starts_with(&self.widget_path.path) {
+            self.children.iter().any(|w| w.can_stage(cursor))
+        } else {
+            false
+        }
+    }
+
+    pub fn can_unstage(&self, cursor: &Cursor) -> bool {
+        if self.widget_path.path == cursor.path {
+            !self.children.is_empty()
+        } else if cursor.path.starts_with(&self.widget_path.path) {
+            self.children.iter().any(|w| w.can_unstage(cursor))
+        } else {
+            false
+        }
+    }
+
     pub fn is_togglable(&self, cursor: &Cursor) -> bool {
         if self.widget_path.path == cursor.path {
             !self.children.is_empty()
@@ -683,11 +764,15 @@ impl Cursor {
 #[derive(Debug)]
 pub struct LineDiffWidget {
     pub widget_path: WidgetPath,
+    pub has_diff: bool,
 }
 
 impl LineDiffWidget {
-    pub fn new(_diff: &LineDiff, widget_path: WidgetPath) -> Self {
-        Self { widget_path }
+    pub fn new(diff: &LineDiff, widget_path: WidgetPath) -> Self {
+        Self {
+            widget_path,
+            has_diff: !matches!(diff, LineDiff::Both(_)),
+        }
     }
 
     pub fn render(
@@ -714,6 +799,22 @@ impl LineDiffWidget {
     }
 
     pub const LEVEL: usize = 4;
+
+    pub fn can_stage(&self, cursor: &Cursor) -> bool {
+        if self.widget_path.path == cursor.path {
+            self.has_diff
+        } else {
+            false
+        }
+    }
+
+    pub fn can_unstage(&self, cursor: &Cursor) -> bool {
+        if self.widget_path.path == cursor.path {
+            self.has_diff
+        } else {
+            false
+        }
+    }
 
     pub fn is_togglable(&self, _cursor: &Cursor) -> bool {
         false
