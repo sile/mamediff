@@ -2,6 +2,7 @@ use std::{io::Write, time::Duration};
 
 use crossterm::{
     event::Event,
+    style::{ContentStyle, StyledContent},
     terminal::{EnterAlternateScreen, LeaveAlternateScreen},
 };
 use orfail::OrFail;
@@ -9,6 +10,7 @@ use orfail::OrFail;
 #[derive(Debug)]
 pub struct Text {
     text: String,
+    attrs: crossterm::style::Attributes,
 }
 
 impl Text {
@@ -16,7 +18,18 @@ impl Text {
         // TODO: validate
         Ok(Self {
             text: text.to_owned(),
+            attrs: crossterm::style::Attributes::default(),
         })
+    }
+
+    pub fn bold(mut self) -> Self {
+        self.attrs.set(crossterm::style::Attribute::Bold);
+        self
+    }
+
+    pub fn dim(mut self) -> Self {
+        self.attrs.set(crossterm::style::Attribute::Dim);
+        self
     }
 }
 
@@ -141,17 +154,23 @@ impl Terminal {
         )
         .or_fail()?;
 
-        // crossterm::queue!(
-        //     writer,
-        //     crossterm::style::SetAttribute(crossterm::style::Attribute::Reverse)
-        // )
-        // .or_fail()?;
-
         for (row_i, row) in canvas.rows.into_iter().enumerate() {
             crossterm::queue!(writer, crossterm::cursor::MoveTo(0, row_i as u16)).or_fail()?;
 
             for text in row.texts {
-                crossterm::queue!(writer, crossterm::style::Print(text.text)).or_fail()?;
+                if text.attrs.is_empty() {
+                    crossterm::queue!(writer, crossterm::style::Print(text.text)).or_fail()?;
+                } else {
+                    let content = StyledContent::new(
+                        ContentStyle {
+                            attributes: text.attrs,
+                            ..Default::default()
+                        },
+                        text.text,
+                    );
+                    crossterm::queue!(writer, crossterm::style::PrintStyledContent(content))
+                        .or_fail()?;
+                }
             }
         }
 

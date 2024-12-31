@@ -796,26 +796,31 @@ impl LineDiffWidget {
         diff: &LineDiff,
         cursor: &Cursor,
     ) -> orfail::Result<()> {
-        canvas.draw_text(
-            Text::new(&format!(
-                "{}{} {}",
-                match cursor.path.len() {
-                    1 if self.widget_path.path.starts_with(&cursor.path[..1]) => " :    ",
-                    2 if self.widget_path.path.starts_with(&cursor.path[..2]) => "   :  ",
-                    3 if self.widget_path.path.starts_with(&cursor.path[..3]) => "     :",
-                    _ => "      ",
-                },
-                if self.widget_path.path == cursor.path {
-                    ">|"
-                } else if cursor.path.len() == 4 {
-                    " |"
-                } else {
-                    "  "
-                },
-                diff
-            ))
-            .or_fail()?,
-        );
+        let prefix = Text::new(&format!(
+            "{}{} ",
+            match cursor.path.len() {
+                1 if self.widget_path.path.starts_with(&cursor.path[..1]) => " :    ",
+                2 if self.widget_path.path.starts_with(&cursor.path[..2]) => "   :  ",
+                3 if self.widget_path.path.starts_with(&cursor.path[..3]) => "     :",
+                _ => "      ",
+            },
+            if self.widget_path.path == cursor.path {
+                ">|"
+            } else if cursor.path.len() == 4 {
+                " |"
+            } else {
+                "  "
+            }
+        ))
+        .or_fail()?;
+        let mut text = Text::new(&format!("{}", diff)).or_fail()?;
+        match diff {
+            LineDiff::Old(_) => text = text.dim(),
+            LineDiff::New(_) => text = text.bold(),
+            LineDiff::Both(_) => {}
+        }
+        canvas.draw_text(prefix);
+        canvas.draw_text(text);
         canvas.draw_newline();
 
         Ok(())
