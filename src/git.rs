@@ -13,10 +13,39 @@ impl Git {
     }
 
     pub fn stage(&self, diff: &Diff) -> orfail::Result<()> {
-        todo!()
+        let patch = diff.to_string();
+
+        // TODO: use pipe
+        std::fs::write(".mamediff.patch", &patch).or_fail()?;
+
+        let output = Command::new("git")
+            .arg("apply")
+            .arg("--cached")
+            .arg(".mamediff.patch") // TODO: use pipe
+            .output()
+            .or_fail_with(|e| format!("Failed to execute `$ git apply --cached`: {e}"))?;
+        output.status.success().or_fail_with(|()| {
+            format!(
+                "Failed to execute `$ git apply --cached`{}{}",
+                output
+                    .status
+                    .code()
+                    .map(|c| format!(": exit_code={c}"))
+                    .unwrap_or_default(),
+                (!output.stderr.is_empty())
+                    .then(|| format!(
+                        "\n\nSTDERR\n------\n{}\n------",
+                        String::from_utf8_lossy(&output.stderr)
+                    ))
+                    .unwrap_or_default()
+            )
+        })?;
+
+        Ok(())
     }
 
     pub fn diff(&self) -> orfail::Result<Diff> {
+        // TODO: factor out
         let output = Command::new("git")
             .arg("diff")
             .output()
