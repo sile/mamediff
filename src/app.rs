@@ -276,10 +276,15 @@ impl DiffWidget {
         }
 
         if cursor.path != self.widget_path.path {
-            return Err(orfail::Failure::new("TODO"));
+            let i = cursor.path[Self::LEVEL];
+            self.children
+                .get_mut(i)
+                .or_fail()?
+                .handle_stage(git, cursor, self.diff.files.get(i).or_fail()?)
+                .or_fail()?;
+        } else {
+            git.stage(&self.diff).or_fail()?;
         }
-
-        git.stage(&self.diff).or_fail()?;
 
         Ok(())
     }
@@ -483,6 +488,23 @@ impl FileDiffWidget {
             children,
             expanded: false,
         }
+    }
+
+    fn handle_stage(&mut self, git: &Git, cursor: &Cursor, diff: &FileDiff) -> orfail::Result<()> {
+        cursor.path.starts_with(&self.widget_path.path).or_fail()?;
+
+        if cursor.path != self.widget_path.path {
+            // self.children
+            //     .get_mut(cursor.path[Self::LEVEL])
+            //     .or_fail()?
+            //     .handle_stage(git, cursor)
+            //     .or_fail()?;
+            todo!()
+        } else {
+            git.stage(&diff.to_diff()).or_fail()?;
+        }
+
+        Ok(())
     }
 
     pub fn render(

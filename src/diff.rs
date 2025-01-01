@@ -285,6 +285,12 @@ pub enum FileDiff {
 }
 
 impl FileDiff {
+    pub fn to_diff(&self) -> Diff {
+        Diff {
+            files: vec![self.clone()],
+        }
+    }
+
     pub fn path(&self) -> &PathBuf {
         match self {
             FileDiff::New { path, .. }
