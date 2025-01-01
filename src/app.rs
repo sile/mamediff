@@ -253,6 +253,7 @@ impl App {
     }
 }
 
+// TODO: Add Widget trait
 #[derive(Debug)]
 pub struct DiffWidget {
     widget_path: WidgetPath,
@@ -450,6 +451,14 @@ impl DiffWidget {
         Ok(())
     }
 
+    pub fn rows(&self) -> usize {
+        if self.expanded {
+            1 + self.children.iter().map(|c| c.rows()).sum::<usize>()
+        } else {
+            1
+        }
+    }
+
     pub fn render(&self, canvas: &mut Canvas, cursor: &Cursor) -> orfail::Result<()> {
         canvas.draw_text(
             Text::new(&format!(
@@ -536,6 +545,14 @@ impl FileDiffWidget {
         }
 
         Ok(())
+    }
+
+    pub fn rows(&self) -> usize {
+        if self.expanded {
+            1 + self.children.iter().map(|c| c.rows()).sum::<usize>()
+        } else {
+            1
+        }
     }
 
     pub fn render(
@@ -749,6 +766,14 @@ impl ChunkDiffWidget {
         }
 
         Ok(())
+    }
+
+    pub fn rows(&self) -> usize {
+        if self.expanded {
+            1 + self.children.len()
+        } else {
+            1
+        }
     }
 
     pub fn render(
@@ -1051,5 +1076,9 @@ impl LineDiffWidget {
         }
 
         Ok(())
+    }
+
+    pub fn rows(&self) -> usize {
+        1
     }
 }
