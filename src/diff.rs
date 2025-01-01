@@ -97,6 +97,22 @@ pub struct ChunkDiff {
 }
 
 impl ChunkDiff {
+    pub fn to_diff(&self, path: &PathBuf) -> Diff {
+        let file_diff = FileDiff::Update {
+            path: path.clone(),
+            old_hash: "000000".to_owned(), // dummy
+            new_hash: "000000".to_owned(), // dummy
+            old_mode: None,                // TODO
+            new_mode: Mode(0),             // dummy
+            content: ContentDiff::Text {
+                chunks: vec![self.clone()],
+            },
+        };
+        Diff {
+            files: vec![file_diff],
+        }
+    }
+
     pub fn head_line(&self) -> String {
         let mut s = String::new();
         s.push_str(&format!(

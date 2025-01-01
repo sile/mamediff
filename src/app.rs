@@ -1,3 +1,5 @@
+use std::path::PathBuf;
+
 use crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use orfail::OrFail;
 
@@ -494,12 +496,12 @@ impl FileDiffWidget {
         cursor.path.starts_with(&self.widget_path.path).or_fail()?;
 
         if cursor.path != self.widget_path.path {
-            // self.children
-            //     .get_mut(cursor.path[Self::LEVEL])
-            //     .or_fail()?
-            //     .handle_stage(git, cursor)
-            //     .or_fail()?;
-            todo!()
+            let i = cursor.path[Self::LEVEL];
+            self.children
+                .get_mut(i)
+                .or_fail()?
+                .handle_stage(git, cursor, diff.path(), diff.chunks().nth(i).or_fail()?)
+                .or_fail()?;
         } else {
             git.stage(&diff.to_diff()).or_fail()?;
         }
@@ -671,6 +673,30 @@ impl ChunkDiffWidget {
             children,
             expanded: true,
         }
+    }
+
+    fn handle_stage(
+        &mut self,
+        git: &Git,
+        cursor: &Cursor,
+        path: &PathBuf,
+        diff: &ChunkDiff,
+    ) -> orfail::Result<()> {
+        cursor.path.starts_with(&self.widget_path.path).or_fail()?;
+
+        if cursor.path != self.widget_path.path {
+            // let i = cursor.path[Self::LEVEL];
+            // self.children
+            //     .get_mut(i)
+            //     .or_fail()?
+            //     .handle_stage(git, cursor, diff.chunks().nth(i).or_fail()?)
+            //     .or_fail()?;
+            todo!()
+        } else {
+            git.stage(&diff.to_diff(path)).or_fail()?;
+        }
+
+        Ok(())
     }
 
     pub fn render(

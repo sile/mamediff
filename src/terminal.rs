@@ -182,7 +182,11 @@ impl Terminal {
 impl Drop for Terminal {
     fn drop(&mut self) {
         let _ = crossterm::terminal::disable_raw_mode();
-        let _ = crossterm::execute!(std::io::stdout(), LeaveAlternateScreen);
+        let _ = crossterm::execute!(
+            std::io::stdout(),
+            LeaveAlternateScreen,
+            crossterm::cursor::Show
+        );
     }
 }
 
