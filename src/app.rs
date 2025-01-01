@@ -229,16 +229,22 @@ impl App {
     }
 
     fn handle_stage(&mut self) -> orfail::Result<()> {
-        self.widgets[0]
-            .handle_stage(&self.git, &self.cursor)
-            .or_fail()?;
-        // TDOO: reload()
+        if self.can_stage() {
+            self.widgets[0]
+                .handle_stage(&self.git, &self.cursor)
+                .or_fail()?;
+            self.reload_diff().or_fail()?;
+        }
         Ok(())
     }
 
     fn handle_unstage(&mut self) -> orfail::Result<()> {
-        self.widgets[0].handle_unstage(&self.cursor).or_fail()?;
-        // TDOO: reload()
+        if self.can_unstage() {
+            self.widgets[0]
+                .handle_unstage(&self.git, &self.cursor)
+                .or_fail()?;
+            self.reload_diff().or_fail()?;
+        }
         Ok(())
     }
 }
@@ -278,11 +284,16 @@ impl DiffWidget {
         Ok(())
     }
 
-    fn handle_unstage(&mut self, cursor: &Cursor) -> orfail::Result<()> {
+    fn handle_unstage(&mut self, git: &Git, cursor: &Cursor) -> orfail::Result<()> {
         if !self.can_unstage(cursor) {
             return Ok(());
         }
-        (cursor.path.len() == 1).or_fail()?; // TODO
+
+        if cursor.path != self.widget_path.path {
+            return Err(orfail::Failure::new("TODO"));
+        }
+
+        git.unstage(&self.diff).or_fail()?;
 
         Ok(())
     }
