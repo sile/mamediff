@@ -690,7 +690,7 @@ impl ChunkDiffWidget {
             self.children
                 .get_mut(i)
                 .or_fail()?
-                .handle_stage(git, cursor, path, &diff.line_chunks().nth(i).or_fail()?)
+                .handle_stage(git, cursor, path, &diff.get_line_chunk(i).or_fail()?)
                 .or_fail()?;
         } else {
             git.stage(&diff.to_diff(path)).or_fail()?;
@@ -846,7 +846,7 @@ impl WidgetPath {
     }
 
     pub fn last_index(&self) -> usize {
-        // TODO:
+        // bar
         self.path[self.path.len() - 1]
     }
 

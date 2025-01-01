@@ -97,23 +97,35 @@ pub struct ChunkDiff {
 }
 
 impl ChunkDiff {
-    pub fn line_chunks(&self) -> impl Iterator<Item = Self> {
-        let mut chunks = Vec::new();
-        let mut start = self.old_start_line_number;
-        for line in &self.lines {
-            chunks.push(Self {
-                old_start_line_number: start,
-                new_start_line_number: start,
-                start_line: None,
-                lines: vec![line.clone()],
-            });
+    pub fn get_line_chunk(&self, index: usize) -> Option<Self> {
+        if !(index < self.lines.len()) {
+            return None;
+        }
+
+        let mut lines = Vec::new();
+        for (i, line) in self.lines.iter().enumerate() {
+            if i == index {
+                lines.push(line.clone());
+                continue;
+            }
+
             match line {
-                LineDiff::Old(_) => start += 1,
+                LineDiff::Old(s) => {
+                    lines.push(LineDiff::Both(s.clone()));
+                }
                 LineDiff::New(_) => {}
-                LineDiff::Both(_) => start += 1,
+                LineDiff::Both(_) => {
+                    lines.push(line.clone());
+                }
             }
         }
-        chunks.into_iter()
+
+        Some(Self {
+            old_start_line_number: self.old_start_line_number,
+            new_start_line_number: self.old_start_line_number,
+            start_line: self.start_line.clone(),
+            lines,
+        })
     }
 
     pub fn to_diff(&self, path: &PathBuf) -> Diff {
