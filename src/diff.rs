@@ -97,7 +97,7 @@ pub struct ChunkDiff {
 }
 
 impl ChunkDiff {
-    pub fn get_line_chunk(&self, index: usize) -> Option<Self> {
+    pub fn get_line_chunk(&self, index: usize, stage: bool) -> Option<Self> {
         if !(index < self.lines.len()) {
             return None;
         }
@@ -110,19 +110,27 @@ impl ChunkDiff {
             }
 
             match line {
-                LineDiff::Old(s) => {
+                LineDiff::Old(s) if stage => {
                     lines.push(LineDiff::Both(s.clone()));
                 }
-                LineDiff::New(_) => {}
+                LineDiff::New(s) if !stage => {
+                    lines.push(LineDiff::Both(s.clone()));
+                }
                 LineDiff::Both(_) => {
                     lines.push(line.clone());
                 }
+                _ => {}
             }
         }
 
+        let start = if stage {
+            self.old_start_line_number
+        } else {
+            self.new_start_line_number
+        };
         Some(Self {
-            old_start_line_number: self.old_start_line_number,
-            new_start_line_number: self.old_start_line_number,
+            old_start_line_number: start,
+            new_start_line_number: start,
             start_line: self.start_line.clone(),
             lines,
         })

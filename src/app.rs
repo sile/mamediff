@@ -717,7 +717,7 @@ impl ChunkDiffWidget {
             self.children
                 .get_mut(i)
                 .or_fail()?
-                .handle_stage(git, cursor, path, &diff.get_line_chunk(i).or_fail()?)
+                .handle_stage(git, cursor, path, &diff.get_line_chunk(i, true).or_fail()?)
                 .or_fail()?;
         } else {
             git.stage(&diff.to_diff(path)).or_fail()?;
@@ -740,7 +740,7 @@ impl ChunkDiffWidget {
             self.children
                 .get_mut(i)
                 .or_fail()?
-                .handle_unstage(git, cursor, path, &diff.get_line_chunk(i).or_fail()?)
+                .handle_unstage(git, cursor, path, &diff.get_line_chunk(i, false).or_fail()?)
                 .or_fail()?;
         } else {
             git.unstage(&diff.to_diff(path)).or_fail()?;
