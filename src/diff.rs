@@ -97,6 +97,25 @@ pub struct ChunkDiff {
 }
 
 impl ChunkDiff {
+    pub fn line_chunks(&self) -> impl Iterator<Item = Self> {
+        let mut chunks = Vec::new();
+        let mut start = self.old_start_line_number;
+        for line in &self.lines {
+            chunks.push(Self {
+                old_start_line_number: start,
+                new_start_line_number: start,
+                start_line: None,
+                lines: vec![line.clone()],
+            });
+            match line {
+                LineDiff::Old(_) => start += 1,
+                LineDiff::New(_) => {}
+                LineDiff::Both(_) => start += 1,
+            }
+        }
+        chunks.into_iter()
+    }
+
     pub fn to_diff(&self, path: &PathBuf) -> Diff {
         let file_diff = FileDiff::Update {
             path: path.clone(),

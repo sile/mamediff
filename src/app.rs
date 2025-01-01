@@ -515,6 +515,7 @@ impl FileDiffWidget {
         diff: &FileDiff,
         cursor: &Cursor,
     ) -> orfail::Result<()> {
+        //
         // TODO: rename handling
         canvas.draw_text(
             Text::new(&format!(
@@ -685,13 +686,12 @@ impl ChunkDiffWidget {
         cursor.path.starts_with(&self.widget_path.path).or_fail()?;
 
         if cursor.path != self.widget_path.path {
-            // let i = cursor.path[Self::LEVEL];
-            // self.children
-            //     .get_mut(i)
-            //     .or_fail()?
-            //     .handle_stage(git, cursor, diff.chunks().nth(i).or_fail()?)
-            //     .or_fail()?;
-            todo!()
+            let i = cursor.path[Self::LEVEL];
+            self.children
+                .get_mut(i)
+                .or_fail()?
+                .handle_stage(git, cursor, path, &diff.line_chunks().nth(i).or_fail()?)
+                .or_fail()?;
         } else {
             git.stage(&diff.to_diff(path)).or_fail()?;
         }
@@ -880,6 +880,22 @@ impl LineDiffWidget {
             widget_path,
             has_diff: !matches!(diff, LineDiff::Both(_)),
         }
+    }
+
+    fn handle_stage(
+        &mut self,
+        git: &Git,
+        cursor: &Cursor,
+        path: &PathBuf,
+        diff: &ChunkDiff,
+    ) -> orfail::Result<()> {
+        cursor.path.starts_with(&self.widget_path.path).or_fail()?;
+
+        if cursor.path == self.widget_path.path {
+            git.stage(&diff.to_diff(path)).or_fail()?;
+        }
+
+        Ok(())
     }
 
     pub fn render(
