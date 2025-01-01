@@ -48,13 +48,13 @@ impl Git {
         let patch = diff.to_string();
 
         // TODO: use pipe
-        std::fs::write(".mamediff.patch", &patch).or_fail()?;
+        std::fs::write(".mamediff.rev.patch", &patch).or_fail()?;
 
         let output = Command::new("git")
             .arg("apply")
             .arg("--cached")
             .arg("--reverse")
-            .arg(".mamediff.patch") // TODO: use pipe
+            .arg(".mamediff.rev.patch") // TODO: use pipe
             .output()
             .or_fail_with(|e| format!("Failed to execute `$ git apply --cached`: {e}"))?;
         output.status.success().or_fail_with(|()| {

@@ -240,7 +240,7 @@ impl App {
 
     fn handle_unstage(&mut self) -> orfail::Result<()> {
         if self.can_unstage() {
-            self.widgets[0]
+            self.widgets[1]
                 .handle_unstage(&self.git, &self.cursor)
                 .or_fail()?;
             self.reload_diff().or_fail()?;
