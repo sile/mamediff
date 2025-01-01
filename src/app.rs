@@ -107,7 +107,7 @@ impl App {
             Event::FocusGained => Ok(()),
             Event::FocusLost => Ok(()),
             Event::Key(event) => self.handle_key_event(event).or_fail(),
-            Event::Mouse(_) => Ok(()), // TODO: Add handling
+            Event::Mouse(_) => Ok(()), // TODO: Add mouse handling
             Event::Paste(_) => Ok(()),
             Event::Resize(_, _) => {
                 self.terminal.on_resized().or_fail()?;
@@ -132,7 +132,7 @@ impl App {
                 self.reload_diff().or_fail()?;
             }
             KeyCode::Char('u') => {
-                todo!()
+                self.handle_unstage().or_fail()?;
             }
             KeyCode::Char('s') => {
                 self.handle_stage().or_fail()?;
@@ -229,7 +229,17 @@ impl App {
     }
 
     fn handle_stage(&mut self) -> orfail::Result<()> {
-        false.or_fail()
+        self.widgets[0]
+            .handle_stage(&self.git, &self.cursor)
+            .or_fail()?;
+        // TDOO: reload()
+        Ok(())
+    }
+
+    fn handle_unstage(&mut self) -> orfail::Result<()> {
+        self.widgets[0].handle_unstage(&self.cursor).or_fail()?;
+        // TDOO: reload()
+        Ok(())
     }
 }
 
@@ -252,6 +262,29 @@ impl DiffWidget {
             children: Vec::new(),
             expanded: true,
         }
+    }
+
+    fn handle_stage(&mut self, git: &Git, cursor: &Cursor) -> orfail::Result<()> {
+        if !self.can_stage(cursor) {
+            return Ok(());
+        }
+
+        if cursor.path != self.widget_path.path {
+            return Err(orfail::Failure::new("TODO"));
+        }
+
+        git.stage(&self.diff).or_fail()?;
+
+        Ok(())
+    }
+
+    fn handle_unstage(&mut self, cursor: &Cursor) -> orfail::Result<()> {
+        if !self.can_unstage(cursor) {
+            return Ok(());
+        }
+        (cursor.path.len() == 1).or_fail()?; // TODO
+
+        Ok(())
     }
 
     pub fn is_togglable(&self, cursor: &Cursor) -> bool {

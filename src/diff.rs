@@ -49,6 +49,15 @@ impl FromStr for Diff {
     }
 }
 
+impl std::fmt::Display for Diff {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        for file in &self.files {
+            write!(f, "{file}")?;
+        }
+        Ok(())
+    }
+}
+
 #[derive(Debug, Clone)]
 pub enum LineDiff {
     Old(String),
@@ -162,6 +171,29 @@ impl ChunkDiff {
     }
 }
 
+impl std::fmt::Display for ChunkDiff {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "@@ -{},{} +{},{} @@",
+            self.old_start_line_number,
+            self.old_columns(),
+            self.new_start_line_number,
+            self.new_columns()
+        )?;
+        if let Some(start) = &self.start_line {
+            write!(f, " {start}")?;
+        }
+        writeln!(f)?;
+
+        for line in &self.lines {
+            writeln!(f, "{line}")?;
+        }
+
+        Ok(())
+    }
+}
+
 #[derive(Debug, Clone)]
 pub enum ContentDiff {
     Text { chunks: Vec<ChunkDiff> },
@@ -200,6 +232,21 @@ impl ContentDiff {
         }
 
         Ok(Self::Text { chunks })
+    }
+}
+
+impl std::fmt::Display for ContentDiff {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ContentDiff::Text { chunks } => {
+                for chunk in chunks {
+                    write!(f, "{chunk}")?;
+                }
+            }
+            ContentDiff::Binary { .. } => todo!(),
+            ContentDiff::Empty => todo!(),
+        }
+        Ok(())
     }
 }
 
@@ -386,6 +433,59 @@ impl FileDiff {
             new_mode: index.mode.or_fail()?,
             content,
         })
+    }
+}
+
+impl std::fmt::Display for FileDiff {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            FileDiff::New {
+                // path,
+                // hash,
+                // mode,
+                // content,
+                ..
+            } => todo!(),
+            FileDiff::Delete {
+                // path,
+                // hash,
+                // mode,
+                // content,
+                ..
+            } => todo!(),
+            FileDiff::Update {
+                path,
+                old_hash,
+                new_hash,
+                old_mode,
+                new_mode,
+                content,
+            } => {
+                if old_mode.is_some(){
+                    todo!();
+                }
+
+                let path = path.display();
+                writeln!(f, "diff --git a/{path} b/{path}")?;
+                writeln!(f, "index {old_hash}..{new_hash} {new_mode}")?;
+                writeln!(f, "--- a/{path}")?;
+                writeln!(f, "+++ b/{path}")?;
+                write!(f, "{content}")?;
+            }
+            FileDiff::Rename {
+                // old_path,
+                // new_path,
+                // similarity_index,
+                ..
+            } => todo!(),
+            FileDiff::Chmod {
+                // path,
+                // old_mode,
+                // new_mode,
+                ..
+            } => todo!(),
+        }
+        Ok(())
     }
 }
 
@@ -727,6 +827,7 @@ index e3bdb24..dd04db5 100644
         let diff = Diff::from_str(text).or_fail()?;
         assert_eq!(diff.files.len(), 1);
         assert!(matches!(diff.files[0], FileDiff::Update { .. }));
+        assert_eq!(diff.to_string().trim_end(), text);
 
         let text = r#"diff --git a/Cargo.toml b/C.toml
 similarity index 100%

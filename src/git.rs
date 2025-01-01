@@ -12,6 +12,10 @@ impl Git {
         Self {}
     }
 
+    pub fn stage(&self, diff: &Diff) -> orfail::Result<()> {
+        todo!()
+    }
+
     pub fn diff(&self) -> orfail::Result<Diff> {
         let output = Command::new("git")
             .arg("diff")
