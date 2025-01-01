@@ -297,10 +297,15 @@ impl DiffWidget {
         }
 
         if cursor.path != self.widget_path.path {
-            return Err(orfail::Failure::new("TODO"));
+            let i = cursor.path[Self::LEVEL];
+            self.children
+                .get_mut(i)
+                .or_fail()?
+                .handle_unstage(git, cursor, self.diff.files.get(i).or_fail()?)
+                .or_fail()?;
+        } else {
+            git.unstage(&self.diff).or_fail()?;
         }
-
-        git.unstage(&self.diff).or_fail()?;
 
         Ok(())
     }
@@ -509,6 +514,28 @@ impl FileDiffWidget {
         Ok(())
     }
 
+    fn handle_unstage(
+        &mut self,
+        git: &Git,
+        cursor: &Cursor,
+        diff: &FileDiff,
+    ) -> orfail::Result<()> {
+        cursor.path.starts_with(&self.widget_path.path).or_fail()?;
+
+        if cursor.path != self.widget_path.path {
+            let i = cursor.path[Self::LEVEL];
+            self.children
+                .get_mut(i)
+                .or_fail()?
+                .handle_unstage(git, cursor, diff.path(), diff.chunks().nth(i).or_fail()?)
+                .or_fail()?;
+        } else {
+            git.unstage(&diff.to_diff()).or_fail()?;
+        }
+
+        Ok(())
+    }
+
     pub fn render(
         &self,
         canvas: &mut Canvas,
@@ -694,6 +721,29 @@ impl ChunkDiffWidget {
                 .or_fail()?;
         } else {
             git.stage(&diff.to_diff(path)).or_fail()?;
+        }
+
+        Ok(())
+    }
+
+    fn handle_unstage(
+        &mut self,
+        git: &Git,
+        cursor: &Cursor,
+        path: &PathBuf,
+        diff: &ChunkDiff,
+    ) -> orfail::Result<()> {
+        cursor.path.starts_with(&self.widget_path.path).or_fail()?;
+
+        if cursor.path != self.widget_path.path {
+            let i = cursor.path[Self::LEVEL];
+            self.children
+                .get_mut(i)
+                .or_fail()?
+                .handle_unstage(git, cursor, path, &diff.get_line_chunk(i).or_fail()?)
+                .or_fail()?;
+        } else {
+            git.unstage(&diff.to_diff(path)).or_fail()?;
         }
 
         Ok(())
@@ -893,6 +943,22 @@ impl LineDiffWidget {
 
         if cursor.path == self.widget_path.path {
             git.stage(&diff.to_diff(path)).or_fail()?;
+        }
+
+        Ok(())
+    }
+
+    fn handle_unstage(
+        &mut self,
+        git: &Git,
+        cursor: &Cursor,
+        path: &PathBuf,
+        diff: &ChunkDiff,
+    ) -> orfail::Result<()> {
+        cursor.path.starts_with(&self.widget_path.path).or_fail()?;
+
+        if cursor.path == self.widget_path.path {
+            git.unstage(&diff.to_diff(path)).or_fail()?;
         }
 
         Ok(())
