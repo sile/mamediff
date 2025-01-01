@@ -74,24 +74,24 @@ impl App {
     fn render_legend(&mut self, canvas: &mut Canvas) -> orfail::Result<()> {
         let mut tmp = Canvas::new();
         let cols = if self.show_legend {
-            tmp.draw_textl(Text::new("|                  ").or_fail()?);
-            tmp.draw_textl(Text::new("| (q)uit [ESC, C-c]").or_fail()?);
-            tmp.draw_textl(Text::new("| (r)eload         ").or_fail()?);
+            tmp.draw_textl(Text::new("|                 ").or_fail()?);
+            tmp.draw_textl(Text::new("| (q)uit [ESC,C-c]").or_fail()?);
+            tmp.draw_textl(Text::new("| (r)eload        ").or_fail()?);
             if self.is_togglable() {
-                tmp.draw_textl(Text::new("| (t)oggle    [TAB]").or_fail()?);
+                tmp.draw_textl(Text::new("| (t)oggle   [TAB]").or_fail()?);
             }
             if self.can_stage() {
-                tmp.draw_textl(Text::new("| (s)tage          ").or_fail()?);
+                tmp.draw_textl(Text::new("| (s)tage         ").or_fail()?);
             }
             if self.can_stage() {
-                tmp.draw_textl(Text::new("| (D)iscard        ").or_fail()?);
+                tmp.draw_textl(Text::new("| (D)iscard       ").or_fail()?);
             }
             if self.can_unstage() {
-                tmp.draw_textl(Text::new("| (u)nstage        ").or_fail()?);
+                tmp.draw_textl(Text::new("| (u)nstage       ").or_fail()?);
             }
-            tmp.draw_textl(Text::new("|                  ").or_fail()?);
-            tmp.draw_textl(Text::new("+- (h)ide ---------").or_fail()?);
-            20
+            tmp.draw_textl(Text::new("|                 ").or_fail()?);
+            tmp.draw_textl(Text::new("+- (h)ide --------").or_fail()?);
+            19
         } else {
             tmp.draw_textl(Text::new("|          ").or_fail()?);
             tmp.draw_textl(Text::new("+- s(h)ow -").or_fail()?);
