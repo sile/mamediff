@@ -40,6 +40,8 @@ impl App {
     pub fn run(mut self) -> orfail::Result<()> {
         self.reload_diff().or_fail()?;
 
+        // TODO: expand if within the screen
+
         while !self.exit {
             let event = self.terminal.next_event().or_fail()?;
             self.handle_event(event).or_fail()?;
