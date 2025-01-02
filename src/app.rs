@@ -108,17 +108,18 @@ impl App {
     }
 
     fn render_legend(&mut self, canvas: &mut Canvas) -> orfail::Result<()> {
-        // TODO:
-        // - 上矢印: `↑` (U+2191)
-        // - 下矢印: `↓` (U+2193)
-        // - 左矢印: `←` (U+2190)
-        // - 右矢印: `→` (U+2192)
-
         let mut tmp = Canvas::new();
         let cols = if self.show_legend {
             tmp.draw_textl(Text::new("|                 ").or_fail()?);
             tmp.draw_textl(Text::new("| (q)uit [ESC,C-c]").or_fail()?);
             tmp.draw_textl(Text::new("| (r)eload        ").or_fail()?);
+
+            // TODO: Make these keys conditional
+            tmp.draw_textl(Text::new("| (↑)        [C-p]").or_fail()?);
+            tmp.draw_textl(Text::new("| (↓)        [C-n]").or_fail()?);
+            tmp.draw_textl(Text::new("| (←)        [C-f]").or_fail()?);
+            tmp.draw_textl(Text::new("| (→)        [C-b]").or_fail()?);
+
             if self.is_togglable() {
                 tmp.draw_textl(Text::new("| (t)oggle   [TAB]").or_fail()?);
             }
