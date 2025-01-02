@@ -76,6 +76,11 @@ impl Canvas {
         }
     }
 
+    pub fn clip(&mut self, offset: usize, rows: usize) {
+        self.rows.drain(..offset);
+        self.rows.truncate(rows);
+    }
+
     pub fn draw_canvas(&mut self, position: Position, canvas: Canvas) {
         for (row_i, src_row) in canvas.rows.into_iter().enumerate() {
             let row_i = row_i + position.row;
@@ -203,6 +208,10 @@ impl Size {
             rows: size.1 as usize,
             cols: size.0 as usize,
         })
+    }
+
+    pub fn is_empty(self) -> bool {
+        self.rows == 0 || self.cols == 0
     }
 }
 

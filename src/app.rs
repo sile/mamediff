@@ -20,6 +20,7 @@ pub struct App {
     widgets: Vec<DiffWidget>,
     cursor: Cursor,
     show_legend: bool,
+    row_offset: usize,
 }
 
 impl App {
@@ -34,6 +35,7 @@ impl App {
             widgets: vec![DiffWidget::new(false), DiffWidget::new(true)],
             cursor: Cursor::new(),
             show_legend: true,
+            row_offset: 0,
         })
     }
 
@@ -50,11 +52,30 @@ impl App {
     }
 
     fn render(&mut self) -> orfail::Result<()> {
+        if self.terminal.size().is_empty() {
+            return Ok(());
+        }
+
+        let cursor_abs_row = self.cursor_abs_row();
+        if cursor_abs_row
+            .checked_sub(self.row_offset)
+            .map_or(true, |p| p >= self.terminal.size().rows)
+        {
+            let rows = self.terminal.size().rows;
+            self.row_offset = cursor_abs_row.saturating_sub(rows / 2);
+        }
+
         let mut canvas = Canvas::new();
         for widget in &mut self.widgets {
             widget.render(&mut canvas, &self.cursor).or_fail()?;
         }
+
+        // TODO: optimize (skip rendering for out of range part)
+        canvas.clip(self.row_offset, self.terminal.size().rows);
+
         self.render_legend(&mut canvas).or_fail()?;
+        canvas.clip(0, self.terminal.size().rows); // TODO
+
         self.terminal.render(canvas).or_fail()?;
         Ok(())
     }
