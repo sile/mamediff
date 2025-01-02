@@ -64,6 +64,17 @@ impl App {
         }
     }
 
+    fn expanded_path(&self) -> orfail::Result<Vec<bool>> {
+        let mut expanded = Vec::new();
+        let i = self.cursor.path.get(0).copied().or_fail()?;
+        self.widgets
+            .get(i)
+            .or_fail()?
+            .expanded_path(&self.cursor, &mut expanded)
+            .or_fail()?;
+        Ok(expanded)
+    }
+
     fn render(&mut self) -> orfail::Result<()> {
         if self.terminal.size().is_empty() {
             return Ok(());
@@ -507,6 +518,17 @@ impl DiffWidget {
         1 + self.children.iter().map(|c| c.full_rows()).sum::<usize>()
     }
 
+    pub fn expanded_path(&self, cursor: &Cursor, expanded: &mut Vec<bool>) -> orfail::Result<()> {
+        expanded.push(self.expanded);
+        let i = cursor.path.get(Self::LEVEL).copied().or_fail()?;
+        self.children
+            .get(i)
+            .or_fail()?
+            .expanded_path(cursor, expanded)
+            .or_fail()?;
+        Ok(())
+    }
+
     pub fn expand_all(&mut self) {
         self.expanded = true;
         for c in &mut self.children {
@@ -630,6 +652,17 @@ impl FileDiffWidget {
 
     pub fn full_rows(&self) -> usize {
         1 + self.children.iter().map(|c| c.full_rows()).sum::<usize>()
+    }
+
+    pub fn expanded_path(&self, cursor: &Cursor, expanded: &mut Vec<bool>) -> orfail::Result<()> {
+        expanded.push(self.expanded);
+        let i = cursor.path.get(Self::LEVEL).copied().or_fail()?;
+        self.children
+            .get(i)
+            .or_fail()?
+            .expanded_path(cursor, expanded)
+            .or_fail()?;
+        Ok(())
     }
 
     pub fn expand_all(&mut self) {
@@ -880,6 +913,11 @@ impl ChunkDiffWidget {
 
     pub fn full_rows(&self) -> usize {
         1 + self.children.len()
+    }
+
+    pub fn expanded_path(&self, _cursor: &Cursor, expanded: &mut Vec<bool>) -> orfail::Result<()> {
+        expanded.push(self.expanded);
+        Ok(())
     }
 
     pub fn expand_all(&mut self) {
