@@ -42,13 +42,26 @@ impl App {
     pub fn run(mut self) -> orfail::Result<()> {
         self.reload_diff().or_fail()?;
 
-        // TODO: expand if within the screen
+        if self.full_rows() <= self.terminal.size().rows {
+            self.expand_all();
+            self.render().or_fail()?;
+        }
 
         while !self.exit {
             let event = self.terminal.next_event().or_fail()?;
             self.handle_event(event).or_fail()?;
         }
         Ok(())
+    }
+
+    fn full_rows(&self) -> usize {
+        self.widgets.iter().map(|w| w.full_rows()).sum()
+    }
+
+    fn expand_all(&mut self) {
+        for w in &mut self.widgets {
+            w.expand_all();
+        }
     }
 
     fn render(&mut self) -> orfail::Result<()> {
@@ -490,6 +503,17 @@ impl DiffWidget {
         }
     }
 
+    pub fn full_rows(&self) -> usize {
+        1 + self.children.iter().map(|c| c.full_rows()).sum::<usize>()
+    }
+
+    pub fn expand_all(&mut self) {
+        self.expanded = true;
+        for c in &mut self.children {
+            c.expand_all();
+        }
+    }
+
     pub fn cursor_abs_row(&self, cursor: &Cursor) -> usize {
         match cursor.path[..Self::LEVEL].cmp(&self.widget_path.path) {
             std::cmp::Ordering::Less => 0,
@@ -601,6 +625,17 @@ impl FileDiffWidget {
             1 + self.children.iter().map(|c| c.rows()).sum::<usize>()
         } else {
             1
+        }
+    }
+
+    pub fn full_rows(&self) -> usize {
+        1 + self.children.iter().map(|c| c.full_rows()).sum::<usize>()
+    }
+
+    pub fn expand_all(&mut self) {
+        self.expanded = true;
+        for c in &mut self.children {
+            c.expand_all();
         }
     }
 
@@ -841,6 +876,14 @@ impl ChunkDiffWidget {
         } else {
             1
         }
+    }
+
+    pub fn full_rows(&self) -> usize {
+        1 + self.children.len()
+    }
+
+    pub fn expand_all(&mut self) {
+        self.expanded = true;
     }
 
     pub fn cursor_abs_row(&self, cursor: &Cursor) -> usize {
