@@ -59,6 +59,13 @@ impl App {
         Ok(())
     }
 
+    fn cursor_abs_row(&self) -> usize {
+        self.widgets
+            .iter()
+            .map(|w| w.cursor_abs_row(&self.cursor))
+            .sum()
+    }
+
     fn is_togglable(&self) -> bool {
         self.widgets.iter().any(|w| w.is_togglable(&self.cursor))
     }
@@ -464,9 +471,13 @@ impl DiffWidget {
             std::cmp::Ordering::Less => 0,
             std::cmp::Ordering::Equal => {
                 if cursor.path.len() == Self::LEVEL {
-                    1
+                    0
                 } else {
-                    self.children.iter().map(|c| c.cursor_abs_row(cursor)).sum()
+                    1 + self
+                        .children
+                        .iter()
+                        .map(|c| c.cursor_abs_row(cursor))
+                        .sum::<usize>()
                 }
             }
             std::cmp::Ordering::Greater => self.rows(),
@@ -574,9 +585,13 @@ impl FileDiffWidget {
             std::cmp::Ordering::Less => 0,
             std::cmp::Ordering::Equal => {
                 if cursor.path.len() == Self::LEVEL {
-                    1
+                    0
                 } else {
-                    self.children.iter().map(|c| c.cursor_abs_row(cursor)).sum()
+                    1 + self
+                        .children
+                        .iter()
+                        .map(|c| c.cursor_abs_row(cursor))
+                        .sum::<usize>()
                 }
             }
             std::cmp::Ordering::Greater => self.rows(),
@@ -809,9 +824,13 @@ impl ChunkDiffWidget {
             std::cmp::Ordering::Less => 0,
             std::cmp::Ordering::Equal => {
                 if cursor.path.len() == Self::LEVEL {
-                    1
+                    0
                 } else {
-                    self.children.iter().map(|c| c.cursor_abs_row(cursor)).sum()
+                    1 + self
+                        .children
+                        .iter()
+                        .map(|c| c.cursor_abs_row(cursor))
+                        .sum::<usize>()
                 }
             }
             std::cmp::Ordering::Greater => self.rows(),
@@ -1127,7 +1146,7 @@ impl LineDiffWidget {
     pub fn cursor_abs_row(&self, cursor: &Cursor) -> usize {
         match cursor.path[..Self::LEVEL].cmp(&self.widget_path.path) {
             std::cmp::Ordering::Less => 0,
-            std::cmp::Ordering::Equal => 1,
+            std::cmp::Ordering::Equal => 0,
             std::cmp::Ordering::Greater => 1,
         }
     }
