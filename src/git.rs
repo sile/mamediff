@@ -13,6 +13,7 @@ impl Git {
     }
 
     pub fn stage(&self, diff: &Diff) -> orfail::Result<()> {
+        // TODO: Check if the diff is still up-to-date
         let patch = diff.to_string();
 
         // TODO: use pipe
@@ -45,6 +46,7 @@ impl Git {
     }
 
     pub fn unstage(&self, diff: &Diff) -> orfail::Result<()> {
+        // TODO: Check if the diff is still up-to-date
         let patch = diff.to_string();
 
         // TODO: use pipe
