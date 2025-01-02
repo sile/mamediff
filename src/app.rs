@@ -59,17 +59,6 @@ impl App {
         }
     }
 
-    fn expanded_path(&self) -> orfail::Result<Vec<bool>> {
-        let mut expanded = Vec::new();
-        let i = self.cursor.path.get(0).copied().or_fail()?;
-        self.widgets
-            .get(i)
-            .or_fail()?
-            .expanded_path(&self.cursor, &mut expanded)
-            .or_fail()?;
-        Ok(expanded)
-    }
-
     fn render(&mut self) -> orfail::Result<()> {
         if self.terminal.size().is_empty() {
             return Ok(());
@@ -281,8 +270,11 @@ impl App {
     }
 
     fn reload_diff(&mut self) -> orfail::Result<()> {
+        let old_widgets = self.widgets.clone(); // TODO
         for widget in &mut self.widgets {
-            widget.reload(&self.git).or_fail()?;
+            widget
+                .reload(&self.git, &self.cursor, &old_widgets)
+                .or_fail()?;
         }
 
         while self.cursor.prev() && !self.is_valid_cursor() {}
@@ -298,9 +290,12 @@ impl App {
     }
 
     fn reload_diff_reset(&mut self) -> orfail::Result<()> {
+        let old_widgets = self.widgets.clone(); // TODO
         self.cursor = Cursor::new();
         for widget in &mut self.widgets {
-            widget.reload(&self.git).or_fail()?;
+            widget
+                .reload(&self.git, &self.cursor, &old_widgets)
+                .or_fail()?;
         }
         if self.full_rows() <= self.terminal.size().rows {
             self.expand_all();
@@ -331,7 +326,7 @@ impl App {
 }
 
 // TODO: Add Widget trait
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct DiffWidget {
     name: &'static str,
     widget_path: WidgetPath,
@@ -524,7 +519,12 @@ impl DiffWidget {
         Ok(())
     }
 
-    pub fn reload(&mut self, git: &Git) -> orfail::Result<()> {
+    pub fn reload(
+        &mut self,
+        git: &Git,
+        cursor: &Cursor,
+        old_widgets: &[DiffWidget],
+    ) -> orfail::Result<()> {
         // TODO: Execute in parallel
         self.diff = if self.staged {
             git.diff_cached().or_fail()?
@@ -552,17 +552,6 @@ impl DiffWidget {
 
     pub fn full_rows(&self) -> usize {
         1 + self.children.iter().map(|c| c.full_rows()).sum::<usize>()
-    }
-
-    pub fn expanded_path(&self, cursor: &Cursor, expanded: &mut Vec<bool>) -> orfail::Result<()> {
-        expanded.push(self.expanded);
-        let i = cursor.path.get(Self::LEVEL).copied().or_fail()?;
-        self.children
-            .get(i)
-            .or_fail()?
-            .expanded_path(cursor, expanded)
-            .or_fail()?;
-        Ok(())
     }
 
     pub fn expand_all(&mut self) {
@@ -618,7 +607,7 @@ impl DiffWidget {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct FileDiffWidget {
     pub name: PathBuf,
     pub widget_path: WidgetPath,
@@ -702,17 +691,6 @@ impl FileDiffWidget {
 
     pub fn full_rows(&self) -> usize {
         1 + self.children.iter().map(|c| c.full_rows()).sum::<usize>()
-    }
-
-    pub fn expanded_path(&self, cursor: &Cursor, expanded: &mut Vec<bool>) -> orfail::Result<()> {
-        expanded.push(self.expanded);
-        let i = cursor.path.get(Self::LEVEL).copied().or_fail()?;
-        self.children
-            .get(i)
-            .or_fail()?
-            .expanded_path(cursor, expanded)
-            .or_fail()?;
-        Ok(())
     }
 
     pub fn expand_all(&mut self) {
@@ -885,7 +863,7 @@ impl FileDiffWidget {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct ChunkDiffWidget {
     pub old_range: Range<usize>,
     pub new_range: Range<usize>,
@@ -977,11 +955,6 @@ impl ChunkDiffWidget {
 
     pub fn full_rows(&self) -> usize {
         1 + self.children.len()
-    }
-
-    pub fn expanded_path(&self, _cursor: &Cursor, expanded: &mut Vec<bool>) -> orfail::Result<()> {
-        expanded.push(self.expanded);
-        Ok(())
     }
 
     pub fn expand_all(&mut self) {
@@ -1142,7 +1115,7 @@ impl ChunkDiffWidget {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct WidgetPath {
     pub path: Vec<usize>,
 }
@@ -1188,7 +1161,7 @@ impl Cursor {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct LineDiffWidget {
     pub widget_path: WidgetPath,
     pub has_diff: bool,
