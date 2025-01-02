@@ -284,8 +284,17 @@ impl App {
         for widget in &mut self.widgets {
             widget.reload(&self.git).or_fail()?;
         }
+
+        while self.cursor.prev() && !self.is_valid_cursor() {}
+
         self.render().or_fail()?;
         Ok(())
+    }
+
+    fn is_valid_cursor(&self) -> bool {
+        self.widgets
+            .get(self.cursor.path[0])
+            .is_some_and(|w| w.is_valid_cursor(&self.cursor))
     }
 
     fn reload_diff_reset(&mut self) -> orfail::Result<()> {
@@ -342,6 +351,18 @@ impl DiffWidget {
             diff: Diff::default(),
             children: Vec::new(),
             expanded: true,
+        }
+    }
+
+    fn is_valid_cursor(&self, cursor: &Cursor) -> bool {
+        if self.widget_path.path == cursor.path {
+            true
+        } else if cursor.path.starts_with(&self.widget_path.path) {
+            self.children
+                .get(cursor.path[Self::LEVEL])
+                .is_some_and(|c| c.is_valid_cursor(cursor))
+        } else {
+            false
         }
     }
 
@@ -620,6 +641,18 @@ impl FileDiffWidget {
         }
     }
 
+    fn is_valid_cursor(&self, cursor: &Cursor) -> bool {
+        if self.widget_path.path == cursor.path {
+            true
+        } else if cursor.path.starts_with(&self.widget_path.path) {
+            self.children
+                .get(cursor.path[Self::LEVEL])
+                .is_some_and(|c| c.is_valid_cursor(cursor))
+        } else {
+            false
+        }
+    }
+
     fn handle_stage(&mut self, git: &Git, cursor: &Cursor, diff: &FileDiff) -> orfail::Result<()> {
         cursor.path.starts_with(&self.widget_path.path).or_fail()?;
 
@@ -884,6 +917,10 @@ impl ChunkDiffWidget {
         }
     }
 
+    fn is_valid_cursor(&self, cursor: &Cursor) -> bool {
+        self.widget_path.path == cursor.path
+    }
+
     fn handle_stage(
         &mut self,
         git: &Git,
@@ -1135,6 +1172,19 @@ pub struct Cursor {
 impl Cursor {
     pub fn new() -> Self {
         Self { path: vec![0] }
+    }
+
+    pub fn prev(&mut self) -> bool {
+        let last = self.path.last_mut().expect("infallible");
+        if let Some(x) = last.checked_sub(1) {
+            *last = x;
+            true
+        } else if self.path.len() > 1 {
+            self.path.pop();
+            true
+        } else {
+            false
+        }
     }
 }
 
