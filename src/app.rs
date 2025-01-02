@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::{ops::Range, path::PathBuf};
 
 use crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use orfail::OrFail;
@@ -119,6 +119,12 @@ impl App {
     }
 
     fn render_legend(&mut self, canvas: &mut Canvas) -> orfail::Result<()> {
+        // TODO:
+        // - 上矢印: `↑` (U+2191)
+        // - 下矢印: `↓` (U+2193)
+        // - 左矢印: `←` (U+2190)
+        // - 右矢印: `→` (U+2192)
+
         let mut tmp = Canvas::new();
         let cols = if self.show_legend {
             tmp.draw_textl(Text::new("|                 ").or_fail()?);
@@ -318,6 +324,7 @@ impl App {
 // TODO: Add Widget trait
 #[derive(Debug)]
 pub struct DiffWidget {
+    name: &'static str,
     widget_path: WidgetPath,
     staged: bool,
     diff: Diff,
@@ -329,6 +336,7 @@ impl DiffWidget {
     pub fn new(staged: bool) -> Self {
         let index = if staged { 1 } else { 0 };
         Self {
+            name: if staged { "Staged" } else { "Unstaged" },
             widget_path: WidgetPath::new(vec![index]),
             staged,
             diff: Diff::default(),
@@ -571,7 +579,7 @@ impl DiffWidget {
                     " "
                 },
                 if cursor.path.len() == 1 { "|" } else { " " },
-                if self.staged { "Staged" } else { "Unstaged" },
+                self.name,
                 self.diff.len(),
                 if self.expanded { "" } else { COLLAPSED_MARK }
             ))
@@ -591,6 +599,7 @@ impl DiffWidget {
 
 #[derive(Debug)]
 pub struct FileDiffWidget {
+    pub name: PathBuf,
     pub widget_path: WidgetPath,
     pub children: Vec<ChunkDiffWidget>,
     pub expanded: bool,
@@ -604,6 +613,7 @@ impl FileDiffWidget {
             .map(|(i, c)| ChunkDiffWidget::new(c, widget_path.join(i)))
             .collect();
         Self {
+            name: diff.path().clone(),
             widget_path,
             children,
             expanded: false,
@@ -844,6 +854,8 @@ impl FileDiffWidget {
 
 #[derive(Debug)]
 pub struct ChunkDiffWidget {
+    pub old_range: Range<usize>,
+    pub new_range: Range<usize>,
     pub widget_path: WidgetPath,
     pub children: Vec<LineDiffWidget>,
     pub expanded: bool,
@@ -858,6 +870,14 @@ impl ChunkDiffWidget {
             .map(|(i, l)| LineDiffWidget::new(l, widget_path.join(i)))
             .collect();
         Self {
+            old_range: Range {
+                start: diff.old_start_line_number,
+                end: diff.old_start_line_number + diff.old_columns(),
+            },
+            new_range: Range {
+                start: diff.new_start_line_number,
+                end: diff.new_start_line_number + diff.new_columns(),
+            },
             widget_path,
             children,
             expanded: true,

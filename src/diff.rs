@@ -168,14 +168,14 @@ impl ChunkDiff {
         s
     }
 
-    fn old_columns(&self) -> usize {
+    pub fn old_columns(&self) -> usize {
         self.lines
             .iter()
             .filter(|line| matches!(line, LineDiff::Both(_) | LineDiff::Old(_)))
             .count()
     }
 
-    fn new_columns(&self) -> usize {
+    pub fn new_columns(&self) -> usize {
         self.lines
             .iter()
             .filter(|line| matches!(line, LineDiff::Both(_) | LineDiff::New(_)))
