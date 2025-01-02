@@ -110,16 +110,21 @@ impl App {
     fn render_legend(&mut self, canvas: &mut Canvas) -> orfail::Result<()> {
         let mut tmp = Canvas::new();
         let cols = if self.show_legend {
-            tmp.draw_textl(Text::new("|                 ").or_fail()?);
             tmp.draw_textl(Text::new("| (q)uit [ESC,C-c]").or_fail()?);
             tmp.draw_textl(Text::new("| (r)eload        ").or_fail()?);
 
-            // TODO: Make these keys conditional
-            tmp.draw_textl(Text::new("| (↑)        [C-p]").or_fail()?);
-            tmp.draw_textl(Text::new("| (↓)        [C-n]").or_fail()?);
-            tmp.draw_textl(Text::new("| (←)        [C-f]").or_fail()?);
-            tmp.draw_textl(Text::new("| (→)        [C-b]").or_fail()?);
-
+            if self.cursor.path.last() != Some(&0) {
+                tmp.draw_textl(Text::new("| (↑)        [C-p]").or_fail()?);
+            }
+            if self.can_down() {
+                tmp.draw_textl(Text::new("| (↓)        [C-n]").or_fail()?);
+            }
+            if self.cursor.path.len() > 1 {
+                tmp.draw_textl(Text::new("| (←)        [C-f]").or_fail()?);
+            }
+            if self.can_right() {
+                tmp.draw_textl(Text::new("| (→)        [C-b]").or_fail()?);
+            }
             if self.is_togglable() {
                 tmp.draw_textl(Text::new("| (t)oggle   [TAB]").or_fail()?);
             }
@@ -132,11 +137,10 @@ impl App {
             if self.can_unstage() {
                 tmp.draw_textl(Text::new("| (u)nstage       ").or_fail()?);
             }
-            tmp.draw_textl(Text::new("|                 ").or_fail()?);
-            tmp.draw_textl(Text::new("+- (h)ide --------").or_fail()?);
+            tmp.draw_textl(Text::new("+---- (h)ide -----").or_fail()?);
             19
         } else {
-            tmp.draw_textl(Text::new("|          ").or_fail()?);
+            tmp.draw_textl(Text::new("|   ...    ").or_fail()?);
             tmp.draw_textl(Text::new("+- s(h)ow -").or_fail()?);
             11
         };
@@ -287,6 +291,39 @@ impl App {
         self.widgets
             .get(self.cursor.path[0])
             .is_some_and(|w| w.is_valid_cursor(&self.cursor))
+    }
+
+    fn can_right(&self) -> bool {
+        let n = self.cursor.path.len();
+        if n == 4 {
+            return false;
+        }
+
+        // TODO: optimize
+        for w in &self.widgets {
+            if n == 1 && !w.children.is_empty() {
+                return true;
+            }
+
+            for c in &w.children {
+                if n == 2 && !c.children.is_empty() {
+                    return true;
+                }
+
+                for c in &c.children {
+                    if n == 3 && !c.children.is_empty() {
+                        return true;
+                    }
+                }
+            }
+        }
+        false
+    }
+
+    fn can_down(&self) -> bool {
+        // TODO
+        // TODO: Allow down key even if the last item if the terminal can scroll down
+        true
     }
 
     fn reload_diff_reset(&mut self) -> orfail::Result<()> {
