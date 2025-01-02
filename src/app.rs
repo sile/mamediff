@@ -459,6 +459,20 @@ impl DiffWidget {
         }
     }
 
+    pub fn cursor_abs_row(&self, cursor: &Cursor) -> usize {
+        match cursor.path[..Self::LEVEL].cmp(&self.widget_path.path) {
+            std::cmp::Ordering::Less => 0,
+            std::cmp::Ordering::Equal => {
+                if cursor.path.len() == Self::LEVEL {
+                    1
+                } else {
+                    self.children.iter().map(|c| c.cursor_abs_row(cursor)).sum()
+                }
+            }
+            std::cmp::Ordering::Greater => self.rows(),
+        }
+    }
+
     pub fn render(&self, canvas: &mut Canvas, cursor: &Cursor) -> orfail::Result<()> {
         canvas.draw_text(
             Text::new(&format!(
@@ -552,6 +566,20 @@ impl FileDiffWidget {
             1 + self.children.iter().map(|c| c.rows()).sum::<usize>()
         } else {
             1
+        }
+    }
+
+    pub fn cursor_abs_row(&self, cursor: &Cursor) -> usize {
+        match cursor.path[..Self::LEVEL].cmp(&self.widget_path.path) {
+            std::cmp::Ordering::Less => 0,
+            std::cmp::Ordering::Equal => {
+                if cursor.path.len() == Self::LEVEL {
+                    1
+                } else {
+                    self.children.iter().map(|c| c.cursor_abs_row(cursor)).sum()
+                }
+            }
+            std::cmp::Ordering::Greater => self.rows(),
         }
     }
 
@@ -773,6 +801,20 @@ impl ChunkDiffWidget {
             1 + self.children.len()
         } else {
             1
+        }
+    }
+
+    pub fn cursor_abs_row(&self, cursor: &Cursor) -> usize {
+        match cursor.path[..Self::LEVEL].cmp(&self.widget_path.path) {
+            std::cmp::Ordering::Less => 0,
+            std::cmp::Ordering::Equal => {
+                if cursor.path.len() == Self::LEVEL {
+                    1
+                } else {
+                    self.children.iter().map(|c| c.cursor_abs_row(cursor)).sum()
+                }
+            }
+            std::cmp::Ordering::Greater => self.rows(),
         }
     }
 
@@ -1080,5 +1122,13 @@ impl LineDiffWidget {
 
     pub fn rows(&self) -> usize {
         1
+    }
+
+    pub fn cursor_abs_row(&self, cursor: &Cursor) -> usize {
+        match cursor.path[..Self::LEVEL].cmp(&self.widget_path.path) {
+            std::cmp::Ordering::Less => 0,
+            std::cmp::Ordering::Equal => 1,
+            std::cmp::Ordering::Greater => 1,
+        }
     }
 }
