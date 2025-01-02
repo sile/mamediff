@@ -139,10 +139,10 @@ impl ChunkDiff {
     pub fn to_diff(&self, path: &PathBuf) -> Diff {
         let file_diff = FileDiff::Update {
             path: path.clone(),
-            old_hash: "000000".to_owned(), // dummy
-            new_hash: "000000".to_owned(), // dummy
-            old_mode: None,                // TODO
-            new_mode: Mode(0),             // dummy
+            old_hash: "0000000".to_owned(), // dummy
+            new_hash: "0000000".to_owned(), // dummy
+            old_mode: None,                 // TODO
+            new_mode: Mode(0),              // dummy
             content: ContentDiff::Text {
                 chunks: vec![self.clone()],
             },
@@ -528,7 +528,10 @@ impl std::fmt::Display for FileDiff {
 
                 let path = path.display();
                 writeln!(f, "diff --git a/{path} b/{path}")?;
-                writeln!(f, "index {old_hash}..{new_hash} {new_mode}")?;
+                if new_mode.0 != 0{
+                    // TODO: Add comment
+                    writeln!(f, "index {old_hash}..{new_hash} {new_mode}")?;
+                }
                 writeln!(f, "--- a/{path}")?;
                 writeln!(f, "+++ b/{path}")?;
                 write!(f, "{content}")?;

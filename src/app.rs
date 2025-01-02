@@ -276,7 +276,8 @@ impl App {
             widget.reload(&self.git, &old_widgets).or_fail()?;
         }
 
-        while self.cursor.prev() && !self.is_valid_cursor() {}
+        while !self.is_valid_cursor() && self.cursor.prev() {}
+        // TODO: expand cursor position if need
 
         self.render().or_fail()?;
         Ok(())
@@ -638,6 +639,10 @@ impl FileDiffWidget {
     }
 
     fn restore_state(&mut self, old: &[&Self]) {
+        if old.is_empty() {
+            return;
+        }
+
         self.expanded = old.iter().any(|w| w.expanded);
 
         for c in &mut self.children {
@@ -922,6 +927,10 @@ impl ChunkDiffWidget {
     }
 
     fn restore_state(&mut self, old: &[&Self]) {
+        if old.is_empty() {
+            return;
+        }
+
         self.expanded = old.iter().any(|w| w.expanded);
     }
 
@@ -1177,6 +1186,7 @@ impl Cursor {
         Self { path: vec![0] }
     }
 
+    // TODO: rename
     pub fn prev(&mut self) -> bool {
         let last = self.path.last_mut().expect("infallible");
         if let Some(x) = last.checked_sub(1) {
