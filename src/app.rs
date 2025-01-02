@@ -272,9 +272,7 @@ impl App {
     fn reload_diff(&mut self) -> orfail::Result<()> {
         let old_widgets = self.widgets.clone(); // TODO
         for widget in &mut self.widgets {
-            widget
-                .reload(&self.git, &self.cursor, &old_widgets)
-                .or_fail()?;
+            widget.reload(&self.git, &old_widgets).or_fail()?;
         }
 
         while self.cursor.prev() && !self.is_valid_cursor() {}
@@ -293,9 +291,7 @@ impl App {
         let old_widgets = self.widgets.clone(); // TODO
         self.cursor = Cursor::new();
         for widget in &mut self.widgets {
-            widget
-                .reload(&self.git, &self.cursor, &old_widgets)
-                .or_fail()?;
+            widget.reload(&self.git, &old_widgets).or_fail()?;
         }
         if self.full_rows() <= self.terminal.size().rows {
             self.expand_all();
@@ -519,12 +515,7 @@ impl DiffWidget {
         Ok(())
     }
 
-    pub fn reload(
-        &mut self,
-        git: &Git,
-        cursor: &Cursor,
-        old_widgets: &[DiffWidget],
-    ) -> orfail::Result<()> {
+    pub fn reload(&mut self, git: &Git, old_widgets: &[DiffWidget]) -> orfail::Result<()> {
         // TODO: Execute in parallel
         self.diff = if self.staged {
             git.diff_cached().or_fail()?
@@ -539,7 +530,22 @@ impl DiffWidget {
                 .push(FileDiffWidget::new(file, self.widget_path.join(i)));
         }
 
+        self.restore_state(old_widgets);
+
         Ok(())
+    }
+
+    fn restore_state(&mut self, old_widgets: &[DiffWidget]) {
+        let i = self.widget_path.path[Self::LEVEL - 1];
+        self.expanded = old_widgets[i].expanded;
+
+        for c in &mut self.children {
+            let old = old_widgets
+                .iter()
+                .filter_map(|w| w.children.iter().find(|old| old.name == c.name))
+                .collect::<Vec<_>>();
+            c.restore_state(&old);
+        }
     }
 
     pub fn rows(&self) -> usize {
@@ -627,6 +633,18 @@ impl FileDiffWidget {
             widget_path,
             children,
             expanded: false,
+        }
+    }
+
+    fn restore_state(&mut self, old: &[&Self]) {
+        self.expanded = old.iter().any(|w| w.expanded);
+
+        for c in &mut self.children {
+            let old = old
+                .iter()
+                .filter_map(|w| w.children.iter().find(|old| old.intersect(c)))
+                .collect::<Vec<_>>();
+            c.restore_state(&old);
         }
     }
 
@@ -893,6 +911,17 @@ impl ChunkDiffWidget {
             children,
             expanded: true,
         }
+    }
+
+    fn intersect(&self, other: &Self) -> bool {
+        self.old_range.contains(&other.new_range.start)
+            || self.old_range.contains(&other.new_range.end)
+            || self.new_range.contains(&other.old_range.start)
+            || self.new_range.contains(&other.old_range.end)
+    }
+
+    fn restore_state(&mut self, old: &[&Self]) {
+        self.expanded = old.iter().any(|w| w.expanded);
     }
 
     fn is_valid_cursor(&self, cursor: &Cursor) -> bool {
