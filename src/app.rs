@@ -40,12 +40,7 @@ impl App {
     }
 
     pub fn run(mut self) -> orfail::Result<()> {
-        self.reload_diff().or_fail()?;
-
-        if self.full_rows() <= self.terminal.size().rows {
-            self.expand_all();
-            self.render().or_fail()?;
-        }
+        self.reload_diff_reset().or_fail()?;
 
         while !self.exit {
             let event = self.terminal.next_event().or_fail()?;
@@ -188,7 +183,7 @@ impl App {
                 self.exit = true;
             }
             KeyCode::Char('r') => {
-                self.reload_diff().or_fail()?;
+                self.reload_diff_reset().or_fail()?;
             }
             KeyCode::Char('u') => {
                 self.handle_unstage().or_fail()?;
@@ -284,6 +279,18 @@ impl App {
             widget.reload(&self.git).or_fail()?;
         }
         self.render().or_fail()?;
+        Ok(())
+    }
+
+    fn reload_diff_reset(&mut self) -> orfail::Result<()> {
+        self.cursor = Cursor::new();
+        for widget in &mut self.widgets {
+            widget.reload(&self.git).or_fail()?;
+        }
+        if self.full_rows() <= self.terminal.size().rows {
+            self.expand_all();
+        }
+        self.render().or_fail()?; // TODO: optimize
         Ok(())
     }
 
