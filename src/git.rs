@@ -50,7 +50,7 @@ impl Git {
         let patch = diff.to_string();
 
         // TODO: use pipe
-        std::fs::write(".mamediff.patch", &patch).or_fail()?;
+        std::fs::write(".mamediff.discard.patch", &patch).or_fail()?;
 
         let output = Command::new("git")
             .arg("apply")
