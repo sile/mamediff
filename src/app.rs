@@ -192,7 +192,7 @@ impl App {
                 self.handle_stage().or_fail()?;
             }
             KeyCode::Char('D') => {
-                todo!()
+                self.handle_discard().or_fail()?;
             }
             KeyCode::Char('h') => {
                 self.show_legend = !self.show_legend;
@@ -452,6 +452,17 @@ impl App {
         Ok(())
     }
 
+    fn handle_discard(&mut self) -> orfail::Result<()> {
+        // TODO: rename `can_state()`
+        if self.can_stage() {
+            self.widgets[0]
+                .handle_discard(&self.git, &self.cursor)
+                .or_fail()?;
+            self.reload_diff().or_fail()?;
+        }
+        Ok(())
+    }
+
     fn handle_unstage(&mut self) -> orfail::Result<()> {
         if self.can_unstage() {
             self.widgets[1]
@@ -524,6 +535,26 @@ impl DiffWidget {
                 .or_fail()?;
         } else {
             git.stage(&self.diff).or_fail()?;
+        }
+
+        Ok(())
+    }
+
+    fn handle_discard(&mut self, git: &Git, cursor: &Cursor) -> orfail::Result<()> {
+        // TODO: Add comment (it's okay to use can_stage() here)
+        if !self.can_stage(cursor) {
+            return Ok(());
+        }
+
+        if cursor.path != self.widget_path.path {
+            let i = cursor.path[Self::LEVEL];
+            self.children
+                .get_mut(i)
+                .or_fail()?
+                .handle_discard(git, cursor, self.diff.files.get(i).or_fail()?)
+                .or_fail()?;
+        } else {
+            git.discard(&self.diff).or_fail()?;
         }
 
         Ok(())
@@ -856,6 +887,28 @@ impl FileDiffWidget {
         Ok(())
     }
 
+    fn handle_discard(
+        &mut self,
+        git: &Git,
+        cursor: &Cursor,
+        diff: &FileDiff,
+    ) -> orfail::Result<()> {
+        cursor.path.starts_with(&self.widget_path.path).or_fail()?;
+
+        if cursor.path != self.widget_path.path {
+            let i = cursor.path[Self::LEVEL];
+            self.children
+                .get_mut(i)
+                .or_fail()?
+                .handle_discard(git, cursor, diff.path(), diff.chunks().nth(i).or_fail()?)
+                .or_fail()?;
+        } else {
+            git.discard(&diff.to_diff()).or_fail()?;
+        }
+
+        Ok(())
+    }
+
     fn handle_unstage(
         &mut self,
         git: &Git,
@@ -1164,6 +1217,29 @@ impl ChunkDiffWidget {
         Ok(())
     }
 
+    fn handle_discard(
+        &mut self,
+        git: &Git,
+        cursor: &Cursor,
+        path: &PathBuf,
+        diff: &ChunkDiff,
+    ) -> orfail::Result<()> {
+        cursor.path.starts_with(&self.widget_path.path).or_fail()?;
+
+        if cursor.path != self.widget_path.path {
+            let i = cursor.path[Self::LEVEL];
+            self.children
+                .get_mut(i)
+                .or_fail()?
+                .handle_discard(git, cursor, path, &diff.get_line_chunk(i, true).or_fail()?)
+                .or_fail()?;
+        } else {
+            git.discard(&diff.to_diff(path)).or_fail()?;
+        }
+
+        Ok(())
+    }
+
     fn handle_unstage(
         &mut self,
         git: &Git,
@@ -1439,6 +1515,22 @@ impl LineDiffWidget {
 
         if cursor.path == self.widget_path.path {
             git.stage(&diff.to_diff(path)).or_fail()?;
+        }
+
+        Ok(())
+    }
+
+    fn handle_discard(
+        &mut self,
+        git: &Git,
+        cursor: &Cursor,
+        path: &PathBuf,
+        diff: &ChunkDiff,
+    ) -> orfail::Result<()> {
+        cursor.path.starts_with(&self.widget_path.path).or_fail()?;
+
+        if cursor.path == self.widget_path.path {
+            git.discard(&diff.to_diff(path)).or_fail()?;
         }
 
         Ok(())
