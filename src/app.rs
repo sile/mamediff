@@ -246,9 +246,40 @@ impl App {
         Ok(())
     }
 
+    fn get_children_len(&self) -> usize {
+        let i = self.cursor.path[0];
+        self.widgets[i].get_children_len(&self.cursor)
+    }
+
     fn handle_up(&mut self) -> orfail::Result<()> {
+        // TODO: factor out with can_up()
+        let old_cursor = self.cursor.clone();
+
         for widget in &mut self.widgets {
             widget.handle_up(&mut self.cursor).or_fail()?;
+        }
+
+        if old_cursor == self.cursor {
+            let level = self.cursor.path.len();
+
+            while self.cursor.path.len() > 1 {
+                self.cursor.path.pop();
+                let old = self.cursor.clone();
+                for widget in &mut self.widgets {
+                    widget.handle_up(&mut self.cursor).or_fail()?;
+                }
+                if old != self.cursor {
+                    while self.cursor.path.len() < level {
+                        let n = self.get_children_len();
+                        self.cursor.path.push(n.checked_sub(1).or_fail()?);
+                    }
+                    break;
+                }
+            }
+            if !self.is_valid_cursor() {
+                self.cursor = old_cursor;
+            }
+            // TODO: expand cursor position if need
         }
 
         // TODO: factor out
@@ -268,8 +299,32 @@ impl App {
     }
 
     fn handle_down(&mut self) -> orfail::Result<()> {
+        // TODO: factor out with can_down()
+        let old_cursor = self.cursor.clone();
         for widget in &mut self.widgets {
             widget.handle_down(&mut self.cursor).or_fail()?;
+        }
+
+        if old_cursor == self.cursor {
+            let level = self.cursor.path.len();
+
+            while self.cursor.path.len() > 1 {
+                self.cursor.path.pop();
+                let old = self.cursor.clone();
+                for widget in &mut self.widgets {
+                    widget.handle_down(&mut self.cursor).or_fail()?;
+                }
+                if old != self.cursor {
+                    while self.cursor.path.len() < level {
+                        self.cursor.path.push(0);
+                    }
+                    break;
+                }
+            }
+            if self.cursor.path.len() != level || !self.is_valid_cursor() {
+                self.cursor = old_cursor;
+            }
+            // TODO: expand cursor position if need
         }
 
         // TODO: factor out
@@ -429,6 +484,17 @@ impl DiffWidget {
             diff: Diff::default(),
             children: Vec::new(),
             expanded: true,
+        }
+    }
+
+    fn get_children_len(&self, cursor: &Cursor) -> usize {
+        if self.widget_path.path == cursor.path {
+            self.children.len()
+        } else if cursor.path.starts_with(&self.widget_path.path) {
+            self.children[cursor.path[Self::LEVEL]].get_children_len(cursor)
+        } else {
+            // TODO: error?
+            0
         }
     }
 
@@ -750,6 +816,17 @@ impl FileDiffWidget {
         }
     }
 
+    fn get_children_len(&self, cursor: &Cursor) -> usize {
+        if self.widget_path.path == cursor.path {
+            self.children.len()
+        } else if cursor.path.starts_with(&self.widget_path.path) {
+            self.children[cursor.path[Self::LEVEL]].get_children_len(cursor)
+        } else {
+            // TODO: error?
+            0
+        }
+    }
+
     fn is_valid_cursor(&self, cursor: &Cursor) -> bool {
         if self.widget_path.path == cursor.path {
             true
@@ -1039,6 +1116,17 @@ impl ChunkDiffWidget {
         }
 
         self.expanded = old.iter().any(|w| w.expanded);
+    }
+
+    fn get_children_len(&self, cursor: &Cursor) -> usize {
+        if self.widget_path.path == cursor.path {
+            self.children.len()
+        } else if cursor.path.starts_with(&self.widget_path.path) {
+            0
+        } else {
+            // TODO: error?
+            0
+        }
     }
 
     fn is_valid_cursor(&self, cursor: &Cursor) -> bool {
