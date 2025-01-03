@@ -250,6 +250,20 @@ impl App {
         for widget in &mut self.widgets {
             widget.handle_up(&mut self.cursor).or_fail()?;
         }
+
+        // TODO: factor out
+        let cursor_abs_row = self.cursor_abs_row();
+        let current_rows = self
+            .widgets
+            .iter()
+            .find_map(|w| w.current_rows(&self.cursor))
+            .or_fail()?;
+        let desired_end_row = cursor_abs_row + current_rows + 1;
+        if self.row_offset + self.terminal.size().rows < desired_end_row {
+            self.row_offset =
+                cursor_abs_row.min(desired_end_row.saturating_sub(self.terminal.size().rows));
+        }
+
         Ok(())
     }
 
@@ -257,6 +271,20 @@ impl App {
         for widget in &mut self.widgets {
             widget.handle_down(&mut self.cursor).or_fail()?;
         }
+
+        // TODO: factor out
+        let cursor_abs_row = self.cursor_abs_row();
+        let current_rows = self
+            .widgets
+            .iter()
+            .find_map(|w| w.current_rows(&self.cursor))
+            .or_fail()?;
+        let desired_end_row = cursor_abs_row + current_rows + 1;
+        if self.row_offset + self.terminal.size().rows < desired_end_row {
+            self.row_offset =
+                cursor_abs_row.min(desired_end_row.saturating_sub(self.terminal.size().rows));
+        }
+
         Ok(())
     }
 
@@ -320,14 +348,34 @@ impl App {
         false
     }
 
-    fn can_down(&self) -> bool {
-        // TODO
+    // TODO: remove mut
+    fn can_down(&mut self) -> bool {
         // TODO: Allow down key even if the last item if the terminal can scroll down
-        true
+        let original_cursor = self.cursor.clone();
+        let mut valid = false;
+
+        if let Some(x) = self.cursor.path.last_mut() {
+            *x += 1;
+            valid = self.is_valid_cursor();
+        }
+
+        // TODO:
+        // if !valid {
+        //     self.cursor.path.pop();
+        //     // TOD0: while self.cursor.next_sigbling() {
+        //     if let Some(x) = self.cursor.path.last_mut() {
+        //         *x += 1;
+        //         self.cursor.path.push(0);
+        //         valid = self.is_valid_cursor();
+        //     }
+        // }
+
+        self.cursor = original_cursor;
+        valid
     }
 
     fn reload_diff_reset(&mut self) -> orfail::Result<()> {
-        let old_widgets = self.widgets.clone(); // TODO
+        let old_widgets = vec![DiffWidget::new(false), DiffWidget::new(true)];
         self.cursor = Cursor::new();
         for widget in &mut self.widgets {
             widget.reload(&self.git, &old_widgets).or_fail()?;
@@ -606,6 +654,17 @@ impl DiffWidget {
         }
     }
 
+    pub fn current_rows(&self, cursor: &Cursor) -> Option<usize> {
+        if self.widget_path.path == cursor.path {
+            Some(self.rows())
+        } else if cursor.path.starts_with(&self.widget_path.path) {
+            let i = cursor.path[Self::LEVEL];
+            self.children[i].current_rows(cursor)
+        } else {
+            None
+        }
+    }
+
     pub fn cursor_abs_row(&self, cursor: &Cursor) -> usize {
         match cursor.path[..Self::LEVEL].cmp(&self.widget_path.path) {
             std::cmp::Ordering::Less => 0,
@@ -758,6 +817,17 @@ impl FileDiffWidget {
         self.expanded = true;
         for c in &mut self.children {
             c.expand_all();
+        }
+    }
+
+    pub fn current_rows(&self, cursor: &Cursor) -> Option<usize> {
+        if self.widget_path.path == cursor.path {
+            Some(self.rows())
+        } else if cursor.path.starts_with(&self.widget_path.path) {
+            let i = cursor.path[Self::LEVEL];
+            self.children[i].current_rows(cursor)
+        } else {
+            None
         }
     }
 
@@ -972,7 +1042,15 @@ impl ChunkDiffWidget {
     }
 
     fn is_valid_cursor(&self, cursor: &Cursor) -> bool {
-        self.widget_path.path == cursor.path
+        if self.widget_path.path == cursor.path {
+            true
+        } else if cursor.path.starts_with(&self.widget_path.path) {
+            self.children
+                .get(cursor.path[Self::LEVEL])
+                .is_some_and(|c| c.widget_path.path == cursor.path)
+        } else {
+            false
+        }
     }
 
     fn handle_stage(
@@ -1035,6 +1113,16 @@ impl ChunkDiffWidget {
 
     pub fn expand_all(&mut self) {
         self.expanded = true;
+    }
+
+    pub fn current_rows(&self, cursor: &Cursor) -> Option<usize> {
+        if self.widget_path.path == cursor.path {
+            Some(self.rows())
+        } else if cursor.path.starts_with(&self.widget_path.path) {
+            Some(1)
+        } else {
+            None
+        }
     }
 
     pub fn cursor_abs_row(&self, cursor: &Cursor) -> usize {
@@ -1213,7 +1301,7 @@ impl WidgetPath {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Cursor {
     pub path: Vec<usize>,
 }
