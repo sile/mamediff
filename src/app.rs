@@ -1024,8 +1024,43 @@ impl FileDiffWidget {
                     diff.path().display()
                 )
             }
-            _ => {
-                return Err(orfail::Failure::new("TODO"));
+            FileDiff::Rename { old_path, .. } => {
+                format!(
+                    "{}{} renamed {} -> {}",
+                    match cursor.path.len() {
+                        1 if self.widget_path.path.starts_with(&cursor.path[..1]) => " :",
+                        _ => "  ",
+                    },
+                    if self.widget_path.path == cursor.path {
+                        ">|"
+                    } else if cursor.path.len() == 2 {
+                        " |"
+                    } else {
+                        "  "
+                    },
+                    old_path.display(),
+                    diff.path().display()
+                )
+            }
+            FileDiff::Delete { .. } => {
+                format!(
+                    "{}{} deleted {}",
+                    match cursor.path.len() {
+                        1 if self.widget_path.path.starts_with(&cursor.path[..1]) => " :",
+                        _ => "  ",
+                    },
+                    if self.widget_path.path == cursor.path {
+                        ">|"
+                    } else if cursor.path.len() == 2 {
+                        " |"
+                    } else {
+                        "  "
+                    },
+                    diff.path().display()
+                )
+            }
+            v => {
+                return Err(orfail::Failure::new(format!("TODO: {v:?}")));
             }
         };
         canvas.draw_text(Text::new(&text).or_fail()?);

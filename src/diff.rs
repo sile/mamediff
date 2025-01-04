@@ -584,11 +584,17 @@ impl std::fmt::Display for FileDiff {
                 write!(f, "{content}")?;
             }
             FileDiff::Rename {
-                // old_path,
-                // new_path,
+                 old_path,
+                 new_path,
                 // similarity_index,
                 ..
-            } => todo!(),
+            } => {
+                let old_path = old_path.display();
+                let new_path = new_path.display();
+                writeln!(f, "diff --git a/{old_path} b/{new_path}")?;
+                writeln!(f, "rename from {old_path}")?;
+                writeln!(f, "rename to {new_path}")?;
+            }
             FileDiff::Chmod {
                 // path,
                 // old_mode,
