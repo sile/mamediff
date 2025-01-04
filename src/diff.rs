@@ -497,16 +497,19 @@ impl FileDiff {
     }
 }
 
+// TODO: Introduce a new method for generating patch file
 impl std::fmt::Display for FileDiff {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             FileDiff::New {
-                // path,
-                // hash,
-                // mode,
-                // content,
+                path,
+                mode,
                 ..
-            } => todo!(),
+            } => {
+                let path = path.display();
+                writeln!(f, "diff --git a/{path} b/{path}")?;
+                writeln!(f, "new file mode {mode}")?;
+            },
             FileDiff::Delete {
                 // path,
                 // hash,
