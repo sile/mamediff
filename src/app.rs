@@ -1082,7 +1082,8 @@ impl FileDiffWidget {
 
     pub fn can_unstage(&self, cursor: &Cursor) -> bool {
         if self.widget_path.path == cursor.path {
-            !self.children.is_empty()
+            // TDOO: !self.children.is_empty()
+            true
         } else if cursor.path.starts_with(&self.widget_path.path) {
             self.children.iter().any(|w| w.can_unstage(cursor))
         } else {
