@@ -9,7 +9,32 @@ pub struct Git {}
 
 impl Git {
     pub fn new() -> Self {
+        // TODO: check git command and directory
         Self {}
+    }
+
+    fn call(&self, args: &[&str], check_status: bool) -> orfail::Result<String> {
+        let output = Command::new("git")
+            .args(args)
+            .output()
+            .or_fail_with(|e| format!("Failed to execute `$ git {}`: {e}", args.join(" ")))?;
+
+        (!check_status || output.status.success()).or_fail_with(|()| {
+            format!(
+                "Failed to execute `$ git {}`:\n{}\n",
+                args.join(" "),
+                String::from_utf8_lossy(&output.stderr)
+            )
+        })?;
+        (check_status || output.stderr.is_empty()).or_fail_with(|()| {
+            format!(
+                "Failed to execute `$ git {}`:\n{}\n",
+                args.join(" "),
+                String::from_utf8_lossy(&output.stderr)
+            )
+        })?;
+
+        String::from_utf8(output.stdout).or_fail()
     }
 
     pub fn stage(&self, diff: &Diff) -> orfail::Result<()> {
@@ -113,54 +138,13 @@ impl Git {
     }
 
     pub fn diff(&self) -> orfail::Result<Diff> {
-        // TODO: factor out
-        let output = Command::new("git")
-            .arg("diff")
-            .output()
-            .or_fail_with(|e| format!("Failed to execute `$ git diff`: {e}"))?;
-        output.status.success().or_fail_with(|()| {
-            format!(
-                "Failed to execute `$ git diff`{}{}",
-                output
-                    .status
-                    .code()
-                    .map(|c| format!(": exit_code={c}"))
-                    .unwrap_or_default(),
-                (!output.stderr.is_empty())
-                    .then(|| format!(
-                        "\n\nSTDERR\n------\n{}\n------",
-                        String::from_utf8_lossy(&output.stderr)
-                    ))
-                    .unwrap_or_default()
-            )
-        })?;
-        let text = String::from_utf8(output.stdout).or_fail()?;
-        let mut diff = Diff::from_str(&text).or_fail()?;
+        let output = self.call(&["diff"], true).or_fail()?;
+        let mut diff = Diff::from_str(&output).or_fail()?;
 
-        let output = Command::new("git")
-            .arg("ls-files")
-            .arg("--others")
-            .arg("--exclude-standard")
-            .output()
-            .or_fail_with(|e| format!("Failed to execute `$ git ls-files`: {e}"))?;
-        output.status.success().or_fail_with(|()| {
-            format!(
-                "Failed to execute `$ git ls-files`{}{}",
-                output
-                    .status
-                    .code()
-                    .map(|c| format!(": exit_code={c}"))
-                    .unwrap_or_default(),
-                (!output.stderr.is_empty())
-                    .then(|| format!(
-                        "\n\nSTDERR\n------\n{}\n------",
-                        String::from_utf8_lossy(&output.stderr)
-                    ))
-                    .unwrap_or_default()
-            )
-        })?;
-        let text = String::from_utf8(output.stdout).or_fail()?;
-        for untracked_file in text.lines() {
+        let output = self
+            .call(&["ls-files", "--others", "--exclude-standard"], true)
+            .or_fail()?;
+        for untracked_file in output.lines() {
             let file_diff =
                 FileDiff::from_added_file(self, &PathBuf::from(untracked_file)).or_fail()?;
 
@@ -172,64 +156,22 @@ impl Git {
     }
 
     pub fn diff_new_file(&self, path: &PathBuf) -> orfail::Result<String> {
-        // TODO: git diff --no-index --binary /dev/null $PATH
-        let output = Command::new("git")
-            .arg("diff")
-            .arg("--no-index")
-            .arg("--binary")
-            .arg("/dev/null")
-            .arg(path.display().to_string()) // TODO
-            .output()
-            .or_fail_with(|e| {
-                format!("Failed to execute `$ git diff`: {e} {:?}", path.display())
-            })?;
-        // TODO: comment
-        // output.status.success().or_fail_with(|()| {
-        //     format!(
-        //         "Failed to execute `$ git diff` {} {}{}",
-        //         path.display().to_string(),
-        //         output
-        //             .status
-        //             .code()
-        //             .map(|c| format!(": exit_code={c}"))
-        //             .unwrap_or_default(),
-        //         (!output.stderr.is_empty())
-        //             .then(|| format!(
-        //                 "\n\nSTDERR\n------\n{}\n------",
-        //                 String::from_utf8_lossy(&output.stderr)
-        //             ))
-        //             .unwrap_or_default()
-        //     )
-        // })?;
-        let diff = String::from_utf8(output.stdout).or_fail()?;
+        let path = path.to_str().or_fail()?;
+
+        // This command exits with code 1 even upon success.
+        // Therefore, specify `check_status=false` here.
+        let diff = self
+            .call(
+                &["diff", "--no-index", "--binary", "/dev/null", path],
+                false,
+            )
+            .or_fail()?;
+
         Ok(diff)
     }
 
     pub fn diff_cached(&self) -> orfail::Result<Diff> {
-        let output = Command::new("git")
-            .arg("diff")
-            .arg("--cached")
-            .output()
-            .or_fail_with(|e| format!("Failed to execute `$ git diff --cached`: {e}"))?;
-        output.status.success().or_fail_with(|()| {
-            format!(
-                "Failed to execute `$ git diff --cached`{}{}",
-                output
-                    .status
-                    .code()
-                    .map(|c| format!(": exit_code={c}"))
-                    .unwrap_or_default(),
-                (!output.stderr.is_empty())
-                    .then(|| format!(
-                        "\n\nSTDERR\n------\n{}\n------",
-                        String::from_utf8_lossy(&output.stderr)
-                    ))
-                    .unwrap_or_default()
-            )
-        })?;
-        let text = String::from_utf8(output.stdout).or_fail()?;
-        Diff::from_str(&text).or_fail()
+        let output = self.call(&["diff", "--cached"], true).or_fail()?;
+        Diff::from_str(&output).or_fail()
     }
-
-    // apply, apply_cached
 }
