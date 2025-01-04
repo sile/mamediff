@@ -70,7 +70,7 @@ impl App {
         let cursor_abs_row = self.cursor_abs_row();
         if cursor_abs_row
             .checked_sub(self.row_offset)
-            .map_or(true, |p| p >= self.terminal.size().rows)
+            .is_none_or(|p| p >= self.terminal.size().rows)
         {
             let rows = self.terminal.size().rows;
             self.row_offset = cursor_abs_row.saturating_sub(rows / 2);

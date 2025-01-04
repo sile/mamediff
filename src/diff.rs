@@ -291,7 +291,7 @@ impl ContentDiff {
     }
 
     pub fn parse(lines: &mut Peekable<Lines>) -> orfail::Result<Self> {
-        if lines.peek().map_or(true, |line| line.starts_with("diff ")) {
+        if lines.peek().is_none_or(|line| line.starts_with("diff ")) {
             return Ok(Self::Empty);
         }
 
