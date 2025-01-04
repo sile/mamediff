@@ -1,8 +1,8 @@
-use std::{process::Command, str::FromStr};
+use std::{os::unix::fs::MetadataExt, path::PathBuf, process::Command, str::FromStr};
 
 use orfail::OrFail;
 
-use crate::diff::Diff;
+use crate::diff::{ContentDiff, Diff, FileDiff, Mode};
 
 #[derive(Debug)]
 pub struct Git {}
@@ -135,7 +135,48 @@ impl Git {
             )
         })?;
         let text = String::from_utf8(output.stdout).or_fail()?;
-        Diff::from_str(&text).or_fail()
+        let mut diff = Diff::from_str(&text).or_fail()?;
+
+        let output = Command::new("git")
+            .arg("ls-files")
+            .arg("--others")
+            .arg("--exclude-standard")
+            .output()
+            .or_fail_with(|e| format!("Failed to execute `$ git ls-files`: {e}"))?;
+        output.status.success().or_fail_with(|()| {
+            format!(
+                "Failed to execute `$ git ls-files`{}{}",
+                output
+                    .status
+                    .code()
+                    .map(|c| format!(": exit_code={c}"))
+                    .unwrap_or_default(),
+                (!output.stderr.is_empty())
+                    .then(|| format!(
+                        "\n\nSTDERR\n------\n{}\n------",
+                        String::from_utf8_lossy(&output.stderr)
+                    ))
+                    .unwrap_or_default()
+            )
+        })?;
+        let text = String::from_utf8(output.stdout).or_fail()?;
+        for untracked_file in text.lines() {
+            let path = PathBuf::from(untracked_file);
+            let mode = Mode(path.metadata().or_fail()?.mode());
+
+            // TODO: optimize
+            diff.files.insert(
+                0,
+                FileDiff::New {
+                    path,
+                    hash: "".to_owned(), // dummy
+                    mode,
+                    content: ContentDiff::Empty,
+                },
+            );
+        }
+
+        Ok(diff)
     }
 
     pub fn diff_cached(&self) -> orfail::Result<Diff> {
