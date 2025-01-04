@@ -987,26 +987,48 @@ impl FileDiffWidget {
     ) -> orfail::Result<()> {
         //
         // TODO: rename handling
-        canvas.draw_text(
-            Text::new(&format!(
-                "{}{} modified {} ({} chunks){}",
-                match cursor.path.len() {
-                    1 if self.widget_path.path.starts_with(&cursor.path[..1]) => " :",
-                    _ => "  ",
-                },
-                if self.widget_path.path == cursor.path {
-                    ">|"
-                } else if cursor.path.len() == 2 {
-                    " |"
-                } else {
-                    "  "
-                },
-                diff.path().display(),
-                self.children.len(),
-                if self.expanded { "" } else { COLLAPSED_MARK }
-            ))
-            .or_fail()?,
-        );
+        let text = match diff {
+            FileDiff::Update { .. } => {
+                format!(
+                    "{}{} modified {} ({} chunks){}",
+                    match cursor.path.len() {
+                        1 if self.widget_path.path.starts_with(&cursor.path[..1]) => " :",
+                        _ => "  ",
+                    },
+                    if self.widget_path.path == cursor.path {
+                        ">|"
+                    } else if cursor.path.len() == 2 {
+                        " |"
+                    } else {
+                        "  "
+                    },
+                    diff.path().display(),
+                    self.children.len(),
+                    if self.expanded { "" } else { COLLAPSED_MARK }
+                )
+            }
+            FileDiff::New { .. } => {
+                format!(
+                    "{}{} added {}",
+                    match cursor.path.len() {
+                        1 if self.widget_path.path.starts_with(&cursor.path[..1]) => " :",
+                        _ => "  ",
+                    },
+                    if self.widget_path.path == cursor.path {
+                        ">|"
+                    } else if cursor.path.len() == 2 {
+                        " |"
+                    } else {
+                        "  "
+                    },
+                    diff.path().display()
+                )
+            }
+            _ => {
+                return Err(orfail::Failure::new("TODO"));
+            }
+        };
+        canvas.draw_text(Text::new(&text).or_fail()?);
         canvas.draw_newline();
 
         if self.expanded {
