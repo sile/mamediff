@@ -4,7 +4,6 @@ use std::{
     str::{FromStr, Lines},
 };
 
-use base64::{prelude::BASE64_STANDARD, Engine};
 use orfail::OrFail;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -273,8 +272,8 @@ impl ContentDiff {
                 }],
             })
         } else {
-            // TODO: rename field
-            let message = BASE64_STANDARD.encode(&bytes);
+            // TODO: git diff --no-index --binary /dev/null $PATH
+            let message = "TODO".to_owned();
             Ok(Self::Binary { message })
         }
     }
