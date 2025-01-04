@@ -1,4 +1,7 @@
-use std::{ops::Range, path::PathBuf};
+use std::{
+    ops::Range,
+    path::{Path, PathBuf},
+};
 
 use crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use orfail::OrFail;
@@ -25,7 +28,7 @@ pub struct App {
 
 impl App {
     pub fn new() -> orfail::Result<Self> {
-        let git = Git::new();
+        let git = Git::new().or_fail()?;
         let terminal = Terminal::new().or_fail()?;
         Ok(Self {
             terminal,
@@ -33,7 +36,7 @@ impl App {
             git,
             // TODO: untrack files
             widgets: vec![DiffWidget::new(false), DiffWidget::new(true)],
-            cursor: Cursor::new(),
+            cursor: Cursor::root(),
             show_legend: true,
             row_offset: 0,
         })
@@ -431,7 +434,7 @@ impl App {
 
     fn reload_diff_reset(&mut self) -> orfail::Result<()> {
         let old_widgets = vec![DiffWidget::new(false), DiffWidget::new(true)];
-        self.cursor = Cursor::new();
+        self.cursor = Cursor::root();
         for widget in &mut self.widgets {
             widget.reload(&self.git, &old_widgets).or_fail()?;
         }
@@ -633,7 +636,7 @@ impl DiffWidget {
     }
 
     pub fn handle_left(&mut self, cursor: &mut Cursor) -> orfail::Result<()> {
-        (cursor.path.len() >= 1).or_fail()?;
+        (!cursor.path.is_empty()).or_fail()?;
 
         if cursor.path[0] == self.widget_path.last_index() && cursor.path.len() > 1 {
             cursor.path.pop();
@@ -1275,7 +1278,7 @@ impl ChunkDiffWidget {
         &mut self,
         git: &Git,
         cursor: &Cursor,
-        path: &PathBuf,
+        path: &Path,
         diff: &ChunkDiff,
     ) -> orfail::Result<()> {
         cursor.path.starts_with(&self.widget_path.path).or_fail()?;
@@ -1298,7 +1301,7 @@ impl ChunkDiffWidget {
         &mut self,
         git: &Git,
         cursor: &Cursor,
-        path: &PathBuf,
+        path: &Path,
         diff: &ChunkDiff,
     ) -> orfail::Result<()> {
         cursor.path.starts_with(&self.widget_path.path).or_fail()?;
@@ -1321,7 +1324,7 @@ impl ChunkDiffWidget {
         &mut self,
         git: &Git,
         cursor: &Cursor,
-        path: &PathBuf,
+        path: &Path,
         diff: &ChunkDiff,
     ) -> orfail::Result<()> {
         cursor.path.starts_with(&self.widget_path.path).or_fail()?;
@@ -1548,7 +1551,7 @@ pub struct Cursor {
 }
 
 impl Cursor {
-    pub fn new() -> Self {
+    pub fn root() -> Self {
         Self { path: vec![0] }
     }
 
@@ -1585,7 +1588,7 @@ impl LineDiffWidget {
         &mut self,
         git: &Git,
         cursor: &Cursor,
-        path: &PathBuf,
+        path: &Path,
         diff: &ChunkDiff,
     ) -> orfail::Result<()> {
         cursor.path.starts_with(&self.widget_path.path).or_fail()?;
@@ -1601,7 +1604,7 @@ impl LineDiffWidget {
         &mut self,
         git: &Git,
         cursor: &Cursor,
-        path: &PathBuf,
+        path: &Path,
         diff: &ChunkDiff,
     ) -> orfail::Result<()> {
         cursor.path.starts_with(&self.widget_path.path).or_fail()?;
@@ -1617,7 +1620,7 @@ impl LineDiffWidget {
         &mut self,
         git: &Git,
         cursor: &Cursor,
-        path: &PathBuf,
+        path: &Path,
         diff: &ChunkDiff,
     ) -> orfail::Result<()> {
         cursor.path.starts_with(&self.widget_path.path).or_fail()?;
@@ -1695,10 +1698,10 @@ impl LineDiffWidget {
     pub fn handle_down(&mut self, cursor: &mut Cursor) -> orfail::Result<()> {
         (cursor.path.len() >= Self::LEVEL).or_fail()?;
 
-        if cursor.path.len() == Self::LEVEL {
-            if self.widget_path.last_index() == cursor.path[Self::LEVEL - 1] + 1 {
-                cursor.path[Self::LEVEL - 1] += 1;
-            }
+        if cursor.path.len() == Self::LEVEL
+            && self.widget_path.last_index() == cursor.path[Self::LEVEL - 1] + 1
+        {
+            cursor.path[Self::LEVEL - 1] += 1;
         }
 
         Ok(())
@@ -1707,10 +1710,10 @@ impl LineDiffWidget {
     pub fn handle_up(&mut self, cursor: &mut Cursor) -> orfail::Result<()> {
         (cursor.path.len() >= Self::LEVEL).or_fail()?;
 
-        if cursor.path.len() == Self::LEVEL {
-            if Some(self.widget_path.last_index()) == cursor.path[Self::LEVEL - 1].checked_sub(1) {
-                cursor.path[Self::LEVEL - 1] -= 1;
-            }
+        if cursor.path.len() == Self::LEVEL
+            && Some(self.widget_path.last_index()) == cursor.path[Self::LEVEL - 1].checked_sub(1)
+        {
+            cursor.path[Self::LEVEL - 1] -= 1;
         }
 
         Ok(())

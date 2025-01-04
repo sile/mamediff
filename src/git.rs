@@ -1,6 +1,6 @@
 use std::{
     io::Write,
-    path::PathBuf,
+    path::{Path, PathBuf},
     process::{Command, Stdio},
     str::FromStr,
 };
@@ -13,9 +13,9 @@ use crate::diff::{Diff, FileDiff};
 pub struct Git {}
 
 impl Git {
-    pub fn new() -> Self {
+    pub fn new() -> Option<Self> {
         // TODO: check git command and directory
-        Self {}
+        Some(Self {})
     }
 
     fn call(&self, args: &[&str], check_status: bool) -> orfail::Result<String> {
@@ -111,7 +111,7 @@ impl Git {
         Ok(diff)
     }
 
-    pub fn diff_new_file(&self, path: &PathBuf) -> orfail::Result<String> {
+    pub fn diff_new_file(&self, path: &Path) -> orfail::Result<String> {
         let path = path.to_str().or_fail()?;
 
         // This command exits with code 1 even upon success.

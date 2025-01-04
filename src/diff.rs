@@ -1,6 +1,6 @@
 use std::{
     iter::Peekable,
-    path::PathBuf,
+    path::{Path, PathBuf},
     str::{FromStr, Lines},
 };
 
@@ -35,6 +35,10 @@ pub struct Diff {
 impl Diff {
     pub fn len(&self) -> usize {
         self.files.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.files.is_empty()
     }
 }
 
@@ -100,7 +104,7 @@ pub struct ChunkDiff {
 
 impl ChunkDiff {
     pub fn get_line_chunk(&self, index: usize, stage: bool) -> Option<Self> {
-        if !(index < self.lines.len()) {
+        if index >= self.lines.len() {
             return None;
         }
 
@@ -138,9 +142,9 @@ impl ChunkDiff {
         })
     }
 
-    pub fn to_diff(&self, path: &PathBuf) -> Diff {
+    pub fn to_diff(&self, path: &Path) -> Diff {
         let file_diff = FileDiff::Update {
-            path: path.clone(),
+            path: path.to_path_buf(),
             old_hash: "0000000".to_owned(), // dummy
             new_hash: "0000000".to_owned(), // dummy
             old_mode: None,                 // TODO
@@ -369,10 +373,10 @@ pub enum FileDiff {
 }
 
 impl FileDiff {
-    pub fn from_added_file(git: &Git, path: &PathBuf) -> orfail::Result<Self> {
+    pub fn from_added_file(git: &Git, path: &Path) -> orfail::Result<Self> {
         let diff = git.diff_new_file(path).or_fail()?;
         Ok(Self::Added {
-            path: path.clone(),
+            path: path.to_path_buf(),
             diff,
         })
     }

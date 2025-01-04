@@ -62,7 +62,7 @@ impl Row {
 }
 
 // TODO: rename
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct Canvas {
     current_row: Row,
     rows: Vec<Row>,
