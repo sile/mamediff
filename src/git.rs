@@ -1,8 +1,8 @@
-use std::{os::unix::fs::MetadataExt, path::PathBuf, process::Command, str::FromStr};
+use std::{path::PathBuf, process::Command, str::FromStr};
 
 use orfail::OrFail;
 
-use crate::diff::{ContentDiff, Diff, FileDiff, Mode};
+use crate::diff::{Diff, FileDiff};
 
 #[derive(Debug)]
 pub struct Git {}
@@ -161,22 +161,47 @@ impl Git {
         })?;
         let text = String::from_utf8(output.stdout).or_fail()?;
         for untracked_file in text.lines() {
-            let path = PathBuf::from(untracked_file);
-            let mode = Mode(path.metadata().or_fail()?.mode());
-            let content = ContentDiff::from_file(&path).or_fail()?;
+            let file_diff =
+                FileDiff::from_added_file(self, &PathBuf::from(untracked_file)).or_fail()?;
 
             // TODO: optimize
-            diff.files.insert(
-                0,
-                FileDiff::New {
-                    path,
-                    hash: "".to_owned(), // dummy
-                    mode,
-                    content,
-                },
-            );
+            diff.files.insert(0, file_diff);
         }
 
+        Ok(diff)
+    }
+
+    pub fn diff_new_file(&self, path: &PathBuf) -> orfail::Result<String> {
+        // TODO: git diff --no-index --binary /dev/null $PATH
+        let output = Command::new("git")
+            .arg("diff")
+            .arg("--no-index")
+            .arg("--binary")
+            .arg("/dev/null")
+            .arg(path.display().to_string()) // TODO
+            .output()
+            .or_fail_with(|e| {
+                format!("Failed to execute `$ git diff`: {e} {:?}", path.display())
+            })?;
+        // TODO: comment
+        // output.status.success().or_fail_with(|()| {
+        //     format!(
+        //         "Failed to execute `$ git diff` {} {}{}",
+        //         path.display().to_string(),
+        //         output
+        //             .status
+        //             .code()
+        //             .map(|c| format!(": exit_code={c}"))
+        //             .unwrap_or_default(),
+        //         (!output.stderr.is_empty())
+        //             .then(|| format!(
+        //                 "\n\nSTDERR\n------\n{}\n------",
+        //                 String::from_utf8_lossy(&output.stderr)
+        //             ))
+        //             .unwrap_or_default()
+        //     )
+        // })?;
+        let diff = String::from_utf8(output.stdout).or_fail()?;
         Ok(diff)
     }
 

@@ -6,6 +6,8 @@ use std::{
 
 use orfail::OrFail;
 
+use crate::git::Git;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Mode(pub u32);
 
@@ -252,7 +254,7 @@ impl std::fmt::Display for ChunkDiff {
 #[derive(Debug, Clone)]
 pub enum ContentDiff {
     Text { chunks: Vec<ChunkDiff> },
-    Binary { message: String },
+    Binary {},
     Empty,
 }
 
@@ -273,8 +275,7 @@ impl ContentDiff {
             })
         } else {
             // TODO: git diff --no-index --binary /dev/null $PATH
-            let message = "TODO".to_owned();
-            Ok(Self::Binary { message })
+            Ok(Self::Binary {})
         }
     }
 
@@ -293,7 +294,7 @@ impl ContentDiff {
         let line = lines.next().or_fail()?;
         if line.starts_with("Binary files ") {
             return Ok(Self::Binary {
-                message: line.to_owned(),
+                // TODO: message: line.to_owned(),
             });
         }
 
@@ -319,8 +320,8 @@ impl std::fmt::Display for ContentDiff {
                     write!(f, "{chunk}")?;
                 }
             }
-            ContentDiff::Binary { message } => {
-                write!(f, "{message}")?;
+            ContentDiff::Binary {} => {
+                // TODO:                write!(f, "{message}")?;
             }
             ContentDiff::Empty => {}
         }
@@ -360,9 +361,22 @@ pub enum FileDiff {
         old_mode: Mode,
         new_mode: Mode,
     },
+    // TODO: merge with New
+    Added {
+        path: PathBuf,
+        diff: String,
+    },
 }
 
 impl FileDiff {
+    pub fn from_added_file(git: &Git, path: &PathBuf) -> orfail::Result<Self> {
+        let diff = git.diff_new_file(path).or_fail()?;
+        Ok(Self::Added {
+            path: path.clone(),
+            diff,
+        })
+    }
+
     pub fn to_diff(&self) -> Diff {
         Diff {
             files: vec![self.clone()],
@@ -375,6 +389,7 @@ impl FileDiff {
             | FileDiff::Delete { path, .. }
             | FileDiff::Update { path, .. }
             | FileDiff::Rename { new_path: path, .. }
+            | FileDiff::Added { path, .. }
             | FileDiff::Chmod { path, .. } => path,
         }
     }
@@ -384,9 +399,10 @@ impl FileDiff {
             FileDiff::Delete { content, .. } | FileDiff::Update { content, .. } => {
                 Some(content.chunks()).into_iter().flatten()
             }
-            FileDiff::New { .. } | FileDiff::Rename { .. } | FileDiff::Chmod { .. } => {
-                None.into_iter().flatten()
-            }
+            FileDiff::Added { .. }
+            | FileDiff::New { .. }
+            | FileDiff::Rename { .. }
+            | FileDiff::Chmod { .. } => None.into_iter().flatten(),
         }
     }
 
@@ -579,6 +595,9 @@ impl std::fmt::Display for FileDiff {
                 // new_mode,
                 ..
             } => todo!(),
+            FileDiff::Added { diff, ..} => {
+                write!(f, "{diff}")?;
+            }
         }
         Ok(())
     }

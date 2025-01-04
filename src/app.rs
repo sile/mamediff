@@ -1007,7 +1007,7 @@ impl FileDiffWidget {
                     if self.expanded { "" } else { COLLAPSED_MARK }
                 )
             }
-            FileDiff::New { .. } => {
+            FileDiff::New { .. } | FileDiff::Added { .. } => {
                 format!(
                     "{}{} added {}",
                     match cursor.path.len() {
