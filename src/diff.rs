@@ -474,7 +474,13 @@ impl FileDiff {
             });
         }
 
-        let line = lines.next().or_fail()?;
+        let Some(line) = lines.next() else {
+            return Ok(Self::Chmod {
+                path,
+                old_mode: old_mode.mode,
+                new_mode: new_mode.mode,
+            });
+        };
         let mut index = IndexHeaderLine::from_str(line).or_fail()?;
         index.mode.is_none().or_fail()?;
         index.mode = Some(new_mode.mode);
@@ -552,10 +558,10 @@ impl std::fmt::Display for FileDiff {
                 writeln!(f, "diff --git a/{path} b/{path}")?;
                 writeln!(f, "new file mode {mode}")?;
                 // TODO: writeln!(f, "index 0000000..{hash}")?;
-                if !matches!(content,ContentDiff::Empty){
+                if !matches!(content, ContentDiff::Empty) {
                     writeln!(f, "{content}")?;
                 }
-            },
+            }
             FileDiff::Delete {
                 path,
                 mode,
@@ -575,13 +581,13 @@ impl std::fmt::Display for FileDiff {
                 new_mode,
                 content,
             } => {
-                if old_mode.is_some(){
+                if old_mode.is_some() {
                     todo!();
                 }
 
                 let path = path.display();
                 writeln!(f, "diff --git a/{path} b/{path}")?;
-                if new_mode.0 != 0{
+                if new_mode.0 != 0 {
                     // TODO: Add comment
                     writeln!(f, "index {old_hash}..{new_hash} {new_mode}")?;
                 }
@@ -590,8 +596,8 @@ impl std::fmt::Display for FileDiff {
                 write!(f, "{content}")?;
             }
             FileDiff::Rename {
-                 old_path,
-                 new_path,
+                old_path,
+                new_path,
                 // similarity_index,
                 ..
             } => {
@@ -602,12 +608,16 @@ impl std::fmt::Display for FileDiff {
                 writeln!(f, "rename to {new_path}")?;
             }
             FileDiff::Chmod {
-                // path,
-                // old_mode,
-                // new_mode,
-                ..
-            } => todo!(),
-            FileDiff::Added { diff, ..} => {
+                path,
+                old_mode,
+                new_mode,
+            } => {
+                let path = path.display();
+                writeln!(f, "diff --git a/{path} b/{path}")?;
+                writeln!(f, "old mode {old_mode}")?;
+                writeln!(f, "new mode {new_mode}")?;
+            }
+            FileDiff::Added { diff, .. } => {
                 write!(f, "{diff}")?;
             }
         }

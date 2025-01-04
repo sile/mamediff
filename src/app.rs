@@ -1059,8 +1059,26 @@ impl FileDiffWidget {
                     diff.path().display()
                 )
             }
-            v => {
-                return Err(orfail::Failure::new(format!("TODO: {v:?}")));
+            FileDiff::Chmod {
+                old_mode, new_mode, ..
+            } => {
+                format!(
+                    "{}{} mode changed {} {} -> {}",
+                    match cursor.path.len() {
+                        1 if self.widget_path.path.starts_with(&cursor.path[..1]) => " :",
+                        _ => "  ",
+                    },
+                    if self.widget_path.path == cursor.path {
+                        ">|"
+                    } else if cursor.path.len() == 2 {
+                        " |"
+                    } else {
+                        "  "
+                    },
+                    diff.path().display(),
+                    old_mode,
+                    new_mode
+                )
             }
         };
         canvas.draw_text(Text::new(&text).or_fail()?);
