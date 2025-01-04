@@ -396,10 +396,12 @@ impl FileDiff {
 
     pub fn chunks(&self) -> impl '_ + Iterator<Item = &ChunkDiff> {
         match self {
-            FileDiff::Delete { content, .. } | FileDiff::Update { content, .. } => {
-                Some(content.chunks()).into_iter().flatten()
-            }
+            // FileDiff::Delete { content, .. } | FileDiff::Update { content, .. } => {
+            //     Some(content.chunks()).into_iter().flatten()
+            // }
+            FileDiff::Update { content, .. } => Some(content.chunks()).into_iter().flatten(),
             FileDiff::Added { .. }
+            | FileDiff::Delete { .. }
             | FileDiff::New { .. }
             | FileDiff::Rename { .. }
             | FileDiff::Chmod { .. } => None.into_iter().flatten(),
@@ -555,12 +557,16 @@ impl std::fmt::Display for FileDiff {
                 }
             },
             FileDiff::Delete {
-                // path,
-                // hash,
-                // mode,
-                // content,
+                path,
+                mode,
+                content,
                 ..
-            } => todo!(),
+            } => {
+                let path = path.display();
+                writeln!(f, "diff --git a/{path} b/{path}")?;
+                writeln!(f, "deleted file mode {mode}")?;
+                writeln!(f, "{content}")?;
+            }
             FileDiff::Update {
                 path,
                 old_hash,
