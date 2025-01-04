@@ -190,7 +190,8 @@ impl Drop for Terminal {
         let _ = crossterm::execute!(
             std::io::stdout(),
             LeaveAlternateScreen,
-            crossterm::cursor::Show
+            crossterm::cursor::Show,
+            crossterm::terminal::EnableLineWrap
         );
     }
 }

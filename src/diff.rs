@@ -4,6 +4,7 @@ use std::{
     str::{FromStr, Lines},
 };
 
+use base64::{prelude::BASE64_STANDARD, Engine};
 use orfail::OrFail;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -261,7 +262,8 @@ impl ContentDiff {
         let bytes = std::fs::read(path).or_fail()?;
         if bytes.is_empty() {
             Ok(Self::Empty)
-        } else if let Ok(text) = String::from_utf8(bytes) {
+        } else if let Ok(text) = String::from_utf8(bytes.clone()) {
+            // TODO: remove above clone
             Ok(Self::Text {
                 chunks: vec![ChunkDiff {
                     old_start_line_number: 0,
@@ -271,9 +273,9 @@ impl ContentDiff {
                 }],
             })
         } else {
-            Ok(Self::Binary {
-                message: format!("Binary files /dev/null and b/{} differ", path.display()),
-            })
+            // TODO: rename field
+            let message = BASE64_STANDARD.encode(&bytes);
+            Ok(Self::Binary { message })
         }
     }
 
@@ -318,8 +320,10 @@ impl std::fmt::Display for ContentDiff {
                     write!(f, "{chunk}")?;
                 }
             }
-            ContentDiff::Binary { .. } => todo!(),
-            ContentDiff::Empty => todo!(),
+            ContentDiff::Binary { message } => {
+                write!(f, "{message}")?;
+            }
+            ContentDiff::Empty => {}
         }
         Ok(())
     }
@@ -530,6 +534,7 @@ impl std::fmt::Display for FileDiff {
                 let path = path.display();
                 writeln!(f, "diff --git a/{path} b/{path}")?;
                 writeln!(f, "new file mode {mode}")?;
+                // TODO: writeln!(f, "index 0000000..{hash}")?;
                 if !matches!(content,ContentDiff::Empty){
                     writeln!(f, "{content}")?;
                 }
