@@ -1,4 +1,9 @@
-use std::{path::PathBuf, process::Command, str::FromStr};
+use std::{
+    io::Write,
+    path::PathBuf,
+    process::{Command, Stdio},
+    str::FromStr,
+};
 
 use orfail::OrFail;
 
@@ -37,103 +42,54 @@ impl Git {
         String::from_utf8(output.stdout).or_fail()
     }
 
-    pub fn stage(&self, diff: &Diff) -> orfail::Result<()> {
-        // TODO: Check if the diff is still up-to-date
-        let patch = diff.to_string();
+    fn call_with_input(&self, args: &[&str], input: &str) -> orfail::Result<String> {
+        let mut child = Command::new("git")
+            .args(args)
+            .stdin(Stdio::piped())
+            .spawn()
+            .or_fail_with(|e| format!("Failed to execute `$ git {}`: {e}", args.join(" ")))?;
 
-        // TODO: use pipe
-        std::fs::write(".mamediff.patch", &patch).or_fail()?;
+        let mut stdin = child.stdin.take().or_fail()?;
+        stdin.write_all(input.as_bytes()).or_fail()?;
+        std::mem::drop(stdin);
 
-        let output = Command::new("git")
-            .arg("apply")
-            .arg("--cached")
-            .arg(".mamediff.patch") // TODO: use pipe
-            .output()
-            .or_fail_with(|e| format!("Failed to execute `$ git apply --cached`: {e}"))?;
+        let output = child
+            .wait_with_output()
+            .or_fail_with(|e| format!("Failed to execute `$ git {}`: {e}", args.join(" ")))?;
+
         output.status.success().or_fail_with(|()| {
+            let _ = std::fs::write(".mamediff.error.input", input.as_bytes());
             format!(
-                "Failed to execute `$ git apply --cached`{}{}",
-                output
-                    .status
-                    .code()
-                    .map(|c| format!(": exit_code={c}"))
-                    .unwrap_or_default(),
-                (!output.stderr.is_empty())
-                    .then(|| format!(
-                        "\n\nSTDERR\n------\n{}\n------",
-                        String::from_utf8_lossy(&output.stderr)
-                    ))
-                    .unwrap_or_default()
+                "Failed to execute `$ cat .mamediff.error.input | git {}`:\n{}\n",
+                args.join(" "),
+                String::from_utf8_lossy(&output.stderr)
             )
         })?;
 
+        String::from_utf8(output.stdout).or_fail()
+    }
+
+    pub fn stage(&self, diff: &Diff) -> orfail::Result<()> {
+        // TODO: Check if the diff is still up-to-date
+        let patch = diff.to_string();
+        self.call_with_input(&["apply", "--cached"], &patch)
+            .or_fail()?;
         Ok(())
     }
 
     pub fn discard(&self, diff: &Diff) -> orfail::Result<()> {
         // TODO: Check if the diff is still up-to-date
         let patch = diff.to_string();
-
-        // TODO: use pipe
-        std::fs::write(".mamediff.discard.patch", &patch).or_fail()?;
-
-        let output = Command::new("git")
-            .arg("apply")
-            .arg("--reverse")
-            .arg(".mamediff.discard.patch") // TODO: use pipe
-            .output()
-            .or_fail_with(|e| format!("Failed to execute `$ git apply --reverse`: {e}"))?;
-        output.status.success().or_fail_with(|()| {
-            format!(
-                "Failed to execute `$ git apply --reverse`{}{}",
-                output
-                    .status
-                    .code()
-                    .map(|c| format!(": exit_code={c}"))
-                    .unwrap_or_default(),
-                (!output.stderr.is_empty())
-                    .then(|| format!(
-                        "\n\nSTDERR\n------\n{}\n------",
-                        String::from_utf8_lossy(&output.stderr)
-                    ))
-                    .unwrap_or_default()
-            )
-        })?;
-
+        self.call_with_input(&["apply", "--reverse"], &patch)
+            .or_fail()?;
         Ok(())
     }
 
     pub fn unstage(&self, diff: &Diff) -> orfail::Result<()> {
         // TODO: Check if the diff is still up-to-date
         let patch = diff.to_string();
-
-        // TODO: use pipe
-        std::fs::write(".mamediff.rev.patch", &patch).or_fail()?;
-
-        let output = Command::new("git")
-            .arg("apply")
-            .arg("--cached")
-            .arg("--reverse")
-            .arg(".mamediff.rev.patch") // TODO: use pipe
-            .output()
-            .or_fail_with(|e| format!("Failed to execute `$ git apply --cached`: {e}"))?;
-        output.status.success().or_fail_with(|()| {
-            format!(
-                "Failed to execute `$ git apply --cached`{}{}",
-                output
-                    .status
-                    .code()
-                    .map(|c| format!(": exit_code={c}"))
-                    .unwrap_or_default(),
-                (!output.stderr.is_empty())
-                    .then(|| format!(
-                        "\n\nSTDERR\n------\n{}\n------",
-                        String::from_utf8_lossy(&output.stderr)
-                    ))
-                    .unwrap_or_default()
-            )
-        })?;
-
+        self.call_with_input(&["apply", "--cached", "--reverse"], &patch)
+            .or_fail()?;
         Ok(())
     }
 
