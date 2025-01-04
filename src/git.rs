@@ -163,6 +163,7 @@ impl Git {
         for untracked_file in text.lines() {
             let path = PathBuf::from(untracked_file);
             let mode = Mode(path.metadata().or_fail()?.mode());
+            let content = ContentDiff::from_file(&path).or_fail()?;
 
             // TODO: optimize
             diff.files.insert(
@@ -171,7 +172,7 @@ impl Git {
                     path,
                     hash: "".to_owned(), // dummy
                     mode,
-                    content: ContentDiff::Empty,
+                    content,
                 },
             );
         }

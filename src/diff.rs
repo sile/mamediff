@@ -257,6 +257,26 @@ pub enum ContentDiff {
 }
 
 impl ContentDiff {
+    pub fn from_file(path: &PathBuf) -> orfail::Result<Self> {
+        let bytes = std::fs::read(path).or_fail()?;
+        if bytes.is_empty() {
+            Ok(Self::Empty)
+        } else if let Ok(text) = String::from_utf8(bytes) {
+            Ok(Self::Text {
+                chunks: vec![ChunkDiff {
+                    old_start_line_number: 0,
+                    new_start_line_number: 1,
+                    start_line: None,
+                    lines: text.lines().map(|l| LineDiff::New(l.to_string())).collect(),
+                }],
+            })
+        } else {
+            Ok(Self::Binary {
+                message: format!("Binary files /dev/null and b/{} differ", path.display()),
+            })
+        }
+    }
+
     pub fn chunks(&self) -> impl '_ + Iterator<Item = &ChunkDiff> {
         match self {
             ContentDiff::Text { chunks } => Some(chunks.iter()).into_iter().flatten(),
@@ -504,11 +524,15 @@ impl std::fmt::Display for FileDiff {
             FileDiff::New {
                 path,
                 mode,
+                content,
                 ..
             } => {
                 let path = path.display();
                 writeln!(f, "diff --git a/{path} b/{path}")?;
                 writeln!(f, "new file mode {mode}")?;
+                if !matches!(content,ContentDiff::Empty){
+                    writeln!(f, "{content}")?;
+                }
             },
             FileDiff::Delete {
                 // path,
