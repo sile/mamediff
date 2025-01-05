@@ -503,7 +503,7 @@ impl DiffWidget {
     fn get_children_len(&self, cursor: &Cursor) -> usize {
         if self.widget_path.path == cursor.path {
             self.children.len()
-        } else if cursor.path.starts_with(&self.widget_path.path) {
+        } else if cursor.path.starts_with(&self.widget_path.path) && !self.children.is_empty() {
             self.children[cursor.path[Self::LEVEL]].get_children_len(cursor)
         } else {
             // TODO: error?
