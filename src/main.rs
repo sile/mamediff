@@ -13,51 +13,52 @@ fn main() -> orfail::Result<()> {
 }
 
 fn check_args() -> orfail::Result<()> {
-    for arg in std::env::args().skip(1) {
-        match arg.as_str() {
-            "-h" | "--help" => {
-                println!("Git diff editor");
-                println!();
-                println!(
-                    "{} {} [OPTIONS]",
-                    bold_underline("Usage:"),
-                    bold("mamediff"),
-                );
-                println!();
-                println!("{}", bold_underline("Options:"));
-                println!(" {}  {}", bold(" -h, --help"), "Print help");
-                println!(" {}  {}", bold(" --version"), " Print version");
+    let Some(arg) = std::env::args().nth(1) else {
+        return Ok(());
+    };
 
-                std::process::exit(0);
-            }
-            "--version" => {
-                println!("mamediff {}", env!("CARGO_PKG_VERSION"));
-                std::process::exit(0);
-            }
-            _ => {
-                let mut stderr = std::io::stderr();
-                writeln!(
-                    stderr,
-                    "{} unexpected argment '{arg}' found",
-                    bold("error:"),
-                )
-                .or_fail()?;
-                writeln!(stderr).or_fail()?;
-                writeln!(
-                    stderr,
-                    "{} {} [OPTIONS]",
-                    bold_underline("Usage:"),
-                    bold("mamediff"),
-                )
-                .or_fail()?;
-                writeln!(stderr).or_fail()?;
-                writeln!(stderr, "For more information, try '--help'.").or_fail()?;
+    match arg.as_str() {
+        "-h" | "--help" => {
+            println!("Git diff editor");
+            println!();
+            println!(
+                "{} {} [OPTIONS]",
+                bold_underline("Usage:"),
+                bold("mamediff"),
+            );
+            println!();
+            println!("{}", bold_underline("Options:"));
+            println!(" {}  Print help", bold(" -h, --help"));
+            println!(" {}   Print version", bold(" --version"));
 
-                std::process::exit(1);
-            }
+            std::process::exit(0);
+        }
+        "--version" => {
+            println!("mamediff {}", env!("CARGO_PKG_VERSION"));
+            std::process::exit(0);
+        }
+        _ => {
+            let mut stderr = std::io::stderr();
+            writeln!(
+                stderr,
+                "{} unexpected argment '{arg}' found",
+                bold("error:"),
+            )
+            .or_fail()?;
+            writeln!(stderr).or_fail()?;
+            writeln!(
+                stderr,
+                "{} {} [OPTIONS]",
+                bold_underline("Usage:"),
+                bold("mamediff"),
+            )
+            .or_fail()?;
+            writeln!(stderr).or_fail()?;
+            writeln!(stderr, "For more information, try '--help'.").or_fail()?;
+
+            std::process::exit(1);
         }
     }
-    Ok(())
 }
 
 fn bold(s: &str) -> PrintStyledContent<&str> {

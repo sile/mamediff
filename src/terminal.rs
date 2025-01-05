@@ -125,6 +125,8 @@ impl Terminal {
             EnterAlternateScreen,
             crossterm::cursor::MoveTo(0, 0),
             crossterm::cursor::Hide,
+            // TODO: Remove this and trim the exceeding chars before drawing
+            crossterm::terminal::DisableLineWrap,
         )
         .or_fail()?;
         crossterm::terminal::enable_raw_mode().or_fail()?;
@@ -207,6 +209,7 @@ impl Drop for Terminal {
             std::io::stdout(),
             LeaveAlternateScreen,
             crossterm::cursor::Show,
+            crossterm::terminal::EnableLineWrap,
         );
     }
 }
