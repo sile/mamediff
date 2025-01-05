@@ -7,7 +7,7 @@ mamediff
 ![License](https://img.shields.io/crates/l/mamediff)
 
 A TUI editor for unstaged and staged Git Diffs.
-Inspired by [Magit], but designed to be significantly simpler and specialized for editing diffs.
+This tool is inspired by [Magit] but is designed to be much simpler and specialized for editing diffs.
 
 **NOTE: This tool is still under development (version 0.1.0 is scheduled for release in January 2025).**
 
