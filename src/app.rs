@@ -273,7 +273,7 @@ impl App {
                 if old != self.cursor {
                     while self.cursor.path.len() < level {
                         let n = self.get_children_len();
-                        self.cursor.path.push(n.checked_sub(1).or_fail()?);
+                        self.cursor.path.push(n.saturating_sub(1));
                     }
                     break;
                 }
@@ -992,7 +992,7 @@ impl FileDiffWidget {
         let text = match diff {
             FileDiff::Update { .. } => {
                 format!(
-                    "{}{} modified {} ({} chunks, +{} -{} lines){}",
+                    "{}{} modified {} ({} chunks, -{} +{} lines){}",
                     match cursor.path.len() {
                         1 if self.widget_path.path.starts_with(&cursor.path[..1]) => " :",
                         _ => "  ",
@@ -1006,8 +1006,8 @@ impl FileDiffWidget {
                     },
                     diff.path().display(),
                     self.children.len(),
-                    self.added_lines(diff),
                     self.removed_lines(diff),
+                    self.added_lines(diff),
                     if self.expanded { "" } else { COLLAPSED_MARK }
                 )
             }
