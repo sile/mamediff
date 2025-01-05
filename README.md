@@ -6,8 +6,8 @@ mamediff
 [![Actions Status](https://github.com/sile/mamediff/workflows/CI/badge.svg)](https://github.com/sile/mamediff/actions)
 ![License](https://img.shields.io/crates/l/mamediff)
 
-A TUI editor for unstaged and staged Git Diffs.
-This tool is inspired by [Magit] but is designed to be much simpler and specialized for editing diffs.
+A TUI editor for managing unstaged and staged Git diffs.
+Inspired by [Magit], this tool focuses on providing a simpler, specialized interface for staging, unstaging, and discarding diffs.
 
 **NOTE: This tool is still under development (version 0.1.0 is scheduled for release in January 2025).**
 
