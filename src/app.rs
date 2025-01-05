@@ -34,7 +34,6 @@ impl App {
             terminal,
             exit: false,
             git,
-            // TODO: untrack files
             widgets: vec![DiffWidget::new(false), DiffWidget::new(true)],
             cursor: Cursor::root(),
             show_legend: true,
@@ -993,7 +992,7 @@ impl FileDiffWidget {
         let text = match diff {
             FileDiff::Update { .. } => {
                 format!(
-                    "{}{} modified {} ({} chunks){}",
+                    "{}{} modified {} ({} chunks, +{} -{} lines){}",
                     match cursor.path.len() {
                         1 if self.widget_path.path.starts_with(&cursor.path[..1]) => " :",
                         _ => "  ",
@@ -1007,6 +1006,8 @@ impl FileDiffWidget {
                     },
                     diff.path().display(),
                     self.children.len(),
+                    self.added_lines(diff),
+                    self.removed_lines(diff),
                     if self.expanded { "" } else { COLLAPSED_MARK }
                 )
             }
@@ -1094,6 +1095,22 @@ impl FileDiffWidget {
         }
 
         Ok(())
+    }
+
+    fn added_lines(&self, diff: &FileDiff) -> usize {
+        self.children
+            .iter()
+            .zip(diff.chunks())
+            .map(|(c, d)| c.added_lines(d))
+            .sum()
+    }
+
+    fn removed_lines(&self, diff: &FileDiff) -> usize {
+        self.children
+            .iter()
+            .zip(diff.chunks())
+            .map(|(c, d)| c.removed_lines(d))
+            .sum()
     }
 
     pub fn toggle(&mut self, cursor: &Cursor) -> orfail::Result<()> {
@@ -1424,6 +1441,22 @@ impl ChunkDiffWidget {
         Ok(())
     }
 
+    fn added_lines(&self, diff: &ChunkDiff) -> usize {
+        self.children
+            .iter()
+            .zip(diff.lines.iter())
+            .map(|(c, d)| c.added_lines(d))
+            .sum()
+    }
+
+    fn removed_lines(&self, diff: &ChunkDiff) -> usize {
+        self.children
+            .iter()
+            .zip(diff.lines.iter())
+            .map(|(c, d)| c.removed_lines(d))
+            .sum()
+    }
+
     pub fn toggle(&mut self, cursor: &Cursor) -> orfail::Result<()> {
         (cursor.path.len() >= Self::LEVEL).or_fail()?;
 
@@ -1666,6 +1699,22 @@ impl LineDiffWidget {
         canvas.draw_newline();
 
         Ok(())
+    }
+
+    fn added_lines(&self, diff: &LineDiff) -> usize {
+        if matches!(diff, LineDiff::New(_)) {
+            1
+        } else {
+            0
+        }
+    }
+
+    fn removed_lines(&self, diff: &LineDiff) -> usize {
+        if matches!(diff, LineDiff::Old(_)) {
+            1
+        } else {
+            0
+        }
     }
 
     pub const LEVEL: usize = 4;
