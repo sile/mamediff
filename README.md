@@ -13,6 +13,8 @@ Inspired by [Magit], but designed to be significantly simpler and specialized fo
 
 [Magit]: https://github.com/magit/magit
 
+![mamediff](mamediff.gif)
+
 Installation
 ------------
 
@@ -24,7 +26,7 @@ $ mamediff -h
 Usage
 -----
 
-Just execute `mamediff` command within a Git directory. 
+Just execute `mamediff` command within a Git directory.
 The available key bindings will be displayed in the top-right corner of the window.
 
 ```console
