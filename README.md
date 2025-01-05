@@ -18,6 +18,7 @@ Installation
 
 ```console
 $ cargo install mamediff
+$ mamediff -h
 ```
 
 Usage
@@ -28,14 +29,14 @@ The available key bindings will be displayed in the top-right corner of the wind
 
 ```console
 $ mamediff
->| Unstaged changes (1 files)                            | (q)uit [ESC,C-c]
- :   modified src/main.rs (1 chunks, -0 +2 lines)        | (r)eload
- :     @@ -5,6 +5,8 @@ use mamediff::app::App;           | (↓)        [C-n]
- :        use orfail::OrFail;                            | (→)        [C-b]
- :                                                       | (t)oggle   [TAB]
- :        fn main() -> orfail::Result<()> {              | (s)tage
- :       +    println!("Hello World!");                  | (D)iscard
- :       +                                               +---- (h)ide -----
+>| Unstaged changes (1 files)                      | (q)uit [ESC,C-c]
+ :   modified src/main.rs (1 chunks, -0 +2 lines)  | (r)eload
+ :     @@ -5,6 +5,8 @@ use mamediff::app::App;     | (↓)        [C-n]
+ :        use orfail::OrFail;                      | (→)        [C-b]
+ :                                                 | (t)oggle   [TAB]
+ :        fn main() -> orfail::Result<()> {        | (s)tage
+ :       +    println!("Hello World!");            | (D)iscard
+ :       +                                         +---- (h)ide -----
  :            check_args().or_fail()?;
  :
  :            let app = App::new().or_fail()?;
