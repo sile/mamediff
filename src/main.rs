@@ -1,13 +1,17 @@
 use std::io::Write;
 
 use crossterm::style::{Attribute, Attributes, ContentStyle, PrintStyledContent, StyledContent};
-use mamediff::app::App;
+use mamediff::{app::App, git::Git};
 use orfail::OrFail;
 
 fn main() -> orfail::Result<()> {
     check_args().or_fail()?;
 
-    let app = App::new().or_fail()?;
+    let Some(git) = Git::new() else {
+        eprintln!("error: no `git` command found, or not a Git directory");
+        std::process::exit(1);
+    };
+    let app = App::new(git).or_fail()?;
     app.run().or_fail()?;
     Ok(())
 }

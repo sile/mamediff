@@ -14,8 +14,10 @@ pub struct Git {}
 
 impl Git {
     pub fn new() -> Option<Self> {
-        // TODO: check git command and directory
-        Some(Self {})
+        let this = Self {};
+
+        // Check if `git` is accessible and we are within a Git directory.
+        this.call(&["status"], true).ok().map(|_| this)
     }
 
     fn call(&self, args: &[&str], check_status: bool) -> orfail::Result<String> {

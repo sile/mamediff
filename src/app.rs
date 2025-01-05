@@ -27,8 +27,7 @@ pub struct App {
 }
 
 impl App {
-    pub fn new() -> orfail::Result<Self> {
-        let git = Git::new().or_fail()?;
+    pub fn new(git: Git) -> orfail::Result<Self> {
         let terminal = Terminal::new().or_fail()?;
         Ok(Self {
             terminal,
