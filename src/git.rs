@@ -1,6 +1,6 @@
 use std::{
     io::Write,
-    path::PathBuf,
+    path::{Path, PathBuf},
     process::{Command, Stdio},
     str::FromStr,
 };
