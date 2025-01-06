@@ -162,7 +162,6 @@ impl App {
             Event::Mouse(_) => Ok(()), // TODO: Add mouse handling
             Event::Paste(_) => Ok(()),
             Event::Resize(_, _) => {
-                self.terminal.on_resized().or_fail()?;
                 let cursor_abs_row = self.cursor_abs_row();
                 let rows = self.terminal.size().rows;
                 self.row_offset = cursor_abs_row.saturating_sub(rows / 2);

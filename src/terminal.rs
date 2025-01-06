@@ -7,6 +7,140 @@ use crossterm::{
 };
 use orfail::OrFail;
 
+#[derive(Debug)]
+pub struct Terminal {
+    size: Size,
+    prev: Canvas,
+}
+
+impl Terminal {
+    pub fn new() -> orfail::Result<Self> {
+        crossterm::execute!(
+            std::io::stdout(),
+            EnterAlternateScreen,
+            crossterm::cursor::Hide,
+            // TODO: Remove this and trim the exceeding chars before drawing
+            crossterm::terminal::DisableLineWrap,
+        )
+        .or_fail()?;
+        crossterm::terminal::enable_raw_mode().or_fail()?;
+
+        let size = Size::current().or_fail()?;
+        Ok(Self {
+            size,
+            prev: Canvas::new(),
+        })
+    }
+
+    pub fn size(&self) -> Size {
+        self.size
+    }
+
+    pub fn next_event(&mut self) -> orfail::Result<Event> {
+        let timeout = Duration::from_secs(1);
+        while !crossterm::event::poll(timeout).or_fail()? {}
+
+        let event = crossterm::event::read().or_fail()?;
+        if matches!(event, Event::Resize(..)) {
+            self.size = Size::current().or_fail()?;
+        }
+
+        Ok(event)
+    }
+
+    pub fn render(&mut self, mut canvas: Canvas) -> orfail::Result<()> {
+        canvas.draw_newline(); // TODO
+
+        let stdout = std::io::stdout();
+        let mut writer = stdout.lock();
+        for (row_i, row) in canvas.rows.iter().enumerate() {
+            if self.prev.rows.get(row_i) == Some(row) {
+                continue;
+            }
+
+            crossterm::queue!(
+                writer,
+                crossterm::cursor::MoveTo(0, row_i as u16),
+                crossterm::terminal::Clear(crossterm::terminal::ClearType::CurrentLine)
+            )
+            .or_fail()?;
+
+            for text in &row.texts {
+                if text.attrs.is_empty() {
+                    crossterm::queue!(writer, crossterm::style::Print(&text.text)).or_fail()?;
+                } else {
+                    let content = StyledContent::new(
+                        ContentStyle {
+                            attributes: text.attrs,
+                            ..Default::default()
+                        },
+                        &text.text,
+                    );
+                    crossterm::queue!(writer, crossterm::style::PrintStyledContent(content))
+                        .or_fail()?;
+                }
+            }
+        }
+
+        for row_i in canvas.rows.len()..self.prev.rows.len() {
+            crossterm::queue!(
+                writer,
+                crossterm::cursor::MoveTo(0, row_i as u16),
+                crossterm::terminal::Clear(crossterm::terminal::ClearType::CurrentLine)
+            )
+            .or_fail()?;
+        }
+
+        writer.flush().or_fail()?;
+        self.prev = canvas;
+        Ok(())
+    }
+}
+
+impl Drop for Terminal {
+    fn drop(&mut self) {
+        let _ = crossterm::terminal::disable_raw_mode();
+        let _ = crossterm::execute!(
+            std::io::stdout(),
+            LeaveAlternateScreen,
+            crossterm::cursor::Show,
+            crossterm::terminal::EnableLineWrap,
+        );
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Size {
+    pub rows: usize,
+    pub cols: usize,
+}
+
+impl Size {
+    pub fn current() -> orfail::Result<Self> {
+        let size = crossterm::terminal::size().or_fail()?;
+        Ok(Self {
+            rows: size.1 as usize,
+            cols: size.0 as usize,
+        })
+    }
+
+    pub fn is_empty(self) -> bool {
+        self.rows == 0 || self.cols == 0
+    }
+}
+
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+pub struct Position {
+    pub row: usize,
+    pub col: usize,
+}
+
+impl Position {
+    pub fn new(row: usize, col: usize) -> Self {
+        Self { row, col }
+    }
+}
+
 #[derive(Debug, PartialEq, Eq)]
 pub struct Text {
     text: String,
@@ -109,139 +243,5 @@ impl Canvas {
 
     pub fn rows(&self) -> usize {
         self.rows.len() + 1
-    }
-}
-
-#[derive(Debug)]
-pub struct Terminal {
-    size: Size,
-    prev: Canvas,
-}
-
-impl Terminal {
-    pub fn new() -> orfail::Result<Self> {
-        crossterm::execute!(
-            std::io::stdout(),
-            EnterAlternateScreen,
-            crossterm::cursor::MoveTo(0, 0),
-            crossterm::cursor::Hide,
-            // TODO: Remove this and trim the exceeding chars before drawing
-            crossterm::terminal::DisableLineWrap,
-        )
-        .or_fail()?;
-        crossterm::terminal::enable_raw_mode().or_fail()?;
-
-        let size = Size::current().or_fail()?;
-        Ok(Self {
-            size,
-            prev: Canvas::new(),
-        })
-    }
-
-    pub fn size(&self) -> Size {
-        self.size
-    }
-
-    pub fn on_resized(&mut self) -> orfail::Result<()> {
-        self.size = Size::current().or_fail()?;
-        Ok(())
-    }
-
-    pub fn next_event(&mut self) -> orfail::Result<Event> {
-        let timeout = Duration::from_secs(1);
-        while !crossterm::event::poll(timeout).or_fail()? {}
-        crossterm::event::read().or_fail()
-    }
-
-    pub fn render(&mut self, mut canvas: Canvas) -> orfail::Result<()> {
-        canvas.draw_newline(); // TODO
-
-        let stdout = std::io::stdout();
-        let mut writer = stdout.lock();
-        for (row_i, row) in canvas.rows.iter().enumerate() {
-            if self.prev.rows.get(row_i) == Some(row) {
-                continue;
-            }
-
-            crossterm::queue!(
-                writer,
-                crossterm::cursor::MoveTo(0, row_i as u16),
-                crossterm::terminal::Clear(crossterm::terminal::ClearType::CurrentLine)
-            )
-            .or_fail()?;
-
-            for text in &row.texts {
-                if text.attrs.is_empty() {
-                    crossterm::queue!(writer, crossterm::style::Print(&text.text)).or_fail()?;
-                } else {
-                    let content = StyledContent::new(
-                        ContentStyle {
-                            attributes: text.attrs,
-                            ..Default::default()
-                        },
-                        &text.text,
-                    );
-                    crossterm::queue!(writer, crossterm::style::PrintStyledContent(content))
-                        .or_fail()?;
-                }
-            }
-        }
-
-        for row_i in canvas.rows.len()..self.prev.rows.len() {
-            crossterm::queue!(
-                writer,
-                crossterm::cursor::MoveTo(0, row_i as u16),
-                crossterm::terminal::Clear(crossterm::terminal::ClearType::CurrentLine)
-            )
-            .or_fail()?;
-        }
-
-        writer.flush().or_fail()?;
-        self.prev = canvas;
-        Ok(())
-    }
-}
-
-impl Drop for Terminal {
-    fn drop(&mut self) {
-        let _ = crossterm::terminal::disable_raw_mode();
-        let _ = crossterm::execute!(
-            std::io::stdout(),
-            LeaveAlternateScreen,
-            crossterm::cursor::Show,
-            crossterm::terminal::EnableLineWrap,
-        );
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct Size {
-    pub rows: usize,
-    pub cols: usize,
-}
-
-impl Size {
-    pub fn current() -> orfail::Result<Self> {
-        let size = crossterm::terminal::size().or_fail()?;
-        Ok(Self {
-            rows: size.1 as usize,
-            cols: size.0 as usize,
-        })
-    }
-
-    pub fn is_empty(self) -> bool {
-        self.rows == 0 || self.cols == 0
-    }
-}
-
-#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
-pub struct Position {
-    pub row: usize,
-    pub col: usize,
-}
-
-impl Position {
-    pub fn new(row: usize, col: usize) -> Self {
-        Self { row, col }
     }
 }
