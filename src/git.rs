@@ -1,6 +1,6 @@
 use std::{
     io::Write,
-    path::{Path, PathBuf},
+    path::PathBuf,
     process::{Command, Stdio},
     str::FromStr,
 };
@@ -45,7 +45,7 @@ impl Git {
     }
 
     pub fn unstaged_and_staged_diffs(&self) -> orfail::Result<(Diff, Diff)> {
-        let (staged_diff, unstaged_diff, untracked_files) =
+        let (mut unstaged_diff, staged_diff, untracked_files) =
             std::thread::scope(|s| -> orfail::Result<_> {
                 let unstaged_diff_handle = s.spawn(|| {
                     let output = self.call(&["diff"], true).or_fail()?;
@@ -77,27 +77,30 @@ impl Git {
                 Ok((unstaged_diff, staged_diff, untracked_files))
             })
             .or_fail()?;
-        todo!()
+
+        std::thread::scope(|s| -> orfail::Result<_> {
+            let mut handles = Vec::new();
+            for path in &untracked_files {
+                handles.push(s.spawn(move || FileDiff::from_added_file(self, &path).or_fail()));
+            }
+
+            let mut diffs = handles
+                .into_iter()
+                .map(|h| h.join().unwrap_or_else(|e| std::panic::resume_unwind(e)))
+                .collect::<orfail::Result<Vec<_>>>()
+                .or_fail()?;
+
+            diffs.extend(unstaged_diff.files.drain(..));
+            unstaged_diff.files = diffs;
+
+            Ok(())
+        })
+        .or_fail()?;
+
+        Ok((unstaged_diff, staged_diff))
     }
 
-    pub fn diff(&self) -> orfail::Result<Diff> {
-        let output = self.call(&["diff"], true).or_fail()?;
-        let mut diff = Diff::from_str(&output).or_fail()?;
-
-        let output = self
-            .call(&["ls-files", "--others", "--exclude-standard"], true)
-            .or_fail()?;
-        for untracked_file in output.lines() {
-            let file_diff =
-                FileDiff::from_added_file(self, &PathBuf::from(untracked_file)).or_fail()?;
-
-            // TODO: optimize
-            diff.files.insert(0, file_diff);
-        }
-
-        Ok(diff)
-    }
-
+    // TODO: refactor
     pub fn diff_new_file(&self, path: &Path) -> orfail::Result<String> {
         let path = path.to_str().or_fail()?;
 
@@ -111,11 +114,6 @@ impl Git {
             .or_fail()?;
 
         Ok(diff)
-    }
-
-    pub fn diff_cached(&self) -> orfail::Result<Diff> {
-        let output = self.call(&["diff", "--cached"], true).or_fail()?;
-        Diff::from_str(&output).or_fail()
     }
 
     fn call(&self, args: &[&str], check_status: bool) -> orfail::Result<String> {

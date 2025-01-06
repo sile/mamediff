@@ -360,9 +360,14 @@ impl App {
 
     fn reload_diff(&mut self) -> orfail::Result<()> {
         let old_widgets = self.widgets.clone(); // TODO
-        for widget in &mut self.widgets {
-            widget.reload(&self.git, &old_widgets).or_fail()?;
-        }
+
+        let (unstaged_diff, staged_diff) = self.git.unstaged_and_staged_diffs().or_fail()?;
+        self.widgets[0]
+            .reload(unstaged_diff, &old_widgets)
+            .or_fail()?;
+        self.widgets[1]
+            .reload(staged_diff, &old_widgets)
+            .or_fail()?;
 
         while !self.is_valid_cursor() && self.cursor.prev() {}
         // TODO: expand cursor position if need
@@ -433,9 +438,13 @@ impl App {
     fn reload_diff_reset(&mut self) -> orfail::Result<()> {
         let old_widgets = vec![DiffWidget::new(false), DiffWidget::new(true)];
         self.cursor = Cursor::root();
-        for widget in &mut self.widgets {
-            widget.reload(&self.git, &old_widgets).or_fail()?;
-        }
+        let (unstaged_diff, staged_diff) = self.git.unstaged_and_staged_diffs().or_fail()?;
+        self.widgets[0]
+            .reload(unstaged_diff, &old_widgets)
+            .or_fail()?;
+        self.widgets[1]
+            .reload(staged_diff, &old_widgets)
+            .or_fail()?;
         if self.full_rows() <= self.terminal.size().rows {
             self.expand_all();
         }
@@ -700,15 +709,9 @@ impl DiffWidget {
         Ok(())
     }
 
-    pub fn reload(&mut self, git: &Git, old_widgets: &[DiffWidget]) -> orfail::Result<()> {
-        // TODO: Execute in parallel
-        self.diff = if self.staged {
-            git.diff_cached().or_fail()?
-        } else {
-            git.diff().or_fail()?
-        };
+    pub fn reload(&mut self, diff: Diff, old_widgets: &[DiffWidget]) -> orfail::Result<()> {
+        self.diff = diff;
 
-        // TODO: merge old state (e.g., focused)
         self.children.clear();
         for (i, file) in self.diff.files.iter().enumerate() {
             self.children
