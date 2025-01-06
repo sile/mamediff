@@ -24,7 +24,6 @@ impl Git {
     }
 
     pub fn stage(&self, diff: &Diff) -> orfail::Result<()> {
-        // TODO: Check if the diff is still up-to-date
         let patch = diff.to_string();
         self.call_with_input(&["apply", "--cached"], &patch)
             .or_fail()?;
@@ -32,7 +31,6 @@ impl Git {
     }
 
     pub fn discard(&self, diff: &Diff) -> orfail::Result<()> {
-        // TODO: Check if the diff is still up-to-date
         let patch = diff.to_string();
         self.call_with_input(&["apply", "--reverse"], &patch)
             .or_fail()?;
@@ -40,7 +38,6 @@ impl Git {
     }
 
     pub fn unstage(&self, diff: &Diff) -> orfail::Result<()> {
-        // TODO: Check if the diff is still up-to-date
         let patch = diff.to_string();
         self.call_with_input(&["apply", "--cached", "--reverse"], &patch)
             .or_fail()?;
