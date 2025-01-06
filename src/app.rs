@@ -7,9 +7,10 @@ use crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use orfail::OrFail;
 
 use crate::{
+    canvas::{Canvas, Position, Text},
     diff::{ChunkDiff, Diff, FileDiff, LineDiff},
     git::Git,
-    terminal::{Canvas, Position, Terminal, Text},
+    terminal::Terminal,
 };
 
 // const COLLAPSED_MARK: &str = "…";
