@@ -47,6 +47,42 @@ impl Git {
         Ok(())
     }
 
+    pub fn unstaged_and_staged_diffs(&self) -> orfail::Result<(Diff, Diff)> {
+        let (staged_diff, unstaged_diff, untracked_files) =
+            std::thread::scope(|s| -> orfail::Result<_> {
+                let unstaged_diff_handle = s.spawn(|| {
+                    let output = self.call(&["diff"], true).or_fail()?;
+                    Diff::from_str(&output).or_fail()
+                });
+                let staged_diff_handle = s.spawn(|| {
+                    let output = self.call(&["diff", "--cached"], true).or_fail()?;
+                    Diff::from_str(&output).or_fail()
+                });
+                let untracked_files_handle = s.spawn(|| {
+                    self.call(&["ls-files", "--others", "--exclude-standard"], true)
+                        .or_fail()
+                        .map(|output| output.lines().map(PathBuf::from).collect::<Vec<_>>())
+                });
+
+                let unstaged_diff = unstaged_diff_handle
+                    .join()
+                    .unwrap_or_else(|e| std::panic::resume_unwind(e))
+                    .or_fail()?;
+                let staged_diff = staged_diff_handle
+                    .join()
+                    .unwrap_or_else(|e| std::panic::resume_unwind(e))
+                    .or_fail()?;
+                let untracked_files = untracked_files_handle
+                    .join()
+                    .unwrap_or_else(|e| std::panic::resume_unwind(e))
+                    .or_fail()?;
+
+                Ok((unstaged_diff, staged_diff, untracked_files))
+            })
+            .or_fail()?;
+        todo!()
+    }
+
     pub fn diff(&self) -> orfail::Result<Diff> {
         let output = self.call(&["diff"], true).or_fail()?;
         let mut diff = Diff::from_str(&output).or_fail()?;
