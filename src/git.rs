@@ -103,7 +103,7 @@ impl Git {
                 .collect::<orfail::Result<Vec<_>>>()
                 .or_fail()?;
 
-            diffs.extend(unstaged_diff.files.drain(..));
+            diffs.append(&mut unstaged_diff.files);
             unstaged_diff.files = diffs;
 
             Ok(())
