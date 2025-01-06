@@ -6,8 +6,6 @@ use std::{
 
 use orfail::OrFail;
 
-use crate::git::Git;
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Mode(pub u32);
 
@@ -373,14 +371,6 @@ pub enum FileDiff {
 }
 
 impl FileDiff {
-    pub fn from_added_file(git: &Git, path: &Path) -> orfail::Result<Self> {
-        let diff = git.diff_new_file(path).or_fail()?;
-        Ok(Self::Added {
-            path: path.to_path_buf(),
-            diff,
-        })
-    }
-
     pub fn to_diff(&self) -> Diff {
         Diff {
             files: vec![self.clone()],

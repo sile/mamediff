@@ -1,6 +1,6 @@
 use std::{
     io::Write,
-    path::{Path, PathBuf},
+    path::PathBuf,
     process::{Command, Stdio},
     str::FromStr,
 };
@@ -30,16 +30,16 @@ impl Git {
         Ok(())
     }
 
-    pub fn discard(&self, diff: &Diff) -> orfail::Result<()> {
+    pub fn unstage(&self, diff: &Diff) -> orfail::Result<()> {
         let patch = diff.to_string();
-        self.call_with_input(&["apply", "--reverse"], &patch)
+        self.call_with_input(&["apply", "--cached", "--reverse"], &patch)
             .or_fail()?;
         Ok(())
     }
 
-    pub fn unstage(&self, diff: &Diff) -> orfail::Result<()> {
+    pub fn discard(&self, diff: &Diff) -> orfail::Result<()> {
         let patch = diff.to_string();
-        self.call_with_input(&["apply", "--cached", "--reverse"], &patch)
+        self.call_with_input(&["apply", "--reverse"], &patch)
             .or_fail()?;
         Ok(())
     }
@@ -58,7 +58,7 @@ impl Git {
                 let untracked_files_handle = s.spawn(|| {
                     self.call(&["ls-files", "--others", "--exclude-standard"], true)
                         .or_fail()
-                        .map(|output| output.lines().map(PathBuf::from).collect::<Vec<_>>())
+                        .map(|output| output.lines().map(|s| s.to_owned()).collect::<Vec<_>>())
                 });
 
                 let unstaged_diff = unstaged_diff_handle
@@ -81,7 +81,20 @@ impl Git {
         std::thread::scope(|s| -> orfail::Result<_> {
             let mut handles = Vec::new();
             for path in &untracked_files {
-                handles.push(s.spawn(move || FileDiff::from_added_file(self, &path).or_fail()));
+                handles.push(s.spawn(move || {
+                    // This command exits with code 1 even upon success.
+                    // Therefore, specify `check_status=false` here.
+                    let diff = self
+                        .call(
+                            &["diff", "--no-index", "--binary", "/dev/null", path],
+                            false,
+                        )
+                        .or_fail()?;
+                    Ok(FileDiff::Added {
+                        path: PathBuf::from(path),
+                        diff,
+                    })
+                }));
             }
 
             let mut diffs = handles
@@ -98,22 +111,6 @@ impl Git {
         .or_fail()?;
 
         Ok((unstaged_diff, staged_diff))
-    }
-
-    // TODO: refactor
-    pub fn diff_new_file(&self, path: &Path) -> orfail::Result<String> {
-        let path = path.to_str().or_fail()?;
-
-        // This command exits with code 1 even upon success.
-        // Therefore, specify `check_status=false` here.
-        let diff = self
-            .call(
-                &["diff", "--no-index", "--binary", "/dev/null", path],
-                false,
-            )
-            .or_fail()?;
-
-        Ok(diff)
     }
 
     fn call(&self, args: &[&str], check_status: bool) -> orfail::Result<String> {
