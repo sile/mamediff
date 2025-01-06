@@ -9,7 +9,7 @@ use orfail::OrFail;
 
 #[derive(Debug)]
 pub struct Terminal {
-    size: Size,
+    size: TerminalSize,
     prev: Canvas,
 }
 
@@ -25,14 +25,14 @@ impl Terminal {
         .or_fail()?;
         crossterm::terminal::enable_raw_mode().or_fail()?;
 
-        let size = Size::current().or_fail()?;
+        let size = TerminalSize::current().or_fail()?;
         Ok(Self {
             size,
             prev: Canvas::new(),
         })
     }
 
-    pub fn size(&self) -> Size {
+    pub fn size(&self) -> TerminalSize {
         self.size
     }
 
@@ -42,7 +42,7 @@ impl Terminal {
 
         let event = crossterm::event::read().or_fail()?;
         if matches!(event, Event::Resize(..)) {
-            self.size = Size::current().or_fail()?;
+            self.size = TerminalSize::current().or_fail()?;
         }
 
         Ok(event)
@@ -110,17 +110,17 @@ impl Drop for Terminal {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct Size {
+pub struct TerminalSize {
     pub rows: usize,
     pub cols: usize,
 }
 
-impl Size {
+impl TerminalSize {
     pub fn current() -> orfail::Result<Self> {
-        let size = crossterm::terminal::size().or_fail()?;
+        let (cols, rows) = crossterm::terminal::size().or_fail()?;
         Ok(Self {
-            rows: size.1 as usize,
-            cols: size.0 as usize,
+            rows: rows as usize,
+            cols: cols as usize,
         })
     }
 
