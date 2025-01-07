@@ -25,8 +25,14 @@ impl Terminal {
         .or_fail()?;
         crossterm::terminal::enable_raw_mode().or_fail()?;
 
+        let (cols, rows) = crossterm::terminal::size().or_fail()?;
+        let size = TerminalSize {
+            rows: rows as usize,
+            cols: cols as usize,
+        };
+
         Ok(Self {
-            size: TerminalSize::current().or_fail()?,
+            size,
             prev: Canvas::new(0),
         })
     }
@@ -40,8 +46,9 @@ impl Terminal {
         while !crossterm::event::poll(timeout).or_fail()? {}
 
         let event = crossterm::event::read().or_fail()?;
-        if matches!(event, Event::Resize(..)) {
-            self.size = TerminalSize::current().or_fail()?;
+        if let Event::Resize(cols, rows) = event {
+            self.size.cols = cols as usize;
+            self.size.rows = rows as usize;
         }
 
         Ok(event)
@@ -114,14 +121,6 @@ pub struct TerminalSize {
 }
 
 impl TerminalSize {
-    pub fn current() -> orfail::Result<Self> {
-        let (cols, rows) = crossterm::terminal::size().or_fail()?;
-        Ok(Self {
-            rows: rows as usize,
-            cols: cols as usize,
-        })
-    }
-
     pub fn is_empty(self) -> bool {
         self.rows == 0 || self.cols == 0
     }
