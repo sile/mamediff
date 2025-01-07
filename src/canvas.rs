@@ -1,5 +1,55 @@
 use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
 
+use crate::terminal::TerminalSize;
+
+// TODO: rename
+#[derive(Debug)]
+pub struct Canvas2 {
+    // TODO: private
+    pub frame: Frame,
+    pub frame_row_offset: usize,
+}
+
+impl Canvas2 {
+    pub fn new(frame_size: TerminalSize) -> Self {
+        Self {
+            frame: Frame::new(frame_size),
+            frame_row_offset: 0,
+        }
+    }
+
+    pub fn take_current_frame(&mut self) -> Frame {
+        let size = self.frame.size;
+        std::mem::replace(&mut self.frame, Frame::new(size))
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct Frame {
+    // TODO: private
+    pub size: TerminalSize,
+}
+
+impl Frame {
+    pub fn new(size: TerminalSize) -> Self {
+        Self { size }
+    }
+
+    pub fn dirty_lines(&self, _prev: &Self) -> impl '_ + Iterator<Item = &FrameLine> {
+        // TODO
+        std::iter::empty()
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FrameLine {}
+
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+pub struct CanvasPosition {
+    pub row: usize,
+    pub col: usize,
+}
+
 #[derive(Debug, Default)]
 pub struct Canvas {
     current_row: Row,

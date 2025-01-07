@@ -121,6 +121,8 @@ pub struct TerminalSize {
 }
 
 impl TerminalSize {
+    pub const EMPTY: Self = Self { cols: 0, rows: 0 };
+
     pub fn is_empty(self) -> bool {
         self.rows == 0 || self.cols == 0
     }
