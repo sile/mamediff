@@ -195,6 +195,7 @@ impl ChunkDiff {
         }
         let line = lines.next().expect("infallible");
 
+        // TODO: Handle "no newline end of file" of emacs temp files
         line.starts_with("@@ -").or_fail()?;
 
         let (range_end, start_line) = if line.ends_with(" @@") {
@@ -490,7 +491,8 @@ impl FileDiff {
         let line = lines.next().or_fail()?;
         let index = IndexHeaderLine::from_str(line).or_fail()?;
         index.mode.is_none().or_fail()?;
-        (index.old_hash == "0000000").or_fail()?;
+        (index.old_hash.parse::<u32>() == Ok(0))
+            .or_fail_with(|()| format!("unexpected added file's old hash: {}", index.old_hash))?;
 
         let content = ContentDiff::parse(lines).or_fail()?;
         Ok(Self::New {
@@ -509,7 +511,8 @@ impl FileDiff {
         let line = lines.next().or_fail()?;
         let index = IndexHeaderLine::from_str(line).or_fail()?;
         index.mode.is_none().or_fail()?;
-        (index.new_hash == "0000000").or_fail()?;
+        (index.new_hash.parse::<u32>() == Ok(0))
+            .or_fail_with(|()| format!("unexpected deleted file's new hash: {}", index.new_hash))?;
 
         let content = ContentDiff::parse(lines).or_fail()?;
         Ok(Self::Delete {
