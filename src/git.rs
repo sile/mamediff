@@ -136,6 +136,8 @@ impl Git {
         let mut child = Command::new("git")
             .args(args)
             .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
             .spawn()
             .or_fail_with(|e| format!("Failed to execute `$ git {}`: {e}", args.join(" ")))?;
 
