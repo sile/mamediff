@@ -21,15 +21,13 @@ impl Terminal {
             std::io::stdout(),
             EnterAlternateScreen,
             crossterm::cursor::Hide,
-            // TODO: Remove this and trim the exceeding chars before drawing
-            crossterm::terminal::DisableLineWrap,
         )
         .or_fail()?;
         crossterm::terminal::enable_raw_mode().or_fail()?;
 
         Ok(Self {
             size: TerminalSize::current().or_fail()?,
-            prev: Canvas::new(),
+            prev: Canvas::new(0),
         })
     }
 
@@ -105,7 +103,6 @@ impl Drop for Terminal {
             std::io::stdout(),
             LeaveAlternateScreen,
             crossterm::cursor::Show,
-            crossterm::terminal::EnableLineWrap,
         );
     }
 }

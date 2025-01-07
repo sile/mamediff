@@ -13,8 +13,8 @@ use crate::{
     terminal::Terminal,
 };
 
-// const COLLAPSED_MARK: &str = "…";
-const COLLAPSED_MARK: &str = "...";
+const COLLAPSED_MARK: &str = "…";
+//const COLLAPSED_MARK: &str = "...";
 
 #[derive(Debug)]
 pub struct App {
@@ -75,7 +75,7 @@ impl App {
             self.row_offset = cursor_abs_row.saturating_sub(rows / 2);
         }
 
-        let mut canvas = Canvas::new();
+        let mut canvas = Canvas::new(self.terminal.size().cols);
         for widget in &mut self.widgets {
             widget.render(&mut canvas, &self.cursor).or_fail()?;
         }
@@ -110,7 +110,7 @@ impl App {
     }
 
     fn render_legend(&mut self, canvas: &mut Canvas) -> orfail::Result<()> {
-        let mut tmp = Canvas::new();
+        let mut tmp = Canvas::new(self.terminal.size().cols);
         let cols = if self.show_legend {
             tmp.draw_textl(Text::new("| (q)uit [ESC,C-c]").or_fail()?);
             tmp.draw_textl(Text::new("| (r)eload        ").or_fail()?);
@@ -146,7 +146,6 @@ impl App {
             tmp.draw_textl(Text::new("+- s(h)ow -").or_fail()?);
             11
         };
-        tmp.draw_newline();
 
         canvas.draw_canvas(
             Position::new(0, self.terminal.size().cols.saturating_sub(cols)),
