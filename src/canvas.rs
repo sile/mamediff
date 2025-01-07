@@ -18,7 +18,7 @@ impl Canvas2 {
         }
     }
 
-    pub fn take_current_frame(&mut self) -> Frame {
+    pub fn take_frame(&mut self) -> Frame {
         let size = self.frame.size;
         std::mem::replace(&mut self.frame, Frame::new(size))
     }
@@ -28,21 +28,41 @@ impl Canvas2 {
 pub struct Frame {
     // TODO: private
     pub size: TerminalSize,
+    pub lines: Vec<FrameLine>,
 }
 
 impl Frame {
     pub fn new(size: TerminalSize) -> Self {
-        Self { size }
+        Self {
+            size,
+            lines: Vec::new(),
+        }
     }
 
-    pub fn dirty_lines(&self, _prev: &Self) -> impl '_ + Iterator<Item = &FrameLine> {
-        // TODO
-        std::iter::empty()
+    pub fn dirty_lines<'a>(
+        &'a self,
+        prev: &'a Self,
+    ) -> impl 'a + Iterator<Item = (usize, &'a FrameLine)> {
+        self.lines
+            .iter()
+            .zip(prev.lines.iter())
+            .enumerate()
+            .filter_map(|(i, (l0, l1))| (l0 != l1).then_some((i, l0)))
+            .chain(self.lines.iter().enumerate().skip(prev.lines.len()))
     }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct FrameLine {}
+pub enum Token {
+    Plain(String),
+    Bold(String),
+    Dim(String),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FrameLine {
+    pub tokens: Vec<Token>,
+}
 
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 pub struct CanvasPosition {
