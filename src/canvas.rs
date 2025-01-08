@@ -1,3 +1,5 @@
+use std::ops::Range;
+
 use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
 
 use crate::terminal::TerminalSize;
@@ -18,6 +20,21 @@ impl Canvas2 {
         }
     }
 
+    pub fn frame_row_range(&self) -> Range<usize> {
+        Range {
+            start: self.frame_row_offset,
+            end: self.frame_row_offset + self.frame.size.rows,
+        }
+    }
+
+    pub fn draw_token(&mut self, position: CanvasPosition, token: Token) {
+        if !self.frame_row_range().contains(&position.col) {
+            return;
+        }
+
+        todo!()
+    }
+
     pub fn take_frame(&mut self) -> Frame {
         let size = self.frame.size;
         std::mem::replace(&mut self.frame, Frame::new(size))
@@ -35,7 +52,7 @@ impl Frame {
     pub fn new(size: TerminalSize) -> Self {
         Self {
             size,
-            lines: Vec::new(),
+            lines: vec![FrameLine::new(); size.rows],
         }
     }
 
@@ -64,10 +81,22 @@ pub struct FrameLine {
     pub tokens: Vec<Token>,
 }
 
+impl FrameLine {
+    pub fn new() -> Self {
+        Self { tokens: Vec::new() }
+    }
+}
+
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 pub struct CanvasPosition {
     pub row: usize,
     pub col: usize,
+}
+
+impl CanvasPosition {
+    pub fn row_col(row: usize, col: usize) -> Self {
+        Self { row, col }
+    }
 }
 
 #[derive(Debug, Default)]
