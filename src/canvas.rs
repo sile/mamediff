@@ -135,12 +135,16 @@ pub enum TokenStyle {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Token {
-    pub text: String,
-    pub style: TokenStyle,
+    text: String,
+    style: TokenStyle,
 }
 
 impl Token {
     pub fn new(text: impl Into<String>) -> Self {
+        Self::with_style(text, TokenStyle::Plain)
+    }
+
+    pub fn with_style(text: impl Into<String>, style: TokenStyle) -> Self {
         let mut text = text.into();
         if text.chars().any(|c| c.is_control()) {
             let mut escaped_text = String::new();
@@ -153,51 +157,32 @@ impl Token {
             }
             text = escaped_text;
         }
-        Self {
-            text,
-            style: TokenStyle::Plain,
-        }
+        Self { text, style }
     }
 
     pub fn split_prefix_off(&mut self, col: usize) -> Self {
-        // TODO: refactor
         let mut acc_cols = 0;
         for (i, c) in self.text.char_indices() {
             if acc_cols == col {
                 let suffix = self.text.split_off(i);
-                let suffix = Self {
-                    text: suffix,
-                    style: self.style,
-                };
-                return std::mem::replace(self, suffix);
+                return std::mem::replace(self, Self::with_style(suffix, self.style));
             }
 
             let next_acc_cols = acc_cols + c.width().expect("infallible");
             if next_acc_cols > col {
                 // Not a char boundary.
                 let suffix = self.text.split_off(i + c.len_utf8());
-                let suffix = Self {
-                    text: suffix,
-                    style: self.style,
-                };
-
+                let suffix = Self::with_style(suffix, self.style);
                 let _ = self.text.pop();
                 for _ in acc_cols..col {
                     self.text.push('…');
                 }
-
                 return std::mem::replace(self, suffix);
             }
             acc_cols = next_acc_cols;
         }
 
-        std::mem::replace(
-            self,
-            Self {
-                text: String::new(),
-                style: self.style,
-            },
-        )
+        std::mem::replace(self, Self::with_style(String::new(), self.style))
     }
 
     pub fn cols(&self) -> usize {
