@@ -87,7 +87,7 @@ impl FrameLine {
     pub fn draw_token(&mut self, col: usize, token: Token) {
         if let Some(n) = col.checked_sub(self.cols()).and_then(NonZeroUsize::new) {
             let s: String = std::iter::repeat_n(' ', n.get()).collect();
-            self.tokens.push(Token::plain(s));
+            self.tokens.push(Token::new(s));
         }
 
         let mut suffix = self.split_off(col);
@@ -140,7 +140,7 @@ pub struct Token {
 }
 
 impl Token {
-    pub fn plain(s: impl Into<String>) -> Self {
+    pub fn new(s: impl Into<String>) -> Self {
         // TODO: replace invalid chars with '?'
         Self {
             text: s.into(),
@@ -370,10 +370,10 @@ mod tests {
         assert_eq!(frame1.dirty_lines(&frame0).count(), 0);
 
         // Draw lines.
-        canvas.draw_token(CanvasPosition::row(0), Token::plain("out of range"));
-        canvas.draw_token(CanvasPosition::row(1), Token::plain("hello"));
-        canvas.draw_token(CanvasPosition::row_col(2, 2), Token::plain("world"));
-        canvas.draw_token(CanvasPosition::row(3), Token::plain("out of range"));
+        canvas.draw_token(CanvasPosition::row(0), Token::new("out of range"));
+        canvas.draw_token(CanvasPosition::row(1), Token::new("hello"));
+        canvas.draw_token(CanvasPosition::row_col(2, 2), Token::new("world"));
+        canvas.draw_token(CanvasPosition::row(3), Token::new("out of range"));
 
         let frame2 = canvas.take_frame();
         assert_eq!(frame2.dirty_lines(&frame1).count(), 2);
@@ -386,7 +386,7 @@ mod tests {
         );
 
         // Draw another lines.
-        canvas.draw_token(CanvasPosition::row(1), Token::plain("hello"));
+        canvas.draw_token(CanvasPosition::row(1), Token::new("hello"));
 
         let frame3 = canvas.take_frame();
         assert_eq!(frame3.dirty_lines(&frame2).count(), 1);
@@ -403,7 +403,20 @@ mod tests {
 
     #[test]
     fn frame_line() -> orfail::Result<()> {
-        // TODO
+        let mut line = FrameLine::new();
+
+        line.draw_token(2, Token::new("foo"));
+        assert_eq!(line.text(), "  foo");
+
+        line.draw_token(4, Token::new("bar"));
+        assert_eq!(line.text(), "  fobar");
+
+        line.draw_token(7, Token::new("baz"));
+        assert_eq!(line.text(), "  fobarbaz");
+
+        line.draw_token(6, Token::new("qux"));
+        assert_eq!(line.text(), "  fobaquxz");
+
         Ok(())
     }
 }
