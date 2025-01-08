@@ -7,16 +7,15 @@ use crate::terminal::TerminalSize;
 // TODO: rename
 #[derive(Debug)]
 pub struct Canvas2 {
-    // TODO: private
-    pub frame: Frame,
-    pub frame_row_offset: usize,
+    frame: Frame,
+    frame_row_offset: usize,
 }
 
 impl Canvas2 {
-    pub fn new(frame_size: TerminalSize) -> Self {
+    pub fn new(frame_row_offset: usize, frame_size: TerminalSize) -> Self {
         Self {
             frame: Frame::new(frame_size),
-            frame_row_offset: 0,
+            frame_row_offset,
         }
     }
 
@@ -28,13 +27,14 @@ impl Canvas2 {
     }
 
     pub fn draw_token(&mut self, position: CanvasPosition, token: Token) {
-        if !self.frame_row_range().contains(&position.col) {
+        if !self.frame_row_range().contains(&position.row) {
             return;
         }
 
         let i = position.row - self.frame_row_offset;
         let line = &mut self.frame.lines[i];
         line.draw_token(position.col, token);
+        line.split_off(self.frame.size.cols);
     }
 
     pub fn take_frame(&mut self) -> Frame {
@@ -45,9 +45,8 @@ impl Canvas2 {
 
 #[derive(Debug, Clone)]
 pub struct Frame {
-    // TODO: private
-    pub size: TerminalSize,
-    pub lines: Vec<FrameLine>,
+    size: TerminalSize,
+    lines: Vec<FrameLine>,
 }
 
 impl Frame {
@@ -149,6 +148,10 @@ impl FrameLine {
         Self::default()
     }
 
+    pub fn text(&self) -> String {
+        self.tokens.iter().map(|t| t.text.clone()).collect()
+    }
+
     pub fn draw_token(&mut self, col: usize, token: Token) {
         if let Some(n) = col.checked_sub(self.cols()).and_then(NonZeroUsize::new) {
             let s: String = std::iter::repeat_n(' ', n.get()).collect();
@@ -169,12 +172,14 @@ impl FrameLine {
                 return Self { tokens: suffix };
             }
 
-            acc_cols += self.tokens[i].cols();
+            let token_cols = self.tokens[i].cols();
+            acc_cols += token_cols;
             if acc_cols == col {
                 continue;
             } else if let Some(n) = acc_cols.checked_sub(col) {
                 let mut suffix = self.tokens.split_off(i);
-                let token_prefix = suffix[0].split_prefix_off(n);
+                let token_prefix_cols = token_cols - n;
+                let token_prefix = suffix[0].split_prefix_off(token_prefix_cols);
                 self.tokens.push(token_prefix);
                 return Self { tokens: suffix };
             }
@@ -196,6 +201,10 @@ pub struct CanvasPosition {
 }
 
 impl CanvasPosition {
+    pub fn row(row: usize) -> Self {
+        Self::row_col(row, 0)
+    }
+
     pub fn row_col(row: usize, col: usize) -> Self {
         Self { row, col }
     }
@@ -351,11 +360,44 @@ mod tests {
     use super::*;
 
     #[test]
-    fn empty_canvas() -> orfail::Result<()> {
+    fn canvas() -> orfail::Result<()> {
         let size = TerminalSize { rows: 2, cols: 4 };
-        let mut canvas = Canvas2::new(size);
-        let _frame = canvas.take_frame();
-        // TODO: test
+        let mut canvas = Canvas2::new(1, size);
+
+        // No dirty lines.
+        let frame0 = canvas.take_frame();
+        let frame1 = canvas.take_frame();
+        assert_eq!(frame1.dirty_lines(&frame0).count(), 0);
+
+        // Draw lines.
+        canvas.draw_token(CanvasPosition::row(0), Token::plain("out of range"));
+        canvas.draw_token(CanvasPosition::row(1), Token::plain("hello"));
+        canvas.draw_token(CanvasPosition::row_col(2, 2), Token::plain("world"));
+        canvas.draw_token(CanvasPosition::row(3), Token::plain("out of range"));
+
+        let frame2 = canvas.take_frame();
+        assert_eq!(frame2.dirty_lines(&frame1).count(), 2);
+        assert_eq!(
+            frame2
+                .dirty_lines(&frame1)
+                .map(|(_, l)| l.text())
+                .collect::<Vec<_>>(),
+            ["hell", "  wo"],
+        );
+
+        // Draw another lines.
+        canvas.draw_token(CanvasPosition::row(1), Token::plain("hello"));
+
+        let frame3 = canvas.take_frame();
+        assert_eq!(frame3.dirty_lines(&frame2).count(), 1);
+        assert_eq!(
+            frame3
+                .dirty_lines(&frame2)
+                .map(|(_, l)| l.text())
+                .collect::<Vec<_>>(),
+            [""],
+        );
+
         Ok(())
     }
 }
