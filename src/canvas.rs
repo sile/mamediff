@@ -345,3 +345,17 @@ impl Text {
         self
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn empty_canvas() -> orfail::Result<()> {
+        let size = TerminalSize { rows: 2, cols: 4 };
+        let mut canvas = Canvas2::new(size);
+        let _frame = canvas.take_frame();
+        // TODO: test
+        Ok(())
+    }
+}

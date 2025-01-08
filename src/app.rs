@@ -182,6 +182,7 @@ impl App {
             KeyCode::Char('c') if event.modifiers.contains(KeyModifiers::CONTROL) => {
                 self.exit = true;
             }
+            // TODO: remove?
             KeyCode::Char('r') => {
                 self.reload_diff_reset().or_fail()?;
             }
