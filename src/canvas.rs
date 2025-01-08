@@ -140,10 +140,21 @@ pub struct Token {
 }
 
 impl Token {
-    pub fn new(s: impl Into<String>) -> Self {
-        // TODO: replace invalid chars with '?'
+    pub fn new(text: impl Into<String>) -> Self {
+        let mut text = text.into();
+        if text.chars().any(|c| c.is_control()) {
+            let mut escaped_text = String::new();
+            for c in text.chars() {
+                if c.is_control() {
+                    escaped_text.extend(c.escape_default());
+                } else {
+                    escaped_text.push(c);
+                }
+            }
+            text = escaped_text;
+        }
         Self {
-            text: s.into(),
+            text,
             style: TokenStyle::Plain,
         }
     }
@@ -416,6 +427,10 @@ mod tests {
 
         line.draw_token(6, Token::new("qux"));
         assert_eq!(line.text(), "  fobaquxz");
+
+        // Control chars are escaped.
+        line.draw_token(0, Token::new("0\n1"));
+        assert_eq!(line.text(), "0\\n1baquxz");
 
         Ok(())
     }
