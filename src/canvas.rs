@@ -70,6 +70,62 @@ impl Frame {
     }
 }
 
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
+pub struct FrameLine {
+    tokens: Vec<Token>,
+}
+
+impl FrameLine {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    pub fn text(&self) -> String {
+        self.tokens.iter().map(|t| t.text.clone()).collect()
+    }
+
+    pub fn draw_token(&mut self, col: usize, token: Token) {
+        if let Some(n) = col.checked_sub(self.cols()).and_then(NonZeroUsize::new) {
+            let s: String = std::iter::repeat_n(' ', n.get()).collect();
+            self.tokens.push(Token::plain(s));
+        }
+
+        let mut suffix = self.split_off(col);
+        let suffix = suffix.split_off(token.cols());
+        self.tokens.push(token);
+        self.tokens.extend(suffix.tokens);
+    }
+
+    fn split_off(&mut self, col: usize) -> Self {
+        let mut acc_cols = 0;
+        for i in 0..self.tokens.len() {
+            if acc_cols == col {
+                let suffix = self.tokens.split_off(i);
+                return Self { tokens: suffix };
+            }
+
+            let token_cols = self.tokens[i].cols();
+            acc_cols += token_cols;
+            if acc_cols == col {
+                continue;
+            } else if let Some(n) = acc_cols.checked_sub(col) {
+                let mut suffix = self.tokens.split_off(i);
+                let token_prefix_cols = token_cols - n;
+                let token_prefix = suffix[0].split_prefix_off(token_prefix_cols);
+                self.tokens.push(token_prefix);
+                return Self { tokens: suffix };
+            }
+        }
+
+        // `col` is out of range, so no splitting is needed.
+        Self::new()
+    }
+
+    pub fn cols(&self) -> usize {
+        self.tokens.iter().map(|t| t.cols()).sum()
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TokenStyle {
     Plain,
@@ -135,62 +191,6 @@ impl Token {
 
     pub fn cols(&self) -> usize {
         self.text.width()
-    }
-}
-
-#[derive(Debug, Default, Clone, PartialEq, Eq)]
-pub struct FrameLine {
-    pub tokens: Vec<Token>,
-}
-
-impl FrameLine {
-    pub fn new() -> Self {
-        Self::default()
-    }
-
-    pub fn text(&self) -> String {
-        self.tokens.iter().map(|t| t.text.clone()).collect()
-    }
-
-    pub fn draw_token(&mut self, col: usize, token: Token) {
-        if let Some(n) = col.checked_sub(self.cols()).and_then(NonZeroUsize::new) {
-            let s: String = std::iter::repeat_n(' ', n.get()).collect();
-            self.tokens.push(Token::plain(s));
-        }
-
-        let mut suffix = self.split_off(col);
-        let suffix = suffix.split_off(token.cols());
-        self.tokens.push(token);
-        self.tokens.extend(suffix.tokens);
-    }
-
-    fn split_off(&mut self, col: usize) -> Self {
-        let mut acc_cols = 0;
-        for i in 0..self.tokens.len() {
-            if acc_cols == col {
-                let suffix = self.tokens.split_off(i);
-                return Self { tokens: suffix };
-            }
-
-            let token_cols = self.tokens[i].cols();
-            acc_cols += token_cols;
-            if acc_cols == col {
-                continue;
-            } else if let Some(n) = acc_cols.checked_sub(col) {
-                let mut suffix = self.tokens.split_off(i);
-                let token_prefix_cols = token_cols - n;
-                let token_prefix = suffix[0].split_prefix_off(token_prefix_cols);
-                self.tokens.push(token_prefix);
-                return Self { tokens: suffix };
-            }
-        }
-
-        // `col` is out of range, so no splitting is needed.
-        Self::new()
-    }
-
-    pub fn cols(&self) -> usize {
-        self.tokens.iter().map(|t| t.cols()).sum()
     }
 }
 
@@ -398,6 +398,12 @@ mod tests {
             [""],
         );
 
+        Ok(())
+    }
+
+    #[test]
+    fn frame_line() -> orfail::Result<()> {
+        // TODO
         Ok(())
     }
 }
