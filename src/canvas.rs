@@ -1,4 +1,4 @@
-use std::ops::Range;
+use std::{num::NonZeroUsize, ops::Range};
 
 use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
 
@@ -32,7 +32,9 @@ impl Canvas2 {
             return;
         }
 
-        todo!()
+        let i = position.row - self.frame_row_offset;
+        let line = &mut self.frame.lines[i];
+        line.draw_token(position.col, token);
     }
 
     pub fn take_frame(&mut self) -> Frame {
@@ -69,21 +71,121 @@ impl Frame {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum Token {
-    Plain(String),
-    Bold(String),
-    Dim(String),
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TokenStyle {
+    Plain,
+    Bold,
+    Dim,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Token {
+    pub text: String,
+    pub style: TokenStyle,
+}
+
+impl Token {
+    pub fn plain(s: impl Into<String>) -> Self {
+        // TODO: replace invalid chars with '?'
+        Self {
+            text: s.into(),
+            style: TokenStyle::Plain,
+        }
+    }
+
+    pub fn split_prefix_off(&mut self, col: usize) -> Self {
+        // TODO: refactor
+        let mut acc_cols = 0;
+        for (i, c) in self.text.char_indices() {
+            if acc_cols == col {
+                let suffix = self.text.split_off(i);
+                let suffix = Self {
+                    text: suffix,
+                    style: self.style,
+                };
+                return std::mem::replace(self, suffix);
+            }
+
+            let next_acc_cols = acc_cols + c.width().expect("infallible");
+            if next_acc_cols > col {
+                // Not a char boundary.
+                let suffix = self.text.split_off(i + c.len_utf8());
+                let suffix = Self {
+                    text: suffix,
+                    style: self.style,
+                };
+
+                let _ = self.text.pop();
+                for _ in acc_cols..col {
+                    self.text.push('…');
+                }
+
+                return std::mem::replace(self, suffix);
+            }
+            acc_cols = next_acc_cols;
+        }
+
+        std::mem::replace(
+            self,
+            Self {
+                text: String::new(),
+                style: self.style,
+            },
+        )
+    }
+
+    pub fn cols(&self) -> usize {
+        self.text.width()
+    }
+}
+
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
 pub struct FrameLine {
     pub tokens: Vec<Token>,
 }
 
 impl FrameLine {
     pub fn new() -> Self {
-        Self { tokens: Vec::new() }
+        Self::default()
+    }
+
+    pub fn draw_token(&mut self, col: usize, token: Token) {
+        if let Some(n) = col.checked_sub(self.cols()).and_then(NonZeroUsize::new) {
+            let s: String = std::iter::repeat_n(' ', n.get()).collect();
+            self.tokens.push(Token::plain(s));
+        }
+
+        let mut suffix = self.split_off(col);
+        let suffix = suffix.split_off(token.cols());
+        self.tokens.push(token);
+        self.tokens.extend(suffix.tokens);
+    }
+
+    fn split_off(&mut self, col: usize) -> Self {
+        let mut acc_cols = 0;
+        for i in 0..self.tokens.len() {
+            if acc_cols == col {
+                let suffix = self.tokens.split_off(i);
+                return Self { tokens: suffix };
+            }
+
+            acc_cols += self.tokens[i].cols();
+            if acc_cols == col {
+                continue;
+            } else if let Some(n) = acc_cols.checked_sub(col) {
+                let mut suffix = self.tokens.split_off(i);
+                let token_prefix = suffix[0].split_prefix_off(n);
+                self.tokens.push(token_prefix);
+                return Self { tokens: suffix };
+            }
+        }
+
+        // `col` is out of range, so no splitting is needed.
+        Self::new()
+    }
+
+    pub fn cols(&self) -> usize {
+        self.tokens.iter().map(|t| t.cols()).sum()
     }
 }
 
