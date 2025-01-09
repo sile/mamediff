@@ -775,27 +775,40 @@ impl DiffWidget {
         }
     }
 
+    // TODO: remove
     pub fn render(&self, canvas: &mut Canvas, cursor: &Cursor) -> orfail::Result<()> {
+        self.render_diff_if_need(canvas, cursor, &self.diff);
+        Ok(())
+    }
+}
+
+impl RenderDiff for DiffWidget {
+    type Diff = Diff;
+
+    fn render_diff(&self, canvas: &mut Canvas, cursor: &Cursor, diff: &Self::Diff) {
+        cursor.render(canvas, &self.widget_path.path);
         canvas.drawl(Token::new(format!(
-            "{}{} {} changes ({} files){}",
-            if self.widget_path.path == cursor.path {
-                ">"
-            } else {
-                " "
-            },
-            if cursor.path.len() == 1 { "|" } else { " " },
+            "{} changes ({} files){}",
             self.name,
             self.diff.len(),
             if self.expanded { "" } else { COLLAPSED_MARK }
         )));
 
         if self.expanded {
-            for (child, diff) in self.children.iter().zip(self.diff.files.iter()) {
-                child.render(canvas, diff, cursor).or_fail()?;
+            for (child, diff) in self.children.iter().zip(diff.files.iter()) {
+                if !child.render_diff_if_need(canvas, cursor, diff) {
+                    break;
+                }
             }
         }
+    }
 
-        Ok(())
+    fn rows(&self) -> usize {
+        if self.expanded {
+            1 + self.children.iter().map(|c| c.rows()).sum::<usize>()
+        } else {
+            1
+        }
     }
 }
 
@@ -922,14 +935,6 @@ impl FileDiffWidget {
         Ok(())
     }
 
-    pub fn rows(&self) -> usize {
-        if self.expanded {
-            1 + self.children.iter().map(|c| c.rows()).sum::<usize>()
-        } else {
-            1
-        }
-    }
-
     pub fn full_rows(&self) -> usize {
         1 + self.children.iter().map(|c| c.full_rows()).sum::<usize>()
     }
@@ -976,112 +981,7 @@ impl FileDiffWidget {
         diff: &FileDiff,
         cursor: &Cursor,
     ) -> orfail::Result<()> {
-        //
-        // TODO: rename handling
-        let text = match diff {
-            FileDiff::Update { .. } => {
-                format!(
-                    "{}{} modified {} ({} chunks, -{} +{} lines){}",
-                    match cursor.path.len() {
-                        1 if self.widget_path.path.starts_with(&cursor.path[..1]) => " :",
-                        _ => "  ",
-                    },
-                    if self.widget_path.path == cursor.path {
-                        ">|"
-                    } else if cursor.path.len() == 2 {
-                        " |"
-                    } else {
-                        "  "
-                    },
-                    diff.path().display(),
-                    self.children.len(),
-                    self.removed_lines(diff),
-                    self.added_lines(diff),
-                    if self.expanded { "" } else { COLLAPSED_MARK }
-                )
-            }
-            FileDiff::New { .. } | FileDiff::Added { .. } => {
-                format!(
-                    "{}{} added {}",
-                    match cursor.path.len() {
-                        1 if self.widget_path.path.starts_with(&cursor.path[..1]) => " :",
-                        _ => "  ",
-                    },
-                    if self.widget_path.path == cursor.path {
-                        ">|"
-                    } else if cursor.path.len() == 2 {
-                        " |"
-                    } else {
-                        "  "
-                    },
-                    diff.path().display()
-                )
-            }
-            FileDiff::Rename { old_path, .. } => {
-                format!(
-                    "{}{} renamed {} -> {}",
-                    match cursor.path.len() {
-                        1 if self.widget_path.path.starts_with(&cursor.path[..1]) => " :",
-                        _ => "  ",
-                    },
-                    if self.widget_path.path == cursor.path {
-                        ">|"
-                    } else if cursor.path.len() == 2 {
-                        " |"
-                    } else {
-                        "  "
-                    },
-                    old_path.display(),
-                    diff.path().display()
-                )
-            }
-            FileDiff::Delete { .. } => {
-                format!(
-                    "{}{} deleted {}",
-                    match cursor.path.len() {
-                        1 if self.widget_path.path.starts_with(&cursor.path[..1]) => " :",
-                        _ => "  ",
-                    },
-                    if self.widget_path.path == cursor.path {
-                        ">|"
-                    } else if cursor.path.len() == 2 {
-                        " |"
-                    } else {
-                        "  "
-                    },
-                    diff.path().display()
-                )
-            }
-            FileDiff::Chmod {
-                old_mode, new_mode, ..
-            } => {
-                format!(
-                    "{}{} mode changed {} {} -> {}",
-                    match cursor.path.len() {
-                        1 if self.widget_path.path.starts_with(&cursor.path[..1]) => " :",
-                        _ => "  ",
-                    },
-                    if self.widget_path.path == cursor.path {
-                        ">|"
-                    } else if cursor.path.len() == 2 {
-                        " |"
-                    } else {
-                        "  "
-                    },
-                    diff.path().display(),
-                    old_mode,
-                    new_mode
-                )
-            }
-        };
-        canvas.drawl(Token::new(text));
-
-        if self.expanded {
-            for (child, chunk) in self.children.iter().zip(diff.chunks()) {
-                child.render(canvas, chunk, cursor).or_fail()?;
-            }
-        }
-
+        self.render_diff(canvas, cursor, diff);
         Ok(())
     }
 
@@ -1206,6 +1106,67 @@ impl FileDiffWidget {
         }
 
         Ok(())
+    }
+}
+
+impl RenderDiff for FileDiffWidget {
+    type Diff = FileDiff;
+
+    fn render_diff(&self, canvas: &mut Canvas, cursor: &Cursor, diff: &Self::Diff) {
+        cursor.render(canvas, &self.widget_path.path);
+
+        let text = match diff {
+            FileDiff::Update { .. } => {
+                format!(
+                    "modified {} ({} chunks, -{} +{} lines){}",
+                    diff.path().display(),
+                    self.children.len(),
+                    self.removed_lines(diff),
+                    self.added_lines(diff),
+                    if self.expanded { "" } else { COLLAPSED_MARK }
+                )
+            }
+            FileDiff::New { .. } | FileDiff::Added { .. } => {
+                format!("added {}", diff.path().display())
+            }
+            FileDiff::Rename { old_path, .. } => {
+                format!(
+                    "renamed {} -> {}",
+                    old_path.display(),
+                    diff.path().display()
+                )
+            }
+            FileDiff::Delete { .. } => {
+                format!("deleted {}", diff.path().display())
+            }
+            FileDiff::Chmod {
+                old_mode, new_mode, ..
+            } => {
+                format!(
+                    "mode changed {} {} -> {}",
+                    diff.path().display(),
+                    old_mode,
+                    new_mode
+                )
+            }
+        };
+        canvas.drawl(Token::new(text));
+
+        if self.expanded {
+            for (child, chunk) in self.children.iter().zip(diff.chunks()) {
+                if !child.render_diff_if_need(canvas, cursor, chunk) {
+                    break;
+                }
+            }
+        }
+    }
+
+    fn rows(&self) -> usize {
+        if self.expanded {
+            1 + self.children.iter().map(|c| c.rows()).sum::<usize>()
+        } else {
+            1
+        }
     }
 }
 
@@ -1348,14 +1309,6 @@ impl ChunkDiffWidget {
         Ok(())
     }
 
-    pub fn rows(&self) -> usize {
-        if self.expanded {
-            1 + self.children.len()
-        } else {
-            1
-        }
-    }
-
     pub fn full_rows(&self) -> usize {
         1 + self.children.len()
     }
@@ -1390,39 +1343,6 @@ impl ChunkDiffWidget {
             }
             std::cmp::Ordering::Greater => self.rows(),
         }
-    }
-
-    pub fn render(
-        &self,
-        canvas: &mut Canvas,
-        diff: &ChunkDiff,
-        cursor: &Cursor,
-    ) -> orfail::Result<()> {
-        canvas.drawl(Token::new(format!(
-            "{}{} {}{}",
-            match cursor.path.len() {
-                1 if self.widget_path.path.starts_with(&cursor.path[..1]) => " :  ",
-                2 if self.widget_path.path.starts_with(&cursor.path[..2]) => "   :",
-                _ => "    ",
-            },
-            if self.widget_path.path == cursor.path {
-                ">|"
-            } else if cursor.path.len() == 3 {
-                " |"
-            } else {
-                "  "
-            },
-            diff.head_line(),
-            if self.expanded { "" } else { COLLAPSED_MARK }
-        )));
-
-        if self.expanded {
-            for (child, line) in self.children.iter().zip(diff.lines.iter()) {
-                child.render(canvas, line, cursor).or_fail()?;
-            }
-        }
-
-        Ok(())
     }
 
     fn added_lines(&self, diff: &ChunkDiff) -> usize {
@@ -1540,6 +1460,35 @@ impl ChunkDiffWidget {
     }
 }
 
+impl RenderDiff for ChunkDiffWidget {
+    type Diff = ChunkDiff;
+
+    fn render_diff(&self, canvas: &mut Canvas, cursor: &Cursor, diff: &Self::Diff) {
+        cursor.render(canvas, &self.widget_path.path);
+        canvas.drawl(Token::new(format!(
+            "{}{}",
+            diff.head_line(),
+            if self.expanded { "" } else { COLLAPSED_MARK }
+        )));
+
+        if self.expanded {
+            for (child, line) in self.children.iter().zip(diff.lines.iter()) {
+                if !child.render_diff_if_need(canvas, cursor, line) {
+                    break;
+                }
+            }
+        }
+    }
+
+    fn rows(&self) -> usize {
+        if self.expanded {
+            1 + self.children.len()
+        } else {
+            1
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct WidgetPath {
     pub path: Vec<usize>,
@@ -1609,22 +1558,6 @@ impl Cursor {
     }
 }
 
-impl RenderDiff for ChunkDiffWidget {
-    type Diff = ChunkDiff;
-
-    fn render_diff(&self, _canvas: &mut Canvas, _cursor: &Cursor, _diff: &Self::Diff) {
-        todo!()
-    }
-
-    fn rows(&self) -> usize {
-        if self.expanded {
-            1 + self.children.len()
-        } else {
-            1
-        }
-    }
-}
-
 #[derive(Debug, Clone)]
 pub struct LineDiffWidget {
     pub widget_path: WidgetPath,
@@ -1684,16 +1617,6 @@ impl LineDiffWidget {
             git.unstage(&diff.to_diff(path)).or_fail()?;
         }
 
-        Ok(())
-    }
-
-    pub fn render(
-        &self,
-        canvas: &mut Canvas,
-        diff: &LineDiff,
-        cursor: &Cursor,
-    ) -> orfail::Result<()> {
-        self.render_diff(canvas, cursor, diff);
         Ok(())
     }
 
