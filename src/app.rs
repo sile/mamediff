@@ -112,7 +112,6 @@ impl App {
             let col = self.terminal.size().cols.saturating_sub(19);
             canvas.set_col_offset(col);
             canvas.drawl(Token::new("| (q)uit [ESC,C-c]"));
-            canvas.drawl(Token::new("| (r)eload        "));
 
             if self.cursor.path.last() != Some(&0) {
                 canvas.drawl(Token::new("| (↑)        [C-p]"));
@@ -176,10 +175,6 @@ impl App {
             }
             KeyCode::Char('c') if event.modifiers.contains(KeyModifiers::CONTROL) => {
                 self.exit = true;
-            }
-            // TODO: remove?
-            KeyCode::Char('r') => {
-                self.reload_diff_reset().or_fail()?;
             }
             KeyCode::Char('u') => {
                 self.handle_unstage().or_fail()?;
@@ -430,6 +425,7 @@ impl App {
         valid
     }
 
+    // TODO: maybe unnecessary
     fn reload_diff_reset(&mut self) -> orfail::Result<()> {
         let old_widgets = vec![DiffWidget::new(false), DiffWidget::new(true)];
         self.cursor = Cursor::root();
