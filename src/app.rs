@@ -107,7 +107,7 @@ impl App {
 
     fn render_legend(&mut self, canvas: &mut Canvas) -> orfail::Result<()> {
         // TODO: Skip rendering if the terminal size is too small.
-        canvas.set_cursor(TokenPosition::default());
+        canvas.set_cursor(TokenPosition::ORIGIN);
         if self.show_legend {
             let col = self.terminal.size().cols.saturating_sub(19);
             canvas.set_col_offset(col);

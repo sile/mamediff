@@ -17,7 +17,7 @@ impl Canvas {
         Self {
             frame: Frame::new(frame_size),
             frame_row_offset,
-            cursor: TokenPosition::default(),
+            cursor: TokenPosition::ORIGIN,
             col_offset: 0,
         }
     }
@@ -226,13 +226,15 @@ impl Token {
     }
 }
 
-#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct TokenPosition {
     pub row: usize,
     pub col: usize,
 }
 
 impl TokenPosition {
+    pub const ORIGIN: Self = Self { row: 0, col: 0 };
+
     pub fn row(row: usize) -> Self {
         Self::row_col(row, 0)
     }
