@@ -2,17 +2,17 @@ use std::{io::Write, time::Duration};
 
 use crossterm::{
     event::Event,
-    style::{ContentStyle, StyledContent},
+    style::{Attribute, Attributes, ContentStyle, StyledContent},
     terminal::{EnterAlternateScreen, LeaveAlternateScreen},
 };
 use orfail::OrFail;
 
-use crate::canvas::Canvas;
+use crate::canvas::{Frame, TokenStyle};
 
 #[derive(Debug)]
 pub struct Terminal {
     size: TerminalSize,
-    prev: Canvas,
+    prev: Frame,
 }
 
 impl Terminal {
@@ -33,7 +33,7 @@ impl Terminal {
 
         Ok(Self {
             size,
-            prev: Canvas::new(0),
+            prev: Frame::new(size),
         })
     }
 
@@ -54,51 +54,37 @@ impl Terminal {
         Ok(event)
     }
 
-    pub fn render(&mut self, mut canvas: Canvas) -> orfail::Result<()> {
-        canvas.draw_newline(); // TODO
-
+    pub fn render(&mut self, frame: Frame) -> orfail::Result<()> {
         let stdout = std::io::stdout();
         let mut writer = stdout.lock();
-        for (row_i, row) in canvas.rows.iter().enumerate() {
-            if self.prev.rows.get(row_i) == Some(row) {
-                continue;
-            }
-
+        for (row, line) in frame.dirty_lines(&self.prev) {
             crossterm::queue!(
                 writer,
-                crossterm::cursor::MoveTo(0, row_i as u16),
+                crossterm::cursor::MoveTo(0, row as u16),
                 crossterm::terminal::Clear(crossterm::terminal::ClearType::CurrentLine)
             )
             .or_fail()?;
 
-            for text in &row.texts {
-                if text.attrs.is_empty() {
-                    crossterm::queue!(writer, crossterm::style::Print(&text.text)).or_fail()?;
-                } else {
-                    let content = StyledContent::new(
-                        ContentStyle {
-                            attributes: text.attrs,
-                            ..Default::default()
-                        },
-                        &text.text,
-                    );
-                    crossterm::queue!(writer, crossterm::style::PrintStyledContent(content))
-                        .or_fail()?;
-                }
+            for token in line.tokens() {
+                let attributes = match token.style() {
+                    TokenStyle::Plain => Attributes::none(),
+                    TokenStyle::Bold => Attributes::none().with(Attribute::Bold),
+                    TokenStyle::Dim => Attributes::none().with(Attribute::Dim),
+                };
+                let content = StyledContent::new(
+                    ContentStyle {
+                        attributes,
+                        ..Default::default()
+                    },
+                    token.text(),
+                );
+                crossterm::queue!(writer, crossterm::style::PrintStyledContent(content))
+                    .or_fail()?;
             }
-        }
-
-        for row_i in canvas.rows.len()..self.prev.rows.len() {
-            crossterm::queue!(
-                writer,
-                crossterm::cursor::MoveTo(0, row_i as u16),
-                crossterm::terminal::Clear(crossterm::terminal::ClearType::CurrentLine)
-            )
-            .or_fail()?;
         }
 
         writer.flush().or_fail()?;
-        self.prev = canvas;
+        self.prev = frame;
         Ok(())
     }
 }

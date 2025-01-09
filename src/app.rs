@@ -7,14 +7,13 @@ use crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use orfail::OrFail;
 
 use crate::{
-    canvas::{Canvas, Position, Text},
+    canvas::{Canvas, Token, TokenPosition, TokenStyle},
     diff::{ChunkDiff, Diff, FileDiff, LineDiff},
     git::Git,
     terminal::Terminal,
 };
 
 const COLLAPSED_MARK: &str = "…";
-//const COLLAPSED_MARK: &str = "...";
 
 #[derive(Debug)]
 pub struct App {
@@ -75,18 +74,15 @@ impl App {
             self.row_offset = cursor_abs_row.saturating_sub(rows / 2);
         }
 
-        let mut canvas = Canvas::new(self.terminal.size().cols);
+        let mut canvas = Canvas::new(self.row_offset, self.terminal.size());
         for widget in &mut self.widgets {
+            // TODO: Skip rendering out-of-range lines
             widget.render(&mut canvas, &self.cursor).or_fail()?;
         }
 
-        // TODO: optimize (skip rendering for out of range part)
-        canvas.clip(self.row_offset, self.terminal.size().rows);
-
         self.render_legend(&mut canvas).or_fail()?;
-        canvas.clip(0, self.terminal.size().rows); // TODO
 
-        self.terminal.render(canvas).or_fail()?;
+        self.terminal.render(canvas.into_frame()).or_fail()?;
         Ok(())
     }
 
@@ -110,47 +106,46 @@ impl App {
     }
 
     fn render_legend(&mut self, canvas: &mut Canvas) -> orfail::Result<()> {
-        let mut tmp = Canvas::new(self.terminal.size().cols);
-        let cols = if self.show_legend {
-            tmp.draw_textl(Text::new("| (q)uit [ESC,C-c]").or_fail()?);
-            tmp.draw_textl(Text::new("| (r)eload        ").or_fail()?);
+        // TODO: Skip rendering if the terminal size is too small.
+        canvas.set_cursor(TokenPosition::default());
+        if self.show_legend {
+            let col = self.terminal.size().cols.saturating_sub(19);
+            canvas.set_col_offset(col);
+            canvas.drawl(Token::new("| (q)uit [ESC,C-c]"));
+            canvas.drawl(Token::new("| (r)eload        "));
 
             if self.cursor.path.last() != Some(&0) {
-                tmp.draw_textl(Text::new("| (↑)        [C-p]").or_fail()?);
+                canvas.drawl(Token::new("| (↑)        [C-p]"));
             }
             if self.can_down() {
-                tmp.draw_textl(Text::new("| (↓)        [C-n]").or_fail()?);
+                canvas.drawl(Token::new("| (↓)        [C-n]"));
             }
             if self.cursor.path.len() > 1 {
-                tmp.draw_textl(Text::new("| (←)        [C-f]").or_fail()?);
+                canvas.drawl(Token::new("| (←)        [C-f]"));
             }
             if self.can_right() {
-                tmp.draw_textl(Text::new("| (→)        [C-b]").or_fail()?);
+                canvas.drawl(Token::new("| (→)        [C-b]"));
             }
             if self.is_togglable() {
-                tmp.draw_textl(Text::new("| (t)oggle   [TAB]").or_fail()?);
+                canvas.drawl(Token::new("| (t)oggle   [TAB]"));
             }
             if self.can_stage() {
-                tmp.draw_textl(Text::new("| (s)tage         ").or_fail()?);
+                canvas.drawl(Token::new("| (s)tage         "));
             }
             if self.can_stage() {
-                tmp.draw_textl(Text::new("| (D)iscard       ").or_fail()?);
+                canvas.drawl(Token::new("| (D)iscard       "));
             }
             if self.can_unstage() {
-                tmp.draw_textl(Text::new("| (u)nstage       ").or_fail()?);
+                canvas.drawl(Token::new("| (u)nstage       "));
             }
-            tmp.draw_textl(Text::new("+---- (h)ide -----").or_fail()?);
-            19
+            canvas.drawl(Token::new("+---- (h)ide -----"));
         } else {
-            tmp.draw_textl(Text::new("|   ...    ").or_fail()?);
-            tmp.draw_textl(Text::new("+- s(h)ow -").or_fail()?);
-            11
+            let col = self.terminal.size().cols.saturating_sub(11);
+            canvas.set_col_offset(col);
+            canvas.drawl(Token::new("|   ...    "));
+            canvas.drawl(Token::new("+- s(h)ow -"));
         };
 
-        canvas.draw_canvas(
-            Position::new(0, self.terminal.size().cols.saturating_sub(cols)),
-            tmp,
-        );
         Ok(())
     }
 
@@ -785,22 +780,18 @@ impl DiffWidget {
     }
 
     pub fn render(&self, canvas: &mut Canvas, cursor: &Cursor) -> orfail::Result<()> {
-        canvas.draw_text(
-            Text::new(&format!(
-                "{}{} {} changes ({} files){}",
-                if self.widget_path.path == cursor.path {
-                    ">"
-                } else {
-                    " "
-                },
-                if cursor.path.len() == 1 { "|" } else { " " },
-                self.name,
-                self.diff.len(),
-                if self.expanded { "" } else { COLLAPSED_MARK }
-            ))
-            .or_fail()?,
-        );
-        canvas.draw_newline();
+        canvas.drawl(Token::new(format!(
+            "{}{} {} changes ({} files){}",
+            if self.widget_path.path == cursor.path {
+                ">"
+            } else {
+                " "
+            },
+            if cursor.path.len() == 1 { "|" } else { " " },
+            self.name,
+            self.diff.len(),
+            if self.expanded { "" } else { COLLAPSED_MARK }
+        )));
 
         if self.expanded {
             for (child, diff) in self.children.iter().zip(self.diff.files.iter()) {
@@ -1087,8 +1078,7 @@ impl FileDiffWidget {
                 )
             }
         };
-        canvas.draw_text(Text::new(&text).or_fail()?);
-        canvas.draw_newline();
+        canvas.drawl(Token::new(text));
 
         if self.expanded {
             for (child, chunk) in self.children.iter().zip(diff.chunks()) {
@@ -1412,27 +1402,23 @@ impl ChunkDiffWidget {
         diff: &ChunkDiff,
         cursor: &Cursor,
     ) -> orfail::Result<()> {
-        canvas.draw_text(
-            Text::new(&format!(
-                "{}{} {}{}",
-                match cursor.path.len() {
-                    1 if self.widget_path.path.starts_with(&cursor.path[..1]) => " :  ",
-                    2 if self.widget_path.path.starts_with(&cursor.path[..2]) => "   :",
-                    _ => "    ",
-                },
-                if self.widget_path.path == cursor.path {
-                    ">|"
-                } else if cursor.path.len() == 3 {
-                    " |"
-                } else {
-                    "  "
-                },
-                diff.head_line(),
-                if self.expanded { "" } else { COLLAPSED_MARK }
-            ))
-            .or_fail()?,
-        );
-        canvas.draw_newline();
+        canvas.drawl(Token::new(format!(
+            "{}{} {}{}",
+            match cursor.path.len() {
+                1 if self.widget_path.path.starts_with(&cursor.path[..1]) => " :  ",
+                2 if self.widget_path.path.starts_with(&cursor.path[..2]) => "   :",
+                _ => "    ",
+            },
+            if self.widget_path.path == cursor.path {
+                ">|"
+            } else if cursor.path.len() == 3 {
+                " |"
+            } else {
+                "  "
+            },
+            diff.head_line(),
+            if self.expanded { "" } else { COLLAPSED_MARK }
+        )));
 
         if self.expanded {
             for (child, line) in self.children.iter().zip(diff.lines.iter()) {
@@ -1673,7 +1659,7 @@ impl LineDiffWidget {
         diff: &LineDiff,
         cursor: &Cursor,
     ) -> orfail::Result<()> {
-        let prefix = Text::new(&format!(
+        let prefix = Token::new(format!(
             "{}{} ",
             match cursor.path.len() {
                 1 if self.widget_path.path.starts_with(&cursor.path[..1]) => " :    ",
@@ -1688,17 +1674,16 @@ impl LineDiffWidget {
             } else {
                 "  "
             }
-        ))
-        .or_fail()?;
-        let mut text = Text::new(&format!("{}", diff)).or_fail()?;
-        match diff {
-            LineDiff::Old(_) => text = text.dim(),
-            LineDiff::New(_) => text = text.bold(),
-            LineDiff::Both(_) => {}
-        }
-        canvas.draw_text(prefix);
-        canvas.draw_text(text);
-        canvas.draw_newline();
+        ));
+        canvas.draw(prefix);
+
+        let style = match diff {
+            LineDiff::Old(_) => TokenStyle::Dim,
+            LineDiff::New(_) => TokenStyle::Bold,
+            LineDiff::Both(_) => TokenStyle::Plain,
+        };
+        let text = Token::with_style(format!("{}", diff), style);
+        canvas.drawl(text);
 
         Ok(())
     }

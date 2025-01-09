@@ -4,18 +4,21 @@ use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
 
 use crate::terminal::TerminalSize;
 
-// TODO: rename
 #[derive(Debug)]
-pub struct Canvas2 {
+pub struct Canvas {
     frame: Frame,
     frame_row_offset: usize,
+    cursor: TokenPosition,
+    col_offset: usize,
 }
 
-impl Canvas2 {
+impl Canvas {
     pub fn new(frame_row_offset: usize, frame_size: TerminalSize) -> Self {
         Self {
             frame: Frame::new(frame_size),
             frame_row_offset,
+            cursor: TokenPosition::default(),
+            col_offset: 0,
         }
     }
 
@@ -26,10 +29,32 @@ impl Canvas2 {
         }
     }
 
-    pub fn draw_token(&mut self, position: CanvasPosition, token: Token) {
+    pub fn set_cursor(&mut self, position: TokenPosition) {
+        self.cursor = position;
+    }
+
+    pub fn set_col_offset(&mut self, offset: usize) {
+        self.col_offset = offset;
+    }
+
+    pub fn draw(&mut self, token: Token) {
+        let cols = token.cols();
+        self.draw_at(self.cursor, token);
+        self.cursor.col += cols;
+    }
+
+    pub fn drawl(&mut self, token: Token) {
+        self.draw(token);
+        self.cursor.row += 1;
+        self.cursor.col = 0;
+    }
+
+    pub fn draw_at(&mut self, mut position: TokenPosition, token: Token) {
         if !self.frame_row_range().contains(&position.row) {
             return;
         }
+
+        position.col += self.col_offset;
 
         let i = position.row - self.frame_row_offset;
         let line = &mut self.frame.lines[i];
@@ -37,9 +62,8 @@ impl Canvas2 {
         line.split_off(self.frame.size.cols);
     }
 
-    pub fn take_frame(&mut self) -> Frame {
-        let size = self.frame.size;
-        std::mem::replace(&mut self.frame, Frame::new(size))
+    pub fn into_frame(self) -> Frame {
+        self.frame
     }
 }
 
@@ -78,6 +102,10 @@ pub struct FrameLine {
 impl FrameLine {
     pub fn new() -> Self {
         Self::default()
+    }
+
+    pub fn tokens(&self) -> &[Token] {
+        &self.tokens
     }
 
     pub fn text(&self) -> String {
@@ -144,6 +172,14 @@ impl Token {
         Self::with_style(text, TokenStyle::Plain)
     }
 
+    pub fn text(&self) -> &str {
+        &self.text
+    }
+
+    pub fn style(&self) -> TokenStyle {
+        self.style
+    }
+
     pub fn with_style(text: impl Into<String>, style: TokenStyle) -> Self {
         let mut text = text.into();
         if text.chars().any(|c| c.is_control()) {
@@ -191,163 +227,18 @@ impl Token {
 }
 
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
-pub struct CanvasPosition {
+pub struct TokenPosition {
     pub row: usize,
     pub col: usize,
 }
 
-impl CanvasPosition {
+impl TokenPosition {
     pub fn row(row: usize) -> Self {
         Self::row_col(row, 0)
     }
 
     pub fn row_col(row: usize, col: usize) -> Self {
         Self { row, col }
-    }
-}
-
-#[derive(Debug, Default)]
-pub struct Canvas {
-    current_row: Row,
-    pub rows: Vec<Row>, // TODO:private
-    max_cols: usize,
-}
-
-impl Canvas {
-    pub fn new(max_cols: usize) -> Self {
-        Self {
-            current_row: Row::default(),
-            rows: Vec::new(),
-            max_cols,
-        }
-    }
-
-    pub fn clip(&mut self, offset: usize, rows: usize) {
-        self.rows.drain(..offset);
-        self.rows.truncate(rows);
-    }
-
-    pub fn draw_canvas(&mut self, position: Position, canvas: Canvas) {
-        for (row_i, src_row) in canvas.rows.into_iter().enumerate() {
-            let row_i = row_i + position.row;
-            while self.rows.len() <= row_i {
-                self.rows.push(Row::default());
-            }
-
-            let dst_row = &mut self.rows[row_i];
-            dst_row.replace(position.col, src_row);
-        }
-    }
-
-    pub fn draw_text(&mut self, text: Text) {
-        self.current_row.texts.push(text);
-    }
-
-    pub fn draw_textl(&mut self, text: Text) {
-        self.draw_text(text);
-        self.draw_newline();
-    }
-
-    pub fn draw_newline(&mut self) {
-        let mut last_row = std::mem::take(&mut self.current_row);
-
-        // TODO: refactor
-        last_row.truncate(self.max_cols);
-
-        self.rows.push(last_row);
-    }
-
-    pub fn rows(&self) -> usize {
-        self.rows.len() + 1
-    }
-}
-
-#[derive(Debug, Default, PartialEq, Eq)]
-pub struct Row {
-    pub texts: Vec<Text>,
-}
-
-impl Row {
-    pub fn replace(&mut self, col: usize, src: Row) {
-        self.truncate(col);
-        let n = self.cols();
-        if col > n {
-            let mut padding = String::new();
-            for _ in n..col {
-                padding.push(' ');
-            }
-            self.texts.push(Text::new(&padding).expect("infallible"));
-        }
-        self.texts.extend(src.texts);
-    }
-
-    pub fn truncate(&mut self, max_cols: usize) {
-        let mut acc_cols = 0;
-        for text in &mut self.texts {
-            let text_cols = text.cols();
-            if acc_cols + text_cols < max_cols {
-                acc_cols += text_cols;
-                continue;
-            }
-            text.truncate(max_cols - acc_cols);
-        }
-    }
-
-    pub fn cols(&self) -> usize {
-        self.texts.iter().map(|x| x.cols()).sum()
-    }
-}
-
-#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
-pub struct Position {
-    pub row: usize,
-    pub col: usize,
-}
-
-impl Position {
-    pub fn new(row: usize, col: usize) -> Self {
-        Self { row, col }
-    }
-}
-
-#[derive(Debug, PartialEq, Eq)]
-pub struct Text {
-    pub text: String,                        // TODO: private
-    pub attrs: crossterm::style::Attributes, // TODO: private
-}
-
-impl Text {
-    pub fn new(text: &str) -> orfail::Result<Self> {
-        // TODO: validate or replace non visible chars
-        Ok(Self {
-            text: text.to_owned(),
-            attrs: crossterm::style::Attributes::default(),
-        })
-    }
-
-    pub fn cols(&self) -> usize {
-        self.text.width()
-    }
-
-    pub fn truncate(&mut self, max_cols: usize) {
-        let mut cols = 0;
-        for (i, c) in self.text.char_indices() {
-            cols += c.width().expect("infallible");
-            if cols >= max_cols {
-                self.text.truncate(i);
-                break;
-            }
-        }
-    }
-
-    pub fn bold(mut self) -> Self {
-        self.attrs.set(crossterm::style::Attribute::Bold);
-        self
-    }
-
-    pub fn dim(mut self) -> Self {
-        self.attrs.set(crossterm::style::Attribute::Dim);
-        self
     }
 }
 
@@ -358,20 +249,20 @@ mod tests {
     #[test]
     fn canvas() -> orfail::Result<()> {
         let size = TerminalSize { rows: 2, cols: 4 };
-        let mut canvas = Canvas2::new(1, size);
 
         // No dirty lines.
-        let frame0 = canvas.take_frame();
-        let frame1 = canvas.take_frame();
+        let frame0 = Canvas::new(1, size).into_frame();
+        let frame1 = Canvas::new(1, size).into_frame();
         assert_eq!(frame1.dirty_lines(&frame0).count(), 0);
 
         // Draw lines.
-        canvas.draw_token(CanvasPosition::row(0), Token::new("out of range"));
-        canvas.draw_token(CanvasPosition::row(1), Token::new("hello"));
-        canvas.draw_token(CanvasPosition::row_col(2, 2), Token::new("world"));
-        canvas.draw_token(CanvasPosition::row(3), Token::new("out of range"));
+        let mut canvas = Canvas::new(1, size);
+        canvas.draw_at(TokenPosition::row(0), Token::new("out of range"));
+        canvas.draw_at(TokenPosition::row(1), Token::new("hello"));
+        canvas.draw_at(TokenPosition::row_col(2, 2), Token::new("world"));
+        canvas.draw_at(TokenPosition::row(3), Token::new("out of range"));
 
-        let frame2 = canvas.take_frame();
+        let frame2 = canvas.into_frame();
         assert_eq!(frame2.dirty_lines(&frame1).count(), 2);
         assert_eq!(
             frame2
@@ -382,9 +273,10 @@ mod tests {
         );
 
         // Draw another lines.
-        canvas.draw_token(CanvasPosition::row(1), Token::new("hello"));
+        let mut canvas = Canvas::new(1, size);
+        canvas.draw_at(TokenPosition::row(1), Token::new("hello"));
 
-        let frame3 = canvas.take_frame();
+        let frame3 = canvas.into_frame();
         assert_eq!(frame3.dirty_lines(&frame2).count(), 1);
         assert_eq!(
             frame3
