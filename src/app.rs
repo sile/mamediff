@@ -1585,6 +1585,28 @@ impl Cursor {
             false
         }
     }
+
+    pub fn render(&self, canvas: &mut Canvas, widget_path: &[usize]) {
+        let mut text = String::with_capacity(widget_path.len() * 2);
+
+        for i in 1..widget_path.len() {
+            if i == self.path.len() && widget_path.starts_with(&self.path) {
+                text.push_str(" :")
+            } else {
+                text.push_str("  ")
+            }
+        }
+
+        if widget_path == self.path {
+            text.push_str(">|");
+        } else if widget_path.len() == self.path.len() {
+            text.push_str(" |");
+        } else {
+            text.push_str("  ");
+        }
+
+        canvas.draw(Token::new(text));
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -1655,32 +1677,7 @@ impl LineDiffWidget {
         diff: &LineDiff,
         cursor: &Cursor,
     ) -> orfail::Result<()> {
-        let prefix = Token::new(format!(
-            "{}{} ",
-            match cursor.path.len() {
-                1 if self.widget_path.path.starts_with(&cursor.path[..1]) => " :    ",
-                2 if self.widget_path.path.starts_with(&cursor.path[..2]) => "   :  ",
-                3 if self.widget_path.path.starts_with(&cursor.path[..3]) => "     :",
-                _ => "      ",
-            },
-            if self.widget_path.path == cursor.path {
-                ">|"
-            } else if cursor.path.len() == 4 {
-                " |"
-            } else {
-                "  "
-            }
-        ));
-        canvas.draw(prefix);
-
-        let style = match diff {
-            LineDiff::Old(_) => TokenStyle::Dim,
-            LineDiff::New(_) => TokenStyle::Bold,
-            LineDiff::Both(_) => TokenStyle::Plain,
-        };
-        let text = Token::with_style(format!("{}", diff), style);
-        canvas.drawl(text);
-
+        self.render_diff(canvas, cursor, diff);
         Ok(())
     }
 
@@ -1762,4 +1759,32 @@ impl LineDiffWidget {
             std::cmp::Ordering::Greater => 1,
         }
     }
+}
+
+impl RenderDiff for LineDiffWidget {
+    type Diff = LineDiff;
+
+    fn render_diff(&self, canvas: &mut Canvas, cursor: &Cursor, diff: &Self::Diff) {
+        cursor.render(canvas, &self.widget_path.path);
+
+        let style = match diff {
+            LineDiff::Old(_) => TokenStyle::Dim,
+            LineDiff::New(_) => TokenStyle::Bold,
+            LineDiff::Both(_) => TokenStyle::Plain,
+        };
+        canvas.drawl(Token::with_style(diff.to_string(), style));
+    }
+
+    fn rows(&self, _diff: &Self::Diff) -> usize {
+        1
+    }
+}
+
+// TODO: move
+pub trait RenderDiff {
+    type Diff;
+
+    fn render_diff(&self, canvas: &mut Canvas, cursor: &Cursor, diff: &Self::Diff);
+
+    fn rows(&self, diff: &Self::Diff) -> usize;
 }
