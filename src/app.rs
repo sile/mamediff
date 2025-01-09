@@ -107,7 +107,7 @@ impl App {
 
     fn render_legend(&mut self, canvas: &mut Canvas) -> orfail::Result<()> {
         // TODO: Skip rendering if the terminal size is too small.
-        canvas.set_cursor(TokenPosition::ORIGIN);
+        canvas.set_cursor(TokenPosition::row(canvas.frame_row_range().start));
         if self.show_legend {
             let col = self.terminal.size().cols.saturating_sub(19);
             canvas.set_col_offset(col);
@@ -1609,6 +1609,22 @@ impl Cursor {
     }
 }
 
+impl RenderDiff for ChunkDiffWidget {
+    type Diff = ChunkDiff;
+
+    fn render_diff(&self, _canvas: &mut Canvas, _cursor: &Cursor, _diff: &Self::Diff) {
+        todo!()
+    }
+
+    fn rows(&self) -> usize {
+        if self.expanded {
+            1 + self.children.len()
+        } else {
+            1
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct LineDiffWidget {
     pub widget_path: WidgetPath,
@@ -1775,7 +1791,7 @@ impl RenderDiff for LineDiffWidget {
         canvas.drawl(Token::with_style(diff.to_string(), style));
     }
 
-    fn rows(&self, _diff: &Self::Diff) -> usize {
+    fn rows(&self) -> usize {
         1
     }
 }
@@ -1786,5 +1802,26 @@ pub trait RenderDiff {
 
     fn render_diff(&self, canvas: &mut Canvas, cursor: &Cursor, diff: &Self::Diff);
 
-    fn rows(&self, diff: &Self::Diff) -> usize;
+    fn rows(&self) -> usize;
+
+    fn render_diff_if_need(&self, canvas: &mut Canvas, cursor: &Cursor, diff: &Self::Diff) -> bool {
+        if canvas.is_frame_exceeded() {
+            return false;
+        }
+
+        let mut canvas_cursor = canvas.cursor();
+        let drawn_rows = self.rows();
+        if canvas
+            .frame_row_range()
+            .start
+            .checked_sub(canvas_cursor.row)
+            .is_some_and(|n| n >= drawn_rows)
+        {
+            canvas_cursor.row += drawn_rows;
+            canvas.set_cursor(canvas_cursor);
+        } else {
+            self.render_diff(canvas, cursor, diff);
+        }
+        true
+    }
 }

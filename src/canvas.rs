@@ -29,6 +29,14 @@ impl Canvas {
         }
     }
 
+    pub fn is_frame_exceeded(&self) -> bool {
+        self.cursor.row >= self.frame_row_range().end
+    }
+
+    pub fn cursor(&self) -> TokenPosition {
+        self.cursor
+    }
+
     pub fn set_cursor(&mut self, position: TokenPosition) {
         self.cursor = position;
     }
