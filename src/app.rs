@@ -1731,6 +1731,10 @@ impl DiffTreeNodeContent for LineDiff {
         vec![Token::with_style(self.to_string(), style)]
     }
 
+    fn can_alter(&self) -> bool {
+        !matches!(self, Self::Both(_))
+    }
+
     fn children(&self) -> &[Self::Child] {
         &[]
     }
@@ -1741,6 +1745,7 @@ pub trait DiffTreeNodeContent {
     type Child: DiffTreeNodeContent;
 
     fn head_line_tokens(&self) -> Vec<Token>;
+    fn can_alter(&self) -> bool;
     fn children(&self) -> &[Self::Child];
 }
 
