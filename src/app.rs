@@ -1490,12 +1490,16 @@ impl Cursor {
         }
     }
 
+    // TODO: rename: widget_path
     pub fn render(&self, canvas: &mut Canvas, widget_path: &[usize]) {
         let mut text = String::with_capacity(widget_path.len() * 2);
 
         for i in 1..widget_path.len() {
             if i == self.path.len() && widget_path.starts_with(&self.path) {
                 text.push_str(" :")
+            } else if widget_path == self.path {
+                // TODO: optimize
+                text.push_str("--")
             } else {
                 text.push_str("  ")
             }
