@@ -1,4 +1,5 @@
 use std::{
+    cmp::Ordering,
     ops::Range,
     path::{Path, PathBuf},
 };
@@ -596,7 +597,10 @@ impl DiffWidget {
         } else if self.widget_path.path == cursor.path {
             !self.children.is_empty()
         } else if cursor.path.starts_with(&self.widget_path.path) {
-            self.children.iter().any(|w| w.can_stage(cursor))
+            self.children
+                .iter()
+                .zip(self.diff.files.iter())
+                .any(|(w, d)| w.can_stage(cursor, d))
         } else {
             false
         }
@@ -608,7 +612,10 @@ impl DiffWidget {
         } else if self.widget_path.path == cursor.path {
             !self.children.is_empty()
         } else if cursor.path.starts_with(&self.widget_path.path) {
-            self.children.iter().any(|w| w.can_unstage(cursor))
+            self.children
+                .iter()
+                .zip(self.diff.files.iter())
+                .any(|(w, d)| w.can_unstage(cursor, d))
         } else {
             false
         }
@@ -759,8 +766,8 @@ impl DiffWidget {
 
     pub fn cursor_abs_row(&self, cursor: &Cursor) -> usize {
         match cursor.path[..Self::LEVEL].cmp(&self.widget_path.path) {
-            std::cmp::Ordering::Less => 0,
-            std::cmp::Ordering::Equal => {
+            Ordering::Less => 0,
+            Ordering::Equal => {
                 if cursor.path.len() == Self::LEVEL {
                     0
                 } else {
@@ -771,7 +778,7 @@ impl DiffWidget {
                         .sum::<usize>()
                 }
             }
-            std::cmp::Ordering::Greater => self.rows(),
+            Ordering::Greater => self.rows(),
         }
     }
 
@@ -959,8 +966,8 @@ impl FileDiffWidget {
 
     pub fn cursor_abs_row(&self, cursor: &Cursor) -> usize {
         match cursor.path[..Self::LEVEL].cmp(&self.widget_path.path) {
-            std::cmp::Ordering::Less => 0,
-            std::cmp::Ordering::Equal => {
+            Ordering::Less => 0,
+            Ordering::Equal => {
                 if cursor.path.len() == Self::LEVEL {
                     0
                 } else {
@@ -971,7 +978,7 @@ impl FileDiffWidget {
                         .sum::<usize>()
                 }
             }
-            std::cmp::Ordering::Greater => self.rows(),
+            Ordering::Greater => self.rows(),
         }
     }
 
@@ -1030,23 +1037,29 @@ impl FileDiffWidget {
         }
     }
 
-    pub fn can_stage(&self, cursor: &Cursor) -> bool {
+    pub fn can_stage(&self, cursor: &Cursor, diff: &FileDiff) -> bool {
         if self.widget_path.path == cursor.path {
             // TODO: !self.children.is_empty()
             true
         } else if cursor.path.starts_with(&self.widget_path.path) {
-            self.children.iter().any(|w| w.can_stage(cursor))
+            self.children
+                .iter()
+                .zip(diff.chunks())
+                .any(|(w, d)| w.can_stage(cursor, d))
         } else {
             false
         }
     }
 
-    pub fn can_unstage(&self, cursor: &Cursor) -> bool {
+    pub fn can_unstage(&self, cursor: &Cursor, diff: &FileDiff) -> bool {
         if self.widget_path.path == cursor.path {
             // TDOO: !self.children.is_empty()
             true
         } else if cursor.path.starts_with(&self.widget_path.path) {
-            self.children.iter().any(|w| w.can_unstage(cursor))
+            self.children
+                .iter()
+                .zip(diff.chunks())
+                .any(|(w, d)| w.can_unstage(cursor, d))
         } else {
             false
         }
@@ -1175,17 +1188,18 @@ pub struct ChunkDiffWidget {
     pub old_range: Range<usize>,
     pub new_range: Range<usize>,
     pub widget_path: WidgetPath,
-    pub children: Vec<LineDiffWidget>,
+    pub children: Vec<DiffTreeNode>,
     pub expanded: bool,
 }
 
 impl ChunkDiffWidget {
     pub fn new(diff: &ChunkDiff, widget_path: WidgetPath) -> Self {
-        let children = diff
-            .lines
-            .iter()
-            .enumerate()
-            .map(|(i, l)| LineDiffWidget::new(l, widget_path.join(i)))
+        let children = (0..diff.lines.len())
+            .map(|i| DiffTreeNode {
+                path: widget_path.join(i).path,
+                expanded: false,
+                children: Vec::new(),
+            })
             .collect();
         Self {
             old_range: Range {
@@ -1234,7 +1248,7 @@ impl ChunkDiffWidget {
         } else if cursor.path.starts_with(&self.widget_path.path) {
             self.children
                 .get(cursor.path[Self::LEVEL])
-                .is_some_and(|c| c.widget_path.path == cursor.path)
+                .is_some_and(|c| c.path == cursor.path)
         } else {
             false
         }
@@ -1251,11 +1265,8 @@ impl ChunkDiffWidget {
 
         if cursor.path != self.widget_path.path {
             let i = cursor.path[Self::LEVEL];
-            self.children
-                .get_mut(i)
-                .or_fail()?
-                .handle_stage(git, cursor, path, &diff.get_line_chunk(i, true).or_fail()?)
-                .or_fail()?;
+            let chunk = diff.get_line_chunk(i, true).or_fail()?;
+            git.stage(&chunk.to_diff(path)).or_fail()?;
         } else {
             git.stage(&diff.to_diff(path)).or_fail()?;
         }
@@ -1274,11 +1285,8 @@ impl ChunkDiffWidget {
 
         if cursor.path != self.widget_path.path {
             let i = cursor.path[Self::LEVEL];
-            self.children
-                .get_mut(i)
-                .or_fail()?
-                .handle_discard(git, cursor, path, &diff.get_line_chunk(i, true).or_fail()?)
-                .or_fail()?;
+            let chunk = diff.get_line_chunk(i, true).or_fail()?;
+            git.discard(&chunk.to_diff(path)).or_fail()?;
         } else {
             git.discard(&diff.to_diff(path)).or_fail()?;
         }
@@ -1297,11 +1305,8 @@ impl ChunkDiffWidget {
 
         if cursor.path != self.widget_path.path {
             let i = cursor.path[Self::LEVEL];
-            self.children
-                .get_mut(i)
-                .or_fail()?
-                .handle_unstage(git, cursor, path, &diff.get_line_chunk(i, false).or_fail()?)
-                .or_fail()?;
+            let chunk = diff.get_line_chunk(i, false).or_fail()?;
+            git.unstage(&chunk.to_diff(path)).or_fail()?;
         } else {
             git.unstage(&diff.to_diff(path)).or_fail()?;
         }
@@ -1329,36 +1334,34 @@ impl ChunkDiffWidget {
 
     pub fn cursor_abs_row(&self, cursor: &Cursor) -> usize {
         match cursor.path[..Self::LEVEL].cmp(&self.widget_path.path) {
-            std::cmp::Ordering::Less => 0,
-            std::cmp::Ordering::Equal => {
+            Ordering::Less => 0,
+            Ordering::Equal => {
                 if cursor.path.len() == Self::LEVEL {
                     0
                 } else {
                     1 + self
                         .children
                         .iter()
-                        .map(|c| c.cursor_abs_row(cursor))
+                        .map(|c| c.cursor_row(cursor))
                         .sum::<usize>()
                 }
             }
-            std::cmp::Ordering::Greater => self.rows(),
+            Ordering::Greater => self.rows(),
         }
     }
 
     fn added_lines(&self, diff: &ChunkDiff) -> usize {
-        self.children
+        diff.lines
             .iter()
-            .zip(diff.lines.iter())
-            .map(|(c, d)| c.added_lines(d))
-            .sum()
+            .filter(|d| matches!(d, LineDiff::New(_)))
+            .count()
     }
 
     fn removed_lines(&self, diff: &ChunkDiff) -> usize {
-        self.children
+        diff.lines
             .iter()
-            .zip(diff.lines.iter())
-            .map(|(c, d)| c.removed_lines(d))
-            .sum()
+            .filter(|d| matches!(d, LineDiff::Old(_)))
+            .count()
     }
 
     pub fn toggle(&mut self, cursor: &Cursor) -> orfail::Result<()> {
@@ -1378,21 +1381,21 @@ impl ChunkDiffWidget {
 
     pub const LEVEL: usize = 3;
 
-    pub fn can_stage(&self, cursor: &Cursor) -> bool {
+    pub fn can_stage(&self, cursor: &Cursor, diff: &ChunkDiff) -> bool {
         if self.widget_path.path == cursor.path {
             !self.children.is_empty()
         } else if cursor.path.starts_with(&self.widget_path.path) {
-            self.children.iter().any(|w| w.can_stage(cursor))
+            diff.lines.iter().any(|c| c.can_alter())
         } else {
             false
         }
     }
 
-    pub fn can_unstage(&self, cursor: &Cursor) -> bool {
+    pub fn can_unstage(&self, cursor: &Cursor, diff: &ChunkDiff) -> bool {
         if self.widget_path.path == cursor.path {
             !self.children.is_empty()
         } else if cursor.path.starts_with(&self.widget_path.path) {
-            self.children.iter().any(|w| w.can_unstage(cursor))
+            diff.lines.iter().any(|c| c.can_alter())
         } else {
             false
         }
@@ -1401,8 +1404,6 @@ impl ChunkDiffWidget {
     pub fn is_togglable(&self, cursor: &Cursor) -> bool {
         if self.widget_path.path == cursor.path {
             !self.children.is_empty()
-        } else if cursor.path.starts_with(&self.widget_path.path) {
-            self.children.iter().any(|w| w.is_togglable(cursor))
         } else {
             false
         }
@@ -1419,10 +1420,6 @@ impl ChunkDiffWidget {
         if cursor.path.len() == Self::LEVEL {
             cursor.path.push(0);
             self.expanded = true;
-        } else {
-            for child in self.children.iter_mut() {
-                child.handle_right(cursor).or_fail()?;
-            }
         }
 
         Ok(())
@@ -1437,7 +1434,10 @@ impl ChunkDiffWidget {
             }
         } else if self.widget_path.last_index() == cursor.path[Self::LEVEL - 1] {
             for child in self.children.iter_mut().rev() {
-                child.handle_down(cursor).or_fail()?;
+                if child.path.last().copied() == Some(cursor.path[Self::LEVEL] + 1) {
+                    cursor.path[Self::LEVEL] += 1;
+                    break;
+                }
             }
         }
 
@@ -1453,7 +1453,10 @@ impl ChunkDiffWidget {
             }
         } else if self.widget_path.last_index() == cursor.path[Self::LEVEL - 1] {
             for child in self.children.iter_mut() {
-                child.handle_up(cursor).or_fail()?;
+                if child.path.last().copied() == cursor.path[Self::LEVEL].checked_sub(1) {
+                    cursor.path[Self::LEVEL] -= 1;
+                    break;
+                }
             }
         }
         Ok(())
@@ -1473,7 +1476,7 @@ impl RenderDiff for ChunkDiffWidget {
 
         if self.expanded {
             for (child, line) in self.children.iter().zip(diff.lines.iter()) {
-                if !child.render_diff_if_need(canvas, cursor, line) {
+                if !child.render_if_need(canvas, cursor, line) {
                     break;
                 }
             }
@@ -1555,167 +1558,6 @@ impl Cursor {
         }
 
         canvas.draw(Token::new(text));
-    }
-}
-
-#[derive(Debug, Clone)]
-pub struct LineDiffWidget {
-    pub widget_path: WidgetPath,
-    pub has_diff: bool,
-}
-
-impl LineDiffWidget {
-    pub fn new(diff: &LineDiff, widget_path: WidgetPath) -> Self {
-        Self {
-            widget_path,
-            has_diff: !matches!(diff, LineDiff::Both(_)),
-        }
-    }
-
-    fn handle_stage(
-        &mut self,
-        git: &Git,
-        cursor: &Cursor,
-        path: &Path,
-        diff: &ChunkDiff,
-    ) -> orfail::Result<()> {
-        cursor.path.starts_with(&self.widget_path.path).or_fail()?;
-
-        if cursor.path == self.widget_path.path {
-            git.stage(&diff.to_diff(path)).or_fail()?;
-        }
-
-        Ok(())
-    }
-
-    fn handle_discard(
-        &mut self,
-        git: &Git,
-        cursor: &Cursor,
-        path: &Path,
-        diff: &ChunkDiff,
-    ) -> orfail::Result<()> {
-        cursor.path.starts_with(&self.widget_path.path).or_fail()?;
-
-        if cursor.path == self.widget_path.path {
-            git.discard(&diff.to_diff(path)).or_fail()?;
-        }
-
-        Ok(())
-    }
-
-    fn handle_unstage(
-        &mut self,
-        git: &Git,
-        cursor: &Cursor,
-        path: &Path,
-        diff: &ChunkDiff,
-    ) -> orfail::Result<()> {
-        cursor.path.starts_with(&self.widget_path.path).or_fail()?;
-
-        if cursor.path == self.widget_path.path {
-            git.unstage(&diff.to_diff(path)).or_fail()?;
-        }
-
-        Ok(())
-    }
-
-    fn added_lines(&self, diff: &LineDiff) -> usize {
-        if matches!(diff, LineDiff::New(_)) {
-            1
-        } else {
-            0
-        }
-    }
-
-    fn removed_lines(&self, diff: &LineDiff) -> usize {
-        if matches!(diff, LineDiff::Old(_)) {
-            1
-        } else {
-            0
-        }
-    }
-
-    pub const LEVEL: usize = 4;
-
-    pub fn can_stage(&self, cursor: &Cursor) -> bool {
-        if self.widget_path.path == cursor.path {
-            self.has_diff
-        } else {
-            false
-        }
-    }
-
-    pub fn can_unstage(&self, cursor: &Cursor) -> bool {
-        if self.widget_path.path == cursor.path {
-            self.has_diff
-        } else {
-            false
-        }
-    }
-
-    pub fn is_togglable(&self, _cursor: &Cursor) -> bool {
-        false
-    }
-
-    pub fn handle_right(&mut self, cursor: &mut Cursor) -> orfail::Result<()> {
-        (cursor.path.len() >= Self::LEVEL).or_fail()?;
-        Ok(())
-    }
-
-    pub fn handle_down(&mut self, cursor: &mut Cursor) -> orfail::Result<()> {
-        (cursor.path.len() >= Self::LEVEL).or_fail()?;
-
-        if cursor.path.len() == Self::LEVEL
-            && self.widget_path.last_index() == cursor.path[Self::LEVEL - 1] + 1
-        {
-            cursor.path[Self::LEVEL - 1] += 1;
-        }
-
-        Ok(())
-    }
-
-    pub fn handle_up(&mut self, cursor: &mut Cursor) -> orfail::Result<()> {
-        (cursor.path.len() >= Self::LEVEL).or_fail()?;
-
-        if cursor.path.len() == Self::LEVEL
-            && Some(self.widget_path.last_index()) == cursor.path[Self::LEVEL - 1].checked_sub(1)
-        {
-            cursor.path[Self::LEVEL - 1] -= 1;
-        }
-
-        Ok(())
-    }
-
-    pub fn rows(&self) -> usize {
-        1
-    }
-
-    pub fn cursor_abs_row(&self, cursor: &Cursor) -> usize {
-        match cursor.path[..Self::LEVEL].cmp(&self.widget_path.path) {
-            std::cmp::Ordering::Less => 0,
-            std::cmp::Ordering::Equal => 0,
-            std::cmp::Ordering::Greater => 1,
-        }
-    }
-}
-
-impl RenderDiff for LineDiffWidget {
-    type Diff = LineDiff;
-
-    fn render_diff(&self, canvas: &mut Canvas, cursor: &Cursor, diff: &Self::Diff) {
-        cursor.render(canvas, &self.widget_path.path);
-
-        let style = match diff {
-            LineDiff::Old(_) => TokenStyle::Dim,
-            LineDiff::New(_) => TokenStyle::Bold,
-            LineDiff::Both(_) => TokenStyle::Plain,
-        };
-        canvas.drawl(Token::with_style(diff.to_string(), style));
-    }
-
-    fn rows(&self) -> usize {
-        1
     }
 }
 
@@ -1808,6 +1650,21 @@ impl DiffTreeNode {
             1 + self.children.iter().map(|c| c.rows()).sum::<usize>()
         } else {
             1
+        }
+    }
+
+    pub fn cursor_row(&self, cursor: &Cursor) -> usize {
+        match cursor.path[..self.path.len()].cmp(&self.path) {
+            Ordering::Less => 0,
+            Ordering::Equal if cursor.path.len() == self.path.len() => 0,
+            Ordering::Equal => {
+                1 + self
+                    .children
+                    .iter()
+                    .map(|c| c.cursor_row(cursor))
+                    .sum::<usize>()
+            }
+            Ordering::Greater => self.rows(),
         }
     }
 }
