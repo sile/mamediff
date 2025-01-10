@@ -1492,6 +1492,23 @@ impl RenderDiff for ChunkDiffWidget {
     }
 }
 
+impl DiffTreeNodeContent for ChunkDiff {
+    type Child = LineDiff;
+
+    fn head_line_token(&self) -> Token {
+        Token::new(self.head_line())
+    }
+
+    fn can_alter(&self) -> bool {
+        true
+    }
+
+    fn children(&self) -> &[Self::Child] {
+        &self.lines
+    }
+}
+
+// TODO: rename: DiffPath
 #[derive(Debug, Clone)]
 pub struct WidgetPath {
     pub path: Vec<usize>,
@@ -1564,13 +1581,13 @@ impl Cursor {
 impl DiffTreeNodeContent for LineDiff {
     type Child = Self;
 
-    fn head_line_tokens(&self) -> Vec<Token> {
+    fn head_line_token(&self) -> Token {
         let style = match self {
             LineDiff::Old(_) => TokenStyle::Dim,
             LineDiff::New(_) => TokenStyle::Bold,
             LineDiff::Both(_) => TokenStyle::Plain,
         };
-        vec![Token::with_style(self.to_string(), style)]
+        Token::with_style(self.to_string(), style)
     }
 
     fn can_alter(&self) -> bool {
@@ -1586,7 +1603,7 @@ impl DiffTreeNodeContent for LineDiff {
 pub trait DiffTreeNodeContent {
     type Child: DiffTreeNodeContent;
 
-    fn head_line_tokens(&self) -> Vec<Token>;
+    fn head_line_token(&self) -> Token;
     fn can_alter(&self) -> bool;
     fn children(&self) -> &[Self::Child];
 }
@@ -1604,9 +1621,7 @@ impl DiffTreeNode {
         T: DiffTreeNodeContent,
     {
         cursor.render(canvas, &self.path);
-        for token in content.head_line_tokens() {
-            canvas.draw(token);
-        }
+        canvas.draw(content.head_line_token());
         if !self.expanded && !self.children.is_empty() {
             canvas.draw(Token::new(COLLAPSED_MARK));
         }
