@@ -1490,24 +1490,29 @@ impl Cursor {
         }
     }
 
-    // TODO: rename: widget_path
-    pub fn render(&self, canvas: &mut Canvas, widget_path: &[usize]) {
-        let mut text = String::with_capacity(widget_path.len() * 2);
+    pub fn render(&self, canvas: &mut Canvas, diff_path: &[usize]) {
+        let mut text = String::with_capacity(diff_path.len() * 2);
+        let selected = diff_path == self.path;
 
-        for i in 1..widget_path.len() {
-            if i == self.path.len() && widget_path.starts_with(&self.path) {
+        if selected {
+            text.push('-');
+        } else {
+            text.push(' ');
+        }
+
+        for i in 1..diff_path.len() {
+            if i == self.path.len() && diff_path.starts_with(&self.path) {
                 text.push_str(" :")
-            } else if widget_path == self.path {
-                // TODO: optimize
+            } else if selected {
                 text.push_str("--")
             } else {
                 text.push_str("  ")
             }
         }
 
-        if widget_path == self.path {
+        if selected {
             text.push_str(">|");
-        } else if widget_path.len() == self.path.len() {
+        } else if diff_path.len() == self.path.len() {
             text.push_str(" |");
         } else {
             text.push_str("  ");
