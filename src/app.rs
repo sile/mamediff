@@ -1719,6 +1719,13 @@ impl RenderDiff for LineDiffWidget {
     }
 }
 
+#[derive(Debug, Clone)]
+pub struct DiffTreeNode {
+    pub path: Vec<usize>,
+    pub expanded: bool,
+    pub children: Vec<Self>,
+}
+
 // TODO: move
 pub trait RenderDiff {
     type Diff;
