@@ -53,6 +53,10 @@ impl Canvas {
 
     pub fn drawl(&mut self, token: Token) {
         self.draw(token);
+        self.newline();
+    }
+
+    pub fn newline(&mut self) {
         self.cursor.row += 1;
         self.cursor.col = 0;
     }

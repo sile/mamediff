@@ -1719,10 +1719,28 @@ impl RenderDiff for LineDiffWidget {
     }
 }
 
+impl DiffTreeNodeContent for LineDiff {
+    type Child = Self;
+
+    fn head_line_tokens(&self) -> Vec<Token> {
+        let style = match self {
+            LineDiff::Old(_) => TokenStyle::Dim,
+            LineDiff::New(_) => TokenStyle::Bold,
+            LineDiff::Both(_) => TokenStyle::Plain,
+        };
+        vec![Token::with_style(self.to_string(), style)]
+    }
+
+    fn children(&self) -> &[Self::Child] {
+        &[]
+    }
+}
+
+// TODO
 pub trait DiffTreeNodeContent {
     type Child: DiffTreeNodeContent;
 
-    fn head_tokens(&self) -> Vec<Token>;
+    fn head_line_tokens(&self) -> Vec<Token>;
     fn children(&self) -> &[Self::Child];
 }
 
@@ -1731,6 +1749,62 @@ pub struct DiffTreeNode {
     pub path: Vec<usize>,
     pub expanded: bool,
     pub children: Vec<Self>,
+}
+
+impl DiffTreeNode {
+    pub fn render<T>(&self, canvas: &mut Canvas, cursor: &Cursor, content: &T)
+    where
+        T: DiffTreeNodeContent,
+    {
+        cursor.render(canvas, &self.path);
+        for token in content.head_line_tokens() {
+            canvas.draw(token);
+        }
+        if !self.expanded && !self.children.is_empty() {
+            canvas.draw(Token::new(COLLAPSED_MARK));
+        }
+        canvas.newline();
+
+        if self.expanded {
+            for child in self.children.iter().zip(content.children().iter()) {
+                if !child.0.render_if_need(canvas, cursor, child.1) {
+                    break;
+                }
+            }
+        }
+    }
+
+    pub fn render_if_need<T>(&self, canvas: &mut Canvas, cursor: &Cursor, content: &T) -> bool
+    where
+        T: DiffTreeNodeContent,
+    {
+        if canvas.is_frame_exceeded() {
+            return false;
+        }
+
+        let mut canvas_cursor = canvas.cursor();
+        let drawn_rows = self.rows();
+        if canvas
+            .frame_row_range()
+            .start
+            .checked_sub(canvas_cursor.row)
+            .is_some_and(|n| n >= drawn_rows)
+        {
+            canvas_cursor.row += drawn_rows;
+            canvas.set_cursor(canvas_cursor);
+        } else {
+            self.render(canvas, cursor, content);
+        }
+        true
+    }
+
+    pub fn rows(&self) -> usize {
+        if self.expanded {
+            1 + self.children.iter().map(|c| c.rows()).sum::<usize>()
+        } else {
+            1
+        }
+    }
 }
 
 // TODO: move
