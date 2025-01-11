@@ -311,6 +311,15 @@ impl ContentDiff {
         }
     }
 
+    // TODO: rename
+    pub fn chunks_slice(&self) -> &[ChunkDiff] {
+        match self {
+            ContentDiff::Text { chunks } => chunks,
+            ContentDiff::Binary { .. } | ContentDiff::Empty => &[],
+        }
+    }
+
+    // TODO: remove
     pub fn chunks(&self) -> impl '_ + Iterator<Item = &ChunkDiff> {
         match self {
             ContentDiff::Text { chunks } => Some(chunks.iter()).into_iter().flatten(),
@@ -426,6 +435,19 @@ impl FileDiff {
         }
     }
 
+    // TODO: remoev
+    pub fn chunks_slice(&self) -> &[ChunkDiff] {
+        match self {
+            FileDiff::Update { content, .. } => content.chunks_slice(),
+            FileDiff::Added { .. }
+            | FileDiff::Delete { .. }
+            | FileDiff::New { .. }
+            | FileDiff::Rename { .. }
+            | FileDiff::Chmod { .. } => &[],
+        }
+    }
+
+    // TODO: delete
     pub fn chunks(&self) -> impl '_ + Iterator<Item = &ChunkDiff> {
         match self {
             // FileDiff::Delete { content, .. } | FileDiff::Update { content, .. } => {
