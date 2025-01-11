@@ -822,14 +822,12 @@ impl RenderDiff for DiffWidget {
 
 #[derive(Debug, Clone)]
 pub struct FileDiffWidget {
-    pub widget_path: WidgetPath,
     pub node: DiffTreeNode,
 }
 
 impl FileDiffWidget {
     pub fn new(diff: &FileDiff, widget_path: WidgetPath) -> Self {
         Self {
-            widget_path: widget_path.clone(),
             node: DiffTreeNode::new_file_diff_node(widget_path.path, diff),
         }
     }
@@ -853,9 +851,9 @@ impl FileDiffWidget {
     }
 
     fn handle_stage(&mut self, git: &Git, cursor: &Cursor, diff: &FileDiff) -> orfail::Result<()> {
-        cursor.path.starts_with(&self.widget_path.path).or_fail()?;
+        cursor.path.starts_with(&self.node.path).or_fail()?;
 
-        if cursor.path != self.widget_path.path {
+        if cursor.path != self.node.path {
             let i = cursor.path[Self::LEVEL];
             self.node
                 .children
@@ -876,9 +874,9 @@ impl FileDiffWidget {
         cursor: &Cursor,
         diff: &FileDiff,
     ) -> orfail::Result<()> {
-        cursor.path.starts_with(&self.widget_path.path).or_fail()?;
+        cursor.path.starts_with(&self.node.path).or_fail()?;
 
-        if cursor.path != self.widget_path.path {
+        if cursor.path != self.node.path {
             let i = cursor.path[Self::LEVEL];
             self.node
                 .children
@@ -899,9 +897,9 @@ impl FileDiffWidget {
         cursor: &Cursor,
         diff: &FileDiff,
     ) -> orfail::Result<()> {
-        cursor.path.starts_with(&self.widget_path.path).or_fail()?;
+        cursor.path.starts_with(&self.node.path).or_fail()?;
 
-        if cursor.path != self.widget_path.path {
+        if cursor.path != self.node.path {
             let i = cursor.path[Self::LEVEL];
             self.node
                 .children
@@ -917,9 +915,9 @@ impl FileDiffWidget {
     }
 
     pub fn is_togglable(&self, cursor: &Cursor) -> bool {
-        if self.widget_path.path == cursor.path {
+        if self.node.path == cursor.path {
             !self.node.children.is_empty()
-        } else if cursor.path.starts_with(&self.widget_path.path) {
+        } else if cursor.path.starts_with(&self.node.path) {
             self.node
                 .children
                 .iter()
@@ -935,7 +933,7 @@ impl FileDiffWidget {
         (cursor.path.len() >= Self::LEVEL).or_fail()?;
 
         if self.node.children.is_empty()
-            || cursor.path[Self::LEVEL - 1] != self.widget_path.last_index()
+            || Some(cursor.path[Self::LEVEL - 1]) != self.node.path.last().copied()
         {
             return Ok(());
         }
@@ -961,10 +959,10 @@ impl FileDiffWidget {
         (cursor.path.len() >= Self::LEVEL).or_fail()?;
 
         if cursor.path.len() == Self::LEVEL {
-            if self.widget_path.last_index() == cursor.path[Self::LEVEL - 1] + 1 {
+            if self.node.path.last().copied() == Some(cursor.path[Self::LEVEL - 1] + 1) {
                 cursor.path[Self::LEVEL - 1] += 1;
             }
-        } else if self.widget_path.last_index() == cursor.path[Self::LEVEL - 1] {
+        } else if self.node.path.last().copied() == Some(cursor.path[Self::LEVEL - 1]) {
             for child in self.node.children.iter_mut().rev() {
                 if cursor.path.starts_with(&child.path) {
                     if let Some(new_cursor) = child.cursor_down(cursor).or_fail()? {
@@ -984,10 +982,10 @@ impl FileDiffWidget {
         (cursor.path.len() >= Self::LEVEL).or_fail()?;
 
         if cursor.path.len() == Self::LEVEL {
-            if Some(self.widget_path.last_index()) == cursor.path[Self::LEVEL - 1].checked_sub(1) {
+            if self.node.path.last().copied() == cursor.path[Self::LEVEL - 1].checked_sub(1) {
                 cursor.path[Self::LEVEL - 1] -= 1;
             }
-        } else if self.widget_path.last_index() == cursor.path[Self::LEVEL - 1] {
+        } else if self.node.path.last().copied() == Some(cursor.path[Self::LEVEL - 1]) {
             for child in &mut self.node.children {
                 if cursor.path.starts_with(&child.path) {
                     if let Some(new_cursor) = child.cursor_up(cursor).or_fail()? {
