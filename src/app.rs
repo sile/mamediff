@@ -1,7 +1,4 @@
-use std::{
-    cmp::Ordering,
-    path::{Path, PathBuf},
-};
+use std::{cmp::Ordering, path::Path};
 
 use crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use orfail::OrFail;
@@ -730,7 +727,7 @@ impl DiffWidget {
             let old = old_widgets
                 .iter()
                 .flat_map(|w| w.children.iter().zip(w.diff.files.iter()))
-                .filter(|w| w.0.name == c.name)
+                .filter(|w| w.1.is_intersect(d))
                 .collect::<Vec<_>>();
             c.restore_state(d, &old);
         }
@@ -823,7 +820,6 @@ impl RenderDiff for DiffWidget {
 
 #[derive(Debug, Clone)]
 pub struct FileDiffWidget {
-    pub name: PathBuf,
     pub widget_path: WidgetPath,
     pub children: Vec<DiffTreeNode>,
     pub node: DiffTreeNode,
@@ -837,7 +833,6 @@ impl FileDiffWidget {
             .map(|(i, c)| DiffTreeNode::new_chunk_diff_node(widget_path.join(i).path, c))
             .collect();
         Self {
-            name: diff.path().clone(),
             widget_path: widget_path.clone(),
             children,
             node: DiffTreeNode::new_file_diff_node(widget_path.path, diff),
