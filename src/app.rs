@@ -95,15 +95,28 @@ impl App {
     }
 
     fn is_togglable(&self) -> bool {
-        self.widgets.iter().any(|w| w.is_togglable(&self.cursor))
+        self.widgets.iter().any(|w| {
+            w.node
+                .get_children(&self.cursor)
+                .ok()
+                .is_some_and(|c| !c.is_empty())
+        })
     }
 
     fn can_stage(&self) -> bool {
-        self.widgets.iter().any(|w| w.can_stage(&self.cursor))
+        self.widgets[0]
+            .node
+            .can_alter(&self.cursor, &self.widgets[0].diff)
+            .ok()
+            .is_some_and(|b| b)
     }
 
     fn can_unstage(&self) -> bool {
-        self.widgets.iter().any(|w| w.can_unstage(&self.cursor))
+        self.widgets[1]
+            .node
+            .can_alter(&self.cursor, &self.widgets[1].diff)
+            .ok()
+            .is_some_and(|b| b)
     }
 
     fn render_legend(&mut self, canvas: &mut Canvas) -> orfail::Result<()> {
@@ -233,45 +246,22 @@ impl App {
 
     fn handle_tab(&mut self) -> orfail::Result<()> {
         for widget in &mut self.widgets {
-            widget.node.toggle(&self.cursor).or_fail()?;
+            if widget.node.is_valid_cursor(&self.cursor) {
+                widget.node.toggle(&self.cursor).or_fail()?;
+                break;
+            }
         }
         Ok(())
     }
 
-    fn get_children_len(&self) -> usize {
-        let i = self.cursor.path[0];
-        self.widgets[i].get_children_len(&self.cursor)
-    }
-
     fn handle_up(&mut self) -> orfail::Result<()> {
-        // TODO: factor out with can_up()
-        let old_cursor = self.cursor.clone();
-
         for widget in &mut self.widgets {
-            widget.handle_up(&mut self.cursor).or_fail()?;
-        }
-
-        if old_cursor == self.cursor {
-            let level = self.cursor.path.len();
-
-            while self.cursor.path.len() > 1 {
-                self.cursor.path.pop();
-                let old = self.cursor.clone();
-                for widget in &mut self.widgets {
-                    widget.handle_up(&mut self.cursor).or_fail()?;
-                }
-                if old != self.cursor {
-                    while self.cursor.path.len() < level {
-                        let n = self.get_children_len();
-                        self.cursor.path.push(n.saturating_sub(1));
-                    }
-                    break;
+            if widget.node.is_valid_cursor(&self.cursor) {
+                if let Some(new_cursor) = widget.node.cursor_up(&self.cursor).or_fail()? {
+                    self.cursor = new_cursor;
+                    widget.node.get_node_mut(&self.cursor).or_fail()?.expanded = true;
                 }
             }
-            if !self.is_valid_cursor() {
-                self.cursor = old_cursor;
-            }
-            // TODO: expand cursor position if need
         }
 
         // TODO: factor out
@@ -291,32 +281,14 @@ impl App {
     }
 
     fn handle_down(&mut self) -> orfail::Result<()> {
-        // TODO: factor out with can_down()
-        let old_cursor = self.cursor.clone();
         for widget in &mut self.widgets {
-            widget.handle_down(&mut self.cursor).or_fail()?;
-        }
-
-        if old_cursor == self.cursor {
-            let level = self.cursor.path.len();
-
-            while self.cursor.path.len() > 1 {
-                self.cursor.path.pop();
-                let old = self.cursor.clone();
-                for widget in &mut self.widgets {
-                    widget.handle_down(&mut self.cursor).or_fail()?;
-                }
-                if old != self.cursor {
-                    while self.cursor.path.len() < level {
-                        self.cursor.path.push(0);
-                    }
+            if widget.node.is_valid_cursor(&self.cursor) {
+                if let Some(new_cursor) = widget.node.cursor_down(&self.cursor).or_fail()? {
+                    self.cursor = new_cursor;
+                    widget.node.get_node_mut(&self.cursor).or_fail()?.expanded = true;
                     break;
                 }
             }
-            if self.cursor.path.len() != level || !self.is_valid_cursor() {
-                self.cursor = old_cursor;
-            }
-            // TODO: expand cursor position if need
         }
 
         // TODO: factor out
@@ -337,14 +309,20 @@ impl App {
 
     fn handle_right(&mut self) -> orfail::Result<()> {
         for widget in &mut self.widgets {
-            widget.handle_right(&mut self.cursor).or_fail()?;
+            if widget.node.is_valid_cursor(&self.cursor) {
+                if let Some(new_cursor) = widget.node.cursor_right(&self.cursor).or_fail()? {
+                    self.cursor = new_cursor;
+                    widget.node.get_node_mut(&self.cursor).or_fail()?.expanded = true;
+                    break;
+                }
+            }
         }
         Ok(())
     }
 
     fn handle_left(&mut self) -> orfail::Result<()> {
-        for widget in &mut self.widgets {
-            widget.handle_left(&mut self.cursor).or_fail()?;
+        if self.cursor.path.len() > 1 {
+            self.cursor.path.pop();
         }
         Ok(())
     }
@@ -370,7 +348,7 @@ impl App {
     fn is_valid_cursor(&self) -> bool {
         self.widgets
             .get(self.cursor.path[0])
-            .is_some_and(|w| w.is_valid_cursor(&self.cursor))
+            .is_some_and(|w| w.node.is_valid_cursor(&self.cursor))
     }
 
     fn can_right(&self) -> bool {
@@ -449,7 +427,6 @@ impl App {
     }
 
     fn handle_discard(&mut self) -> orfail::Result<()> {
-        // TODO: rename `can_state()`
         if self.can_stage() {
             self.widgets[0]
                 .handle_discard(&self.git, &self.cursor)
@@ -470,7 +447,8 @@ impl App {
     }
 }
 
-// TODO: Add Widget trait
+// TODO: AddRootNode
+
 #[derive(Debug, Clone)]
 pub struct DiffWidget {
     diff: PhasedDiff,
@@ -496,38 +474,7 @@ impl DiffWidget {
         }
     }
 
-    fn get_children_len(&self, cursor: &Cursor) -> usize {
-        if self.node.path == cursor.path {
-            self.node.children.len()
-        } else if cursor.path.starts_with(&self.node.path) && !self.node.children.is_empty() {
-            self.node.children[cursor.path[Self::LEVEL]]
-                .get_children(cursor)
-                .expect("TODO")
-                .len()
-        } else {
-            // TODO: error?
-            0
-        }
-    }
-
-    fn is_valid_cursor(&self, cursor: &Cursor) -> bool {
-        if self.node.path == cursor.path {
-            true
-        } else if cursor.path.starts_with(&self.node.path) {
-            self.node
-                .children
-                .get(cursor.path[Self::LEVEL])
-                .is_some_and(|c| c.is_valid_cursor(cursor))
-        } else {
-            false
-        }
-    }
-
     fn handle_stage(&mut self, git: &Git, cursor: &Cursor) -> orfail::Result<()> {
-        if !self.can_stage(cursor) {
-            return Ok(());
-        }
-
         if cursor.path != self.node.path {
             let i = cursor.path[Self::LEVEL];
             self.node
@@ -544,11 +491,6 @@ impl DiffWidget {
     }
 
     fn handle_discard(&mut self, git: &Git, cursor: &Cursor) -> orfail::Result<()> {
-        // TODO: Add comment (it's okay to use can_stage() here)
-        if !self.can_stage(cursor) {
-            return Ok(());
-        }
-
         if cursor.path != self.node.path {
             let i = cursor.path[Self::LEVEL];
             self.node
@@ -565,10 +507,6 @@ impl DiffWidget {
     }
 
     fn handle_unstage(&mut self, git: &Git, cursor: &Cursor) -> orfail::Result<()> {
-        if !self.can_unstage(cursor) {
-            return Ok(());
-        }
-
         if cursor.path != self.node.path {
             let i = cursor.path[Self::LEVEL];
             self.node
@@ -584,132 +522,8 @@ impl DiffWidget {
         Ok(())
     }
 
-    pub fn is_togglable(&self, cursor: &Cursor) -> bool {
-        if self.node.path == cursor.path {
-            !self.node.children.is_empty()
-        } else if cursor.path.starts_with(&self.node.path) {
-            self.node
-                .children
-                .iter()
-                .any(|w| w.get_children(cursor).ok().is_some_and(|x| !x.is_empty()))
-        } else {
-            false
-        }
-    }
-
-    pub fn can_stage(&self, cursor: &Cursor) -> bool {
-        if self.diff.phase == DiffPhase::Staged {
-            false
-        } else if self.node.path == cursor.path {
-            !self.node.children.is_empty()
-        } else if cursor.path.starts_with(&self.node.path) {
-            self.node
-                .children
-                .iter()
-                .zip(self.diff.diff.files.iter())
-                .any(|(w, d)| w.can_alter(cursor, d).expect("TODO"))
-        } else {
-            false
-        }
-    }
-
-    pub fn can_unstage(&self, cursor: &Cursor) -> bool {
-        if self.diff.phase == DiffPhase::Unstaged {
-            false
-        } else if self.node.path == cursor.path {
-            !self.node.children.is_empty()
-        } else if cursor.path.starts_with(&self.node.path) {
-            self.node
-                .children
-                .iter()
-                .zip(self.diff.diff.files.iter())
-                .any(|(w, d)| w.can_alter(cursor, d).expect("TODO"))
-        } else {
-            false
-        }
-    }
-
-    pub fn handle_left(&mut self, cursor: &mut Cursor) -> orfail::Result<()> {
-        (!cursor.path.is_empty()).or_fail()?;
-
-        if cursor.path[0] == self.node.path.last().copied().expect("TODO") && cursor.path.len() > 1
-        {
-            cursor.path.pop();
-        }
-
-        Ok(())
-    }
-
     // TODO: factor out
     pub const LEVEL: usize = 1;
-
-    pub fn handle_right(&mut self, cursor: &mut Cursor) -> orfail::Result<()> {
-        (cursor.path.len() >= Self::LEVEL).or_fail()?;
-
-        if self.node.children.is_empty()
-            || cursor.path[Self::LEVEL - 1] != self.node.path.last().copied().expect("TODO")
-        {
-            return Ok(());
-        }
-
-        if cursor.path.len() == Self::LEVEL {
-            cursor.path.push(0);
-            self.node.expanded = true;
-        } else {
-            for child in &mut self.node.children {
-                if cursor.path.starts_with(&child.path) {
-                    if let Some(new_cursor) = child.cursor_right(cursor).or_fail()? {
-                        *cursor = new_cursor;
-                        child.get_node_mut(cursor).or_fail()?.expanded = true;
-                    }
-                }
-            }
-        }
-
-        Ok(())
-    }
-
-    pub fn handle_down(&mut self, cursor: &mut Cursor) -> orfail::Result<()> {
-        (cursor.path.len() >= Self::LEVEL).or_fail()?;
-
-        if cursor.path.len() == Self::LEVEL {
-            if self.node.path.last().copied().unwrap() == cursor.path[Self::LEVEL - 1] + 1 {
-                cursor.path[Self::LEVEL - 1] += 1;
-            }
-        } else if self.node.path.last().copied().unwrap() == cursor.path[Self::LEVEL - 1] {
-            for child in self.node.children.iter_mut().rev() {
-                if cursor.path.starts_with(&child.path) {
-                    if let Some(new_cursor) = child.cursor_down(cursor).or_fail()? {
-                        *cursor = new_cursor;
-                        child.get_node_mut(cursor).or_fail()?.expanded = true;
-                    }
-                }
-            }
-        }
-
-        Ok(())
-    }
-
-    pub fn handle_up(&mut self, cursor: &mut Cursor) -> orfail::Result<()> {
-        (cursor.path.len() >= Self::LEVEL).or_fail()?;
-
-        if cursor.path.len() == Self::LEVEL {
-            if self.node.path.last().copied() == cursor.path[Self::LEVEL - 1].checked_sub(1) {
-                cursor.path[Self::LEVEL - 1] -= 1;
-            }
-        } else if self.node.path.last().copied().unwrap() == cursor.path[Self::LEVEL - 1] {
-            for child in &mut self.node.children {
-                if cursor.path.starts_with(&child.path) {
-                    if let Some(new_cursor) = child.cursor_up(cursor).or_fail()? {
-                        *cursor = new_cursor;
-                        child.get_node_mut(cursor).or_fail()?.expanded = true;
-                    }
-                }
-            }
-        }
-
-        Ok(())
-    }
 
     pub fn reload(&mut self, diff: Diff, old_widgets: &[DiffWidget]) -> orfail::Result<()> {
         self.diff.diff = diff;
@@ -1113,11 +927,21 @@ impl DiffTreeNode {
         }
     }
 
+    fn check_cursor(&self, cursor: &Cursor) -> orfail::Result<()> {
+        cursor.path.starts_with(&self.path).or_fail_with(|()| {
+            format!(
+                "invalid cursor: path={:?}, cursor={:?}",
+                self.path, cursor.path
+            )
+        })?;
+        Ok(())
+    }
+
     pub fn can_alter<T>(&self, cursor: &Cursor, content: &T) -> orfail::Result<bool>
     where
         T: DiffTreeNodeContent,
     {
-        cursor.path.starts_with(&self.path).or_fail()?;
+        self.check_cursor(cursor).or_fail()?;
 
         let level = self.path.len();
         if cursor.path.len() == level {
