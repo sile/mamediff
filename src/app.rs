@@ -856,9 +856,9 @@ impl FileDiffWidget {
                 .iter()
                 .flat_map(|w| w.0.children.iter().zip(w.1.chunks()))
                 .filter(|w| w.1.is_intersect(d))
-                .map(|w| w.0)
+                .map(|w| &w.0.node)
                 .collect::<Vec<_>>();
-            c.restore_state(&old);
+            c.node.restore_chunk_node_state(&old);
         }
     }
 
@@ -1084,7 +1084,12 @@ impl FileDiffWidget {
             self.expanded = true;
         } else {
             for child in &mut self.children {
-                child.handle_right(cursor).or_fail()?;
+                if cursor.path.starts_with(&child.node.path) {
+                    if let Some(new_cursor) = child.node.cursor_right(cursor).or_fail()? {
+                        *cursor = new_cursor;
+                        child.node.get_node_mut(cursor).or_fail()?.expanded = true;
+                    }
+                }
             }
         }
 
@@ -1100,7 +1105,12 @@ impl FileDiffWidget {
             }
         } else if self.widget_path.last_index() == cursor.path[Self::LEVEL - 1] {
             for child in self.children.iter_mut().rev() {
-                child.handle_down(cursor).or_fail()?;
+                if cursor.path.starts_with(&child.node.path) {
+                    if let Some(new_cursor) = child.node.cursor_down(cursor).or_fail()? {
+                        *cursor = new_cursor;
+                        child.node.get_node_mut(cursor).or_fail()?.expanded = true;
+                    }
+                }
             }
         }
 
@@ -1118,7 +1128,12 @@ impl FileDiffWidget {
             }
         } else if self.widget_path.last_index() == cursor.path[Self::LEVEL - 1] {
             for child in &mut self.children {
-                child.handle_up(cursor).or_fail()?;
+                if cursor.path.starts_with(&child.node.path) {
+                    if let Some(new_cursor) = child.node.cursor_up(cursor).or_fail()? {
+                        *cursor = new_cursor;
+                        child.node.get_node_mut(cursor).or_fail()?.expanded = true;
+                    }
+                }
             }
         }
 
@@ -1198,70 +1213,6 @@ impl ChunkDiffWidget {
         Self {
             node: DiffTreeNode::new_chunk_diff_node(widget_path.path, diff),
         }
-    }
-
-    fn restore_state(&mut self, old: &[&Self]) {
-        if old.is_empty() {
-            return;
-        }
-
-        self.node.expanded = old.iter().any(|w| w.node.expanded);
-    }
-
-    pub const LEVEL: usize = 3;
-
-    pub fn handle_right(&mut self, cursor: &mut Cursor) -> orfail::Result<()> {
-        (cursor.path.len() >= Self::LEVEL).or_fail()?;
-
-        if self.node.children.is_empty()
-            || cursor.path[Self::LEVEL - 1] != self.node.path.last().copied().expect("TODO")
-        {
-            return Ok(());
-        }
-
-        if cursor.path.len() == Self::LEVEL {
-            cursor.path.push(0);
-            self.node.expanded = true;
-        }
-
-        Ok(())
-    }
-
-    pub fn handle_down(&mut self, cursor: &mut Cursor) -> orfail::Result<()> {
-        (cursor.path.len() >= Self::LEVEL).or_fail()?;
-
-        if cursor.path.len() == Self::LEVEL {
-            if self.node.path.last().copied().expect("TODO") == cursor.path[Self::LEVEL - 1] + 1 {
-                cursor.path[Self::LEVEL - 1] += 1;
-            }
-        } else if self.node.path.last().copied().expect("TODO") == cursor.path[Self::LEVEL - 1] {
-            for child in self.node.children.iter_mut().rev() {
-                if child.path.last().copied() == Some(cursor.path[Self::LEVEL] + 1) {
-                    cursor.path[Self::LEVEL] += 1;
-                    break;
-                }
-            }
-        }
-
-        Ok(())
-    }
-
-    pub fn handle_up(&mut self, cursor: &mut Cursor) -> orfail::Result<()> {
-        (cursor.path.len() >= Self::LEVEL).or_fail()?;
-
-        if cursor.path.len() == Self::LEVEL {
-            if self.node.path.last().copied() == cursor.path[Self::LEVEL - 1].checked_sub(1) {
-                cursor.path[Self::LEVEL - 1] -= 1;
-            }
-        } else if self.node.path.last().copied().expect("TODO") == cursor.path[Self::LEVEL - 1] {
-            for child in self.node.children.iter_mut() {
-                if child.path.last().copied() == cursor.path[Self::LEVEL].checked_sub(1) {
-                    cursor.path[Self::LEVEL] -= 1;
-                    break;
-                }
-            }
-        }
-        Ok(())
     }
 }
 
@@ -1404,7 +1355,7 @@ pub trait DiffTreeNodeContent {
     fn head_line_token(&self) -> Token;
     fn can_alter(&self) -> bool;
     fn children(&self) -> &[Self::Child];
-    fn is_intersect(&self, other: &Self) -> bool;
+    fn is_intersect(&self, other: &Self) -> bool; // TODO: delete
 }
 
 #[derive(Debug, Clone)]
@@ -1549,6 +1500,13 @@ impl DiffTreeNode {
         Ok(())
     }
 
+    // TODO: refactor
+    pub fn restore_chunk_node_state(&mut self, old: &[&Self]) {
+        if !old.is_empty() {
+            self.expanded = old.iter().any(|n| n.expanded);
+        }
+    }
+
     pub fn get_node(&self, cursor: &Cursor) -> orfail::Result<&Self> {
         if let Some((_, child)) = self.get_maybe_child(cursor).or_fail()? {
             child.get_node(cursor).or_fail()
@@ -1642,6 +1600,80 @@ impl DiffTreeNode {
         };
 
         Ok(chunk.get_line_chunk(i, stage).or_fail()?.to_diff(path))
+    }
+
+    pub fn cursor_right(&self, cursor: &Cursor) -> orfail::Result<Option<Cursor>> {
+        let mut cursor = cursor.clone();
+
+        while cursor.path.len() >= self.path.len() {
+            cursor.path.push(0);
+            if self.is_valid_cursor(&cursor) {
+                return Ok(Some(cursor));
+            }
+            cursor.path.pop();
+
+            if let Some(n) = cursor.path.last_mut() {
+                *n += 1;
+            }
+            if !self.is_valid_cursor(&cursor) {
+                cursor.path.pop();
+            }
+        }
+
+        Ok(None)
+    }
+
+    pub fn cursor_down(&self, cursor: &Cursor) -> orfail::Result<Option<Cursor>> {
+        let mut cursor = cursor.clone();
+
+        *cursor.path.last_mut().or_fail()? += 1;
+        if self.is_valid_cursor(&cursor) {
+            return Ok(Some(cursor));
+        }
+
+        cursor.path.pop();
+        while self.is_valid_cursor(&cursor) {
+            *cursor.path.last_mut().or_fail()? += 1;
+            if self
+                .get_node(&cursor)
+                .ok()
+                .is_some_and(|n| !n.children.is_empty())
+            {
+                cursor.path.push(0);
+                return Ok(Some(cursor));
+            }
+        }
+
+        Ok(None)
+    }
+
+    pub fn cursor_up(&self, cursor: &Cursor) -> orfail::Result<Option<Cursor>> {
+        let mut cursor = cursor.clone();
+
+        if let Some(n) = cursor.path.last_mut().filter(|n| **n > 1) {
+            *n -= 1;
+            return Ok(Some(cursor));
+        }
+
+        cursor.path.pop();
+        while self.is_valid_cursor(&cursor) {
+            if let Some(n) = cursor.path.last_mut().filter(|n| **n > 1) {
+                *n -= 1;
+            } else {
+                break;
+            }
+
+            if let Some(node) = self
+                .get_node(&cursor)
+                .ok()
+                .filter(|node| !node.children.is_empty())
+            {
+                cursor.path.push(node.children.len() - 1);
+                return Ok(Some(cursor));
+            }
+        }
+
+        Ok(None)
     }
 }
 
