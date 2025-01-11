@@ -897,7 +897,8 @@ impl FileDiffWidget {
             self.children
                 .get_mut(i)
                 .or_fail()?
-                .handle_stage(git, cursor, diff.path(), diff.chunks().nth(i).or_fail()?)
+                .node
+                .stage(cursor, diff.chunks().nth(i).or_fail()?, git, diff.path())
                 .or_fail()?;
         } else {
             git.stage(&diff.to_diff()).or_fail()?;
@@ -919,7 +920,8 @@ impl FileDiffWidget {
             self.children
                 .get_mut(i)
                 .or_fail()?
-                .handle_discard(git, cursor, diff.path(), diff.chunks().nth(i).or_fail()?)
+                .node
+                .discard(cursor, diff.chunks().nth(i).or_fail()?, git, diff.path())
                 .or_fail()?;
         } else {
             git.discard(&diff.to_diff()).or_fail()?;
@@ -941,7 +943,8 @@ impl FileDiffWidget {
             self.children
                 .get_mut(i)
                 .or_fail()?
-                .handle_unstage(git, cursor, diff.path(), diff.chunks().nth(i).or_fail()?)
+                .node
+                .unstage(cursor, diff.chunks().nth(i).or_fail()?, git, diff.path())
                 .or_fail()?;
         } else {
             git.unstage(&diff.to_diff()).or_fail()?;
@@ -1203,66 +1206,6 @@ impl ChunkDiffWidget {
         }
 
         self.node.expanded = old.iter().any(|w| w.node.expanded);
-    }
-
-    fn handle_stage(
-        &mut self,
-        git: &Git,
-        cursor: &Cursor,
-        path: &Path,
-        diff: &ChunkDiff,
-    ) -> orfail::Result<()> {
-        cursor.path.starts_with(&self.node.path).or_fail()?;
-
-        if cursor.path != self.node.path {
-            let i = cursor.path[Self::LEVEL];
-            let chunk = diff.get_line_chunk(i, true).or_fail()?;
-            git.stage(&chunk.to_diff(path)).or_fail()?;
-        } else {
-            git.stage(&diff.to_diff(path)).or_fail()?;
-        }
-
-        Ok(())
-    }
-
-    fn handle_discard(
-        &mut self,
-        git: &Git,
-        cursor: &Cursor,
-        path: &Path,
-        diff: &ChunkDiff,
-    ) -> orfail::Result<()> {
-        cursor.path.starts_with(&self.node.path).or_fail()?;
-
-        if cursor.path != self.node.path {
-            let i = cursor.path[Self::LEVEL];
-            let chunk = diff.get_line_chunk(i, true).or_fail()?;
-            git.discard(&chunk.to_diff(path)).or_fail()?;
-        } else {
-            git.discard(&diff.to_diff(path)).or_fail()?;
-        }
-
-        Ok(())
-    }
-
-    fn handle_unstage(
-        &mut self,
-        git: &Git,
-        cursor: &Cursor,
-        path: &Path,
-        diff: &ChunkDiff,
-    ) -> orfail::Result<()> {
-        cursor.path.starts_with(&self.node.path).or_fail()?;
-
-        if cursor.path != self.node.path {
-            let i = cursor.path[Self::LEVEL];
-            let chunk = diff.get_line_chunk(i, false).or_fail()?;
-            git.unstage(&chunk.to_diff(path)).or_fail()?;
-        } else {
-            git.unstage(&diff.to_diff(path)).or_fail()?;
-        }
-
-        Ok(())
     }
 
     pub const LEVEL: usize = 3;
@@ -1638,6 +1581,67 @@ impl DiffTreeNode {
             let child = self.children.get(i).or_fail()?;
             Ok(Some((i, child)))
         }
+    }
+
+    pub fn stage(
+        &self,
+        cursor: &Cursor,
+        diff: &ChunkDiff,
+        git: &Git,
+        path: &Path,
+    ) -> orfail::Result<()> {
+        let diff = self.get_diff(cursor, diff, true, path).or_fail()?;
+        git.stage(&diff).or_fail()?;
+        Ok(())
+    }
+
+    pub fn discard(
+        &self,
+        cursor: &Cursor,
+        diff: &ChunkDiff,
+        git: &Git,
+        path: &Path,
+    ) -> orfail::Result<()> {
+        let diff = self.get_diff(cursor, diff, true, path).or_fail()?;
+        git.discard(&diff).or_fail()?;
+        Ok(())
+    }
+
+    pub fn unstage(
+        &self,
+        cursor: &Cursor,
+        diff: &ChunkDiff,
+        git: &Git,
+        path: &Path,
+    ) -> orfail::Result<()> {
+        let diff = self.get_diff(cursor, diff, false, path).or_fail()?;
+        git.unstage(&diff).or_fail()?;
+        Ok(())
+    }
+
+    pub fn get_diff(
+        &self,
+        cursor: &Cursor,
+        chunk: &ChunkDiff,
+        stage: bool,
+        path: &Path,
+    ) -> orfail::Result<Diff> {
+        // let Some((i, node)) = self.get_maybe_child(cursor).or_fail()? else {
+        //     return Ok(diff.clone());
+        // };
+        // let file = diff.files.get(i).or_fail()?;
+
+        // let Some((i, node)) = node.get_maybe_child(cursor).or_fail()? else {
+        //     return Ok(file.to_diff());
+        // };
+        // let chunk = file.chunks().nth(i).or_fail()?;
+        let node = self;
+
+        let Some((i, _node)) = node.get_maybe_child(cursor).or_fail()? else {
+            return Ok(chunk.to_diff(path));
+        };
+
+        Ok(chunk.get_line_chunk(i, stage).or_fail()?.to_diff(path))
     }
 }
 
