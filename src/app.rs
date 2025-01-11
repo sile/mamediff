@@ -632,7 +632,9 @@ impl DiffWidget {
             self.expanded = !self.expanded;
         } else {
             for child in &mut self.children {
-                child.toggle(cursor).or_fail()?;
+                if child.is_valid_cursor(cursor) {
+                    child.toggle(cursor).or_fail()?;
+                }
             }
         }
 
@@ -864,7 +866,11 @@ impl FileDiffWidget {
         if self.widget_path.path == cursor.path {
             self.children.len()
         } else if cursor.path.starts_with(&self.widget_path.path) {
-            self.children[cursor.path[Self::LEVEL]].get_children_len(cursor)
+            self.children[cursor.path[Self::LEVEL]]
+                .node
+                .get_children(cursor)
+                .expect("TODO")
+                .len()
         } else {
             // TODO: error?
             0
@@ -877,7 +883,7 @@ impl FileDiffWidget {
         } else if cursor.path.starts_with(&self.widget_path.path) {
             self.children
                 .get(cursor.path[Self::LEVEL])
-                .is_some_and(|c| c.is_valid_cursor(cursor))
+                .is_some_and(|c| c.node.is_valid_cursor(cursor))
         } else {
             false
         }
@@ -964,7 +970,7 @@ impl FileDiffWidget {
             Some(self.rows())
         } else if cursor.path.starts_with(&self.widget_path.path) {
             let i = cursor.path[Self::LEVEL];
-            self.children[i].current_rows(cursor)
+            Some(self.children[i].node.get_node(cursor).expect("TODO").rows())
         } else {
             None
         }
@@ -1010,7 +1016,9 @@ impl FileDiffWidget {
             self.expanded = !self.expanded;
         } else {
             for child in &mut self.children {
-                child.toggle(cursor).or_fail()?;
+                if child.node.is_valid_cursor(cursor) {
+                    child.node.toggle(cursor).or_fail()?;
+                }
             }
         }
 
@@ -1021,7 +1029,12 @@ impl FileDiffWidget {
         if self.widget_path.path == cursor.path {
             !self.children.is_empty()
         } else if cursor.path.starts_with(&self.widget_path.path) {
-            self.children.iter().any(|w| w.is_togglable(cursor))
+            self.children.iter().any(|w| {
+                w.node
+                    .get_children(cursor)
+                    .ok()
+                    .is_some_and(|x| !x.is_empty())
+            })
         } else {
             false
         }
@@ -1032,10 +1045,9 @@ impl FileDiffWidget {
             // TODO: !self.children.is_empty()
             true
         } else if cursor.path.starts_with(&self.widget_path.path) {
-            self.children
-                .iter()
-                .zip(diff.chunks())
-                .any(|(w, d)| w.node.can_alter(cursor, d).expect("TODO"))
+            self.children.iter().zip(diff.chunks()).any(|(w, d)| {
+                w.node.is_valid_cursor(cursor) && w.node.can_alter(cursor, d).expect("TODO")
+            })
         } else {
             false
         }
@@ -1046,10 +1058,9 @@ impl FileDiffWidget {
             // TDOO: !self.children.is_empty()
             true
         } else if cursor.path.starts_with(&self.widget_path.path) {
-            self.children
-                .iter()
-                .zip(diff.chunks())
-                .any(|(w, d)| w.node.can_alter(cursor, d).expect("TODO"))
+            self.children.iter().zip(diff.chunks()).any(|(w, d)| {
+                w.node.is_valid_cursor(cursor) && w.node.can_alter(cursor, d).expect("TODO")
+            })
         } else {
             false
         }
@@ -1194,30 +1205,6 @@ impl ChunkDiffWidget {
         self.node.expanded = old.iter().any(|w| w.node.expanded);
     }
 
-    fn get_children_len(&self, cursor: &Cursor) -> usize {
-        if self.node.path == cursor.path {
-            self.node.children.len()
-        } else if cursor.path.starts_with(&self.node.path) {
-            0
-        } else {
-            // TODO: error?
-            0
-        }
-    }
-
-    fn is_valid_cursor(&self, cursor: &Cursor) -> bool {
-        if self.node.path == cursor.path {
-            true
-        } else if cursor.path.starts_with(&self.node.path) {
-            self.node
-                .children
-                .get(cursor.path[Self::LEVEL])
-                .is_some_and(|c| c.path == cursor.path)
-        } else {
-            false
-        }
-    }
-
     fn handle_stage(
         &mut self,
         git: &Git,
@@ -1278,41 +1265,7 @@ impl ChunkDiffWidget {
         Ok(())
     }
 
-    pub fn current_rows(&self, cursor: &Cursor) -> Option<usize> {
-        if self.node.path == cursor.path {
-            Some(self.node.rows())
-        } else if cursor.path.starts_with(&self.node.path) {
-            Some(1)
-        } else {
-            None
-        }
-    }
-
-    // TODO: remove
-    pub fn toggle(&mut self, cursor: &Cursor) -> orfail::Result<()> {
-        (cursor.path.len() >= Self::LEVEL).or_fail()?;
-
-        if self.node.children.is_empty()
-            || cursor.path.len() > Self::LEVEL
-            || cursor.path[Self::LEVEL - 1] != self.node.path.last().copied().expect("TODO")
-        {
-            return Ok(());
-        }
-
-        self.node.expanded = !self.node.expanded;
-
-        Ok(())
-    }
-
     pub const LEVEL: usize = 3;
-
-    pub fn is_togglable(&self, cursor: &Cursor) -> bool {
-        if self.node.path == cursor.path {
-            !self.node.children.is_empty()
-        } else {
-            false
-        }
-    }
 
     pub fn handle_right(&mut self, cursor: &mut Cursor) -> orfail::Result<()> {
         (cursor.path.len() >= Self::LEVEL).or_fail()?;
@@ -1624,16 +1577,66 @@ impl DiffTreeNode {
     where
         T: DiffTreeNodeContent,
     {
+        cursor.path.starts_with(&self.path).or_fail()?;
+
         let level = self.path.len();
-        if !cursor.path.starts_with(&self.path) {
-            Ok(false)
-        } else if cursor.path.len() == level {
+        if cursor.path.len() == level {
             Ok(content.can_alter())
         } else {
             let i = cursor.path[level];
             let child_node = self.children.get(i).or_fail()?;
             let child_content = content.children().get(i).or_fail()?;
             child_node.can_alter(cursor, child_content).or_fail()
+        }
+    }
+
+    pub fn get_children(&self, cursor: &Cursor) -> orfail::Result<&[Self]> {
+        self.get_node(cursor)
+            .map(|node| &node.children[..])
+            .or_fail()
+    }
+
+    pub fn is_valid_cursor(&self, cursor: &Cursor) -> bool {
+        self.get_node(cursor).is_ok()
+    }
+
+    pub fn toggle(&mut self, cursor: &Cursor) -> orfail::Result<()> {
+        let node = self.get_node_mut(cursor).or_fail()?;
+        node.expanded = !node.expanded;
+        Ok(())
+    }
+
+    pub fn get_node(&self, cursor: &Cursor) -> orfail::Result<&Self> {
+        if let Some((_, child)) = self.get_maybe_child(cursor).or_fail()? {
+            child.get_node(cursor).or_fail()
+        } else {
+            Ok(self)
+        }
+    }
+
+    pub fn get_node_mut(&mut self, cursor: &Cursor) -> orfail::Result<&mut Self> {
+        cursor.path.starts_with(&self.path).or_fail()?;
+
+        let level = self.path.len();
+        if cursor.path.len() == level {
+            Ok(self)
+        } else {
+            let i = cursor.path[level];
+            let child = self.children.get_mut(i).or_fail()?;
+            child.get_node_mut(cursor).or_fail()
+        }
+    }
+
+    pub fn get_maybe_child(&self, cursor: &Cursor) -> orfail::Result<Option<(usize, &Self)>> {
+        cursor.path.starts_with(&self.path).or_fail()?;
+
+        let level = self.path.len();
+        if cursor.path.len() == level {
+            Ok(None)
+        } else {
+            let i = cursor.path[level];
+            let child = self.children.get(i).or_fail()?;
+            Ok(Some((i, child)))
         }
     }
 }
