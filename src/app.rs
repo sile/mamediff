@@ -73,8 +73,12 @@ impl App {
 
         let mut canvas = Canvas::new(self.row_offset, self.terminal.size());
         for widget in &mut self.widgets {
-            // TODO: Skip rendering out-of-range lines
-            widget.render(&mut canvas, &self.cursor).or_fail()?;
+            if !widget
+                .node
+                .render_if_need(&mut canvas, &self.cursor, &widget.diff)
+            {
+                break;
+            }
         }
 
         self.render_legend(&mut canvas).or_fail()?;
@@ -377,11 +381,11 @@ impl App {
 
         // TODO: optimize
         for w in &self.widgets {
-            if n == 1 && !w.children.is_empty() {
+            if n == 1 && !w.node.children.is_empty() {
                 return true;
             }
 
-            for c in &w.children {
+            for c in &w.node.children {
                 if matches!(c.cursor_right(&self.cursor), Ok(Some(_))) {
                     return true;
                 }
@@ -469,32 +473,41 @@ impl App {
 // TODO: Add Widget trait
 #[derive(Debug, Clone)]
 pub struct DiffWidget {
-    name: &'static str,
     widget_path: WidgetPath,
     staged: bool,
-    diff: Diff,
-    children: Vec<DiffTreeNode>,
+    diff: PhasedDiff,
     expanded: bool,
+    node: DiffTreeNode,
 }
 
 impl DiffWidget {
     pub fn new(staged: bool) -> Self {
         let index = if staged { 1 } else { 0 };
         Self {
-            name: if staged { "Staged" } else { "Unstaged" },
             widget_path: WidgetPath::new(vec![index]),
             staged,
-            diff: Diff::default(),
-            children: Vec::new(),
+            diff: if staged {
+                PhasedDiff {
+                    phase: DiffPhase::Staged,
+                    diff: Diff::default(),
+                }
+            } else {
+                PhasedDiff {
+                    phase: DiffPhase::Unstaged,
+                    diff: Diff::default(),
+                }
+            },
             expanded: true,
+            node: DiffTreeNode::new_diff_node(vec![index]),
         }
     }
 
     fn get_children_len(&self, cursor: &Cursor) -> usize {
         if self.widget_path.path == cursor.path {
-            self.children.len()
-        } else if cursor.path.starts_with(&self.widget_path.path) && !self.children.is_empty() {
-            self.children[cursor.path[Self::LEVEL]]
+            self.node.children.len()
+        } else if cursor.path.starts_with(&self.widget_path.path) && !self.node.children.is_empty()
+        {
+            self.node.children[cursor.path[Self::LEVEL]]
                 .get_children(cursor)
                 .expect("TODO")
                 .len()
@@ -508,7 +521,8 @@ impl DiffWidget {
         if self.widget_path.path == cursor.path {
             true
         } else if cursor.path.starts_with(&self.widget_path.path) {
-            self.children
+            self.node
+                .children
                 .get(cursor.path[Self::LEVEL])
                 .is_some_and(|c| c.is_valid_cursor(cursor))
         } else {
@@ -523,13 +537,14 @@ impl DiffWidget {
 
         if cursor.path != self.widget_path.path {
             let i = cursor.path[Self::LEVEL];
-            self.children
+            self.node
+                .children
                 .get_mut(i)
                 .or_fail()?
-                .stage(cursor, self.diff.files.get(i).or_fail()?, git)
+                .stage(cursor, self.diff.diff.files.get(i).or_fail()?, git)
                 .or_fail()?;
         } else {
-            git.stage(&self.diff).or_fail()?;
+            git.stage(&self.diff.diff).or_fail()?;
         }
 
         Ok(())
@@ -543,13 +558,14 @@ impl DiffWidget {
 
         if cursor.path != self.widget_path.path {
             let i = cursor.path[Self::LEVEL];
-            self.children
+            self.node
+                .children
                 .get_mut(i)
                 .or_fail()?
-                .discard(cursor, self.diff.files.get(i).or_fail()?, git)
+                .discard(cursor, self.diff.diff.files.get(i).or_fail()?, git)
                 .or_fail()?;
         } else {
-            git.discard(&self.diff).or_fail()?;
+            git.discard(&self.diff.diff).or_fail()?;
         }
 
         Ok(())
@@ -562,13 +578,14 @@ impl DiffWidget {
 
         if cursor.path != self.widget_path.path {
             let i = cursor.path[Self::LEVEL];
-            self.children
+            self.node
+                .children
                 .get_mut(i)
                 .or_fail()?
-                .unstage(cursor, self.diff.files.get(i).or_fail()?, git)
+                .unstage(cursor, self.diff.diff.files.get(i).or_fail()?, git)
                 .or_fail()?;
         } else {
-            git.unstage(&self.diff).or_fail()?;
+            git.unstage(&self.diff.diff).or_fail()?;
         }
 
         Ok(())
@@ -576,9 +593,10 @@ impl DiffWidget {
 
     pub fn is_togglable(&self, cursor: &Cursor) -> bool {
         if self.widget_path.path == cursor.path {
-            !self.children.is_empty()
+            !self.node.children.is_empty()
         } else if cursor.path.starts_with(&self.widget_path.path) {
-            self.children
+            self.node
+                .children
                 .iter()
                 .any(|w| w.get_children(cursor).ok().is_some_and(|x| !x.is_empty()))
         } else {
@@ -590,11 +608,12 @@ impl DiffWidget {
         if self.staged {
             false
         } else if self.widget_path.path == cursor.path {
-            !self.children.is_empty()
+            !self.node.children.is_empty()
         } else if cursor.path.starts_with(&self.widget_path.path) {
-            self.children
+            self.node
+                .children
                 .iter()
-                .zip(self.diff.files.iter())
+                .zip(self.diff.diff.files.iter())
                 .any(|(w, d)| w.can_alter(cursor, d).expect("TODO"))
         } else {
             false
@@ -605,11 +624,12 @@ impl DiffWidget {
         if !self.staged {
             false
         } else if self.widget_path.path == cursor.path {
-            !self.children.is_empty()
+            !self.node.children.is_empty()
         } else if cursor.path.starts_with(&self.widget_path.path) {
-            self.children
+            self.node
+                .children
                 .iter()
-                .zip(self.diff.files.iter())
+                .zip(self.diff.diff.files.iter())
                 .any(|(w, d)| w.can_alter(cursor, d).expect("TODO"))
         } else {
             false
@@ -619,7 +639,8 @@ impl DiffWidget {
     pub fn toggle(&mut self, cursor: &Cursor) -> orfail::Result<()> {
         (cursor.path.len() >= Self::LEVEL).or_fail()?;
 
-        if self.children.is_empty() || cursor.path[Self::LEVEL - 1] != self.widget_path.last_index()
+        if self.node.children.is_empty()
+            || cursor.path[Self::LEVEL - 1] != self.widget_path.last_index()
         {
             return Ok(());
         }
@@ -627,7 +648,7 @@ impl DiffWidget {
         if cursor.path.len() == Self::LEVEL {
             self.expanded = !self.expanded;
         } else {
-            for child in &mut self.children {
+            for child in &mut self.node.children {
                 if child.is_valid_cursor(cursor) {
                     child.toggle(cursor).or_fail()?;
                 }
@@ -653,7 +674,8 @@ impl DiffWidget {
     pub fn handle_right(&mut self, cursor: &mut Cursor) -> orfail::Result<()> {
         (cursor.path.len() >= Self::LEVEL).or_fail()?;
 
-        if self.children.is_empty() || cursor.path[Self::LEVEL - 1] != self.widget_path.last_index()
+        if self.node.children.is_empty()
+            || cursor.path[Self::LEVEL - 1] != self.widget_path.last_index()
         {
             return Ok(());
         }
@@ -662,7 +684,7 @@ impl DiffWidget {
             cursor.path.push(0);
             self.expanded = true;
         } else {
-            for child in &mut self.children {
+            for child in &mut self.node.children {
                 if cursor.path.starts_with(&child.path) {
                     if let Some(new_cursor) = child.cursor_right(cursor).or_fail()? {
                         *cursor = new_cursor;
@@ -683,7 +705,7 @@ impl DiffWidget {
                 cursor.path[Self::LEVEL - 1] += 1;
             }
         } else if self.widget_path.last_index() == cursor.path[Self::LEVEL - 1] {
-            for child in self.children.iter_mut().rev() {
+            for child in self.node.children.iter_mut().rev() {
                 if cursor.path.starts_with(&child.path) {
                     if let Some(new_cursor) = child.cursor_down(cursor).or_fail()? {
                         *cursor = new_cursor;
@@ -704,7 +726,7 @@ impl DiffWidget {
                 cursor.path[Self::LEVEL - 1] -= 1;
             }
         } else if self.widget_path.last_index() == cursor.path[Self::LEVEL - 1] {
-            for child in &mut self.children {
+            for child in &mut self.node.children {
                 if cursor.path.starts_with(&child.path) {
                     if let Some(new_cursor) = child.cursor_up(cursor).or_fail()? {
                         *cursor = new_cursor;
@@ -718,12 +740,12 @@ impl DiffWidget {
     }
 
     pub fn reload(&mut self, diff: Diff, old_widgets: &[DiffWidget]) -> orfail::Result<()> {
-        self.diff = diff;
+        self.diff.diff = diff;
 
-        self.children.clear();
-        for (i, file) in self.diff.files.iter().enumerate() {
+        self.node.children.clear();
+        for (i, file) in self.diff.diff.files.iter().enumerate() {
             let node = DiffTreeNode::new_file_diff_node(self.widget_path.join(i).path, file);
-            self.children.push(node);
+            self.node.children.push(node);
         }
 
         self.restore_state(old_widgets);
@@ -735,10 +757,15 @@ impl DiffWidget {
         let i = self.widget_path.path[Self::LEVEL - 1];
         self.expanded = old_widgets[i].expanded;
 
-        for (c, d) in self.children.iter_mut().zip(self.diff.files.iter()) {
+        for (c, d) in self
+            .node
+            .children
+            .iter_mut()
+            .zip(self.diff.diff.files.iter())
+        {
             let old = old_widgets
                 .iter()
-                .flat_map(|w| w.children.iter().zip(w.diff.files.iter()))
+                .flat_map(|w| w.node.children.iter().zip(w.diff.diff.files.iter()))
                 .filter(|w| w.1.is_intersect(d))
                 .collect::<Vec<_>>();
             c.restore_file_node_state(d, &old);
@@ -747,19 +774,24 @@ impl DiffWidget {
 
     pub fn rows(&self) -> usize {
         if self.expanded {
-            1 + self.children.iter().map(|c| c.rows()).sum::<usize>()
+            1 + self.node.children.iter().map(|c| c.rows()).sum::<usize>()
         } else {
             1
         }
     }
 
     pub fn full_rows(&self) -> usize {
-        1 + self.children.iter().map(|c| c.full_rows()).sum::<usize>()
+        1 + self
+            .node
+            .children
+            .iter()
+            .map(|c| c.full_rows())
+            .sum::<usize>()
     }
 
     pub fn expand_all(&mut self) {
         self.expanded = true;
-        for c in &mut self.children {
+        for c in &mut self.node.children {
             c.expand_all();
         }
     }
@@ -769,7 +801,7 @@ impl DiffWidget {
             Some(self.rows())
         } else if cursor.path.starts_with(&self.widget_path.path) {
             let i = cursor.path[Self::LEVEL];
-            Some(self.children[i].get_node(cursor).expect("TODO").rows())
+            Some(self.node.children[i].get_node(cursor).expect("TODO").rows())
         } else {
             None
         }
@@ -783,6 +815,7 @@ impl DiffWidget {
                     0
                 } else {
                     1 + self
+                        .node
                         .children
                         .iter()
                         .map(|c| c.cursor_row(cursor))
@@ -792,41 +825,41 @@ impl DiffWidget {
             Ordering::Greater => self.rows(),
         }
     }
-
-    // TODO: remove
-    pub fn render(&self, canvas: &mut Canvas, cursor: &Cursor) -> orfail::Result<()> {
-        self.render_diff_if_need(canvas, cursor, &self.diff);
-        Ok(())
-    }
 }
 
-impl RenderDiff for DiffWidget {
-    type Diff = Diff;
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DiffPhase {
+    Unstaged,
+    Staged,
+}
 
-    fn render_diff(&self, canvas: &mut Canvas, cursor: &Cursor, diff: &Self::Diff) {
-        cursor.render(canvas, &self.widget_path.path);
-        canvas.drawl(Token::new(format!(
-            "{} changes ({} files){}",
-            self.name,
-            self.diff.len(),
-            if self.expanded { "" } else { COLLAPSED_MARK }
-        )));
+#[derive(Debug, Clone)]
+pub struct PhasedDiff {
+    pub phase: DiffPhase,
+    pub diff: Diff,
+}
 
-        if self.expanded {
-            for (child, diff) in self.children.iter().zip(diff.files.iter()) {
-                if !child.render_if_need(canvas, cursor, diff) {
-                    break;
-                }
-            }
-        }
+impl DiffTreeNodeContent for PhasedDiff {
+    type Child = FileDiff;
+
+    fn head_line_token(&self) -> Token {
+        Token::new(format!(
+            "{:?} changes ({} files)",
+            self.phase,
+            self.diff.files.len(),
+        ))
     }
 
-    fn rows(&self) -> usize {
-        if self.expanded {
-            1 + self.children.iter().map(|c| c.rows()).sum::<usize>()
-        } else {
-            1
-        }
+    fn can_alter(&self) -> bool {
+        !self.diff.files.is_empty()
+    }
+
+    fn children(&self) -> &[Self::Child] {
+        &self.diff.files
+    }
+
+    fn is_intersect(&self, _other: &Self) -> bool {
+        true
     }
 }
 
@@ -1034,6 +1067,14 @@ pub struct DiffTreeNode {
 }
 
 impl DiffTreeNode {
+    pub fn new_diff_node(path: Vec<usize>) -> Self {
+        Self {
+            path,
+            expanded: true,
+            children: Vec::new(),
+        }
+    }
+
     pub fn new_file_diff_node(path: Vec<usize>, diff: &FileDiff) -> Self {
         let children = diff
             .chunks()
@@ -1356,35 +1397,5 @@ impl DiffTreeNode {
         }
 
         Ok(None)
-    }
-}
-
-// TODO: move
-pub trait RenderDiff {
-    type Diff;
-
-    fn render_diff(&self, canvas: &mut Canvas, cursor: &Cursor, diff: &Self::Diff);
-
-    fn rows(&self) -> usize;
-
-    fn render_diff_if_need(&self, canvas: &mut Canvas, cursor: &Cursor, diff: &Self::Diff) -> bool {
-        if canvas.is_frame_exceeded() {
-            return false;
-        }
-
-        let mut canvas_cursor = canvas.cursor();
-        let drawn_rows = self.rows();
-        if canvas
-            .frame_row_range()
-            .start
-            .checked_sub(canvas_cursor.row)
-            .is_some_and(|n| n >= drawn_rows)
-        {
-            canvas_cursor.row += drawn_rows;
-            canvas.set_cursor(canvas_cursor);
-        } else {
-            self.render_diff(canvas, cursor, diff);
-        }
-        true
     }
 }
