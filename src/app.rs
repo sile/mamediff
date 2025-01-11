@@ -48,12 +48,12 @@ impl App {
     }
 
     fn full_rows(&self) -> usize {
-        self.widgets.iter().map(|w| w.full_rows()).sum()
+        self.widgets.iter().map(|w| w.node.full_rows()).sum()
     }
 
     fn expand_all(&mut self) {
         for w in &mut self.widgets {
-            w.expand_all();
+            w.node.expand_all();
         }
     }
 
@@ -90,7 +90,7 @@ impl App {
     fn cursor_abs_row(&self) -> usize {
         self.widgets
             .iter()
-            .map(|w| w.cursor_abs_row(&self.cursor))
+            .map(|w| w.node.cursor_row(&self.cursor))
             .sum()
     }
 
@@ -233,7 +233,7 @@ impl App {
 
     fn handle_tab(&mut self) -> orfail::Result<()> {
         for widget in &mut self.widgets {
-            widget.toggle(&self.cursor).or_fail()?;
+            widget.node.toggle(&self.cursor).or_fail()?;
         }
         Ok(())
     }
@@ -279,7 +279,7 @@ impl App {
         let current_rows = self
             .widgets
             .iter()
-            .find_map(|w| w.current_rows(&self.cursor))
+            .find_map(|w| w.node.get_node(&self.cursor).ok().map(|n| n.rows()))
             .or_fail()?;
         let desired_end_row = cursor_abs_row + current_rows + 1;
         if self.row_offset + self.terminal.size().rows < desired_end_row {
@@ -324,7 +324,7 @@ impl App {
         let current_rows = self
             .widgets
             .iter()
-            .find_map(|w| w.current_rows(&self.cursor))
+            .find_map(|w| w.node.get_node(&self.cursor).ok().map(|n| n.rows()))
             .or_fail()?;
         let desired_end_row = cursor_abs_row + current_rows + 1;
         if self.row_offset + self.terminal.size().rows < desired_end_row {
@@ -476,7 +476,6 @@ pub struct DiffWidget {
     widget_path: WidgetPath,
     staged: bool,
     diff: PhasedDiff,
-    expanded: bool,
     node: DiffTreeNode,
 }
 
@@ -497,7 +496,6 @@ impl DiffWidget {
                     diff: Diff::default(),
                 }
             },
-            expanded: true,
             node: DiffTreeNode::new_diff_node(vec![index]),
         }
     }
@@ -636,28 +634,6 @@ impl DiffWidget {
         }
     }
 
-    pub fn toggle(&mut self, cursor: &Cursor) -> orfail::Result<()> {
-        (cursor.path.len() >= Self::LEVEL).or_fail()?;
-
-        if self.node.children.is_empty()
-            || cursor.path[Self::LEVEL - 1] != self.widget_path.last_index()
-        {
-            return Ok(());
-        }
-
-        if cursor.path.len() == Self::LEVEL {
-            self.expanded = !self.expanded;
-        } else {
-            for child in &mut self.node.children {
-                if child.is_valid_cursor(cursor) {
-                    child.toggle(cursor).or_fail()?;
-                }
-            }
-        }
-
-        Ok(())
-    }
-
     pub fn handle_left(&mut self, cursor: &mut Cursor) -> orfail::Result<()> {
         (!cursor.path.is_empty()).or_fail()?;
 
@@ -682,7 +658,7 @@ impl DiffWidget {
 
         if cursor.path.len() == Self::LEVEL {
             cursor.path.push(0);
-            self.expanded = true;
+            self.node.expanded = true;
         } else {
             for child in &mut self.node.children {
                 if cursor.path.starts_with(&child.path) {
@@ -755,7 +731,7 @@ impl DiffWidget {
 
     fn restore_state(&mut self, old_widgets: &[DiffWidget]) {
         let i = self.widget_path.path[Self::LEVEL - 1];
-        self.expanded = old_widgets[i].expanded;
+        self.node.expanded = old_widgets[i].node.expanded;
 
         for (c, d) in self
             .node
@@ -769,60 +745,6 @@ impl DiffWidget {
                 .filter(|w| w.1.is_intersect(d))
                 .collect::<Vec<_>>();
             c.restore_file_node_state(d, &old);
-        }
-    }
-
-    pub fn rows(&self) -> usize {
-        if self.expanded {
-            1 + self.node.children.iter().map(|c| c.rows()).sum::<usize>()
-        } else {
-            1
-        }
-    }
-
-    pub fn full_rows(&self) -> usize {
-        1 + self
-            .node
-            .children
-            .iter()
-            .map(|c| c.full_rows())
-            .sum::<usize>()
-    }
-
-    pub fn expand_all(&mut self) {
-        self.expanded = true;
-        for c in &mut self.node.children {
-            c.expand_all();
-        }
-    }
-
-    pub fn current_rows(&self, cursor: &Cursor) -> Option<usize> {
-        if self.widget_path.path == cursor.path {
-            Some(self.rows())
-        } else if cursor.path.starts_with(&self.widget_path.path) {
-            let i = cursor.path[Self::LEVEL];
-            Some(self.node.children[i].get_node(cursor).expect("TODO").rows())
-        } else {
-            None
-        }
-    }
-
-    pub fn cursor_abs_row(&self, cursor: &Cursor) -> usize {
-        match cursor.path[..Self::LEVEL].cmp(&self.widget_path.path) {
-            Ordering::Less => 0,
-            Ordering::Equal => {
-                if cursor.path.len() == Self::LEVEL {
-                    0
-                } else {
-                    1 + self
-                        .node
-                        .children
-                        .iter()
-                        .map(|c| c.cursor_row(cursor))
-                        .sum::<usize>()
-                }
-            }
-            Ordering::Greater => self.rows(),
         }
     }
 }
