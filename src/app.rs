@@ -1,4 +1,4 @@
-use std::{cmp::Ordering, path::Path};
+use std::cmp::Ordering;
 
 use crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use orfail::OrFail;
@@ -527,7 +527,8 @@ impl DiffWidget {
             self.children
                 .get_mut(i)
                 .or_fail()?
-                .handle_stage(git, cursor, self.diff.files.get(i).or_fail()?)
+                .node
+                .stage(cursor, self.diff.files.get(i).or_fail()?, git)
                 .or_fail()?;
         } else {
             git.stage(&self.diff).or_fail()?;
@@ -547,7 +548,8 @@ impl DiffWidget {
             self.children
                 .get_mut(i)
                 .or_fail()?
-                .handle_discard(git, cursor, self.diff.files.get(i).or_fail()?)
+                .node
+                .discard(cursor, self.diff.files.get(i).or_fail()?, git)
                 .or_fail()?;
         } else {
             git.discard(&self.diff).or_fail()?;
@@ -566,7 +568,8 @@ impl DiffWidget {
             self.children
                 .get_mut(i)
                 .or_fail()?
-                .handle_unstage(git, cursor, self.diff.files.get(i).or_fail()?)
+                .node
+                .unstage(cursor, self.diff.files.get(i).or_fail()?, git)
                 .or_fail()?;
         } else {
             git.unstage(&self.diff).or_fail()?;
@@ -662,7 +665,12 @@ impl DiffWidget {
             self.expanded = true;
         } else {
             for child in &mut self.children {
-                child.handle_right(cursor).or_fail()?;
+                if cursor.path.starts_with(&child.node.path) {
+                    if let Some(new_cursor) = child.node.cursor_right(cursor).or_fail()? {
+                        *cursor = new_cursor;
+                        child.node.get_node_mut(cursor).or_fail()?.expanded = true;
+                    }
+                }
             }
         }
 
@@ -678,11 +686,14 @@ impl DiffWidget {
             }
         } else if self.widget_path.last_index() == cursor.path[Self::LEVEL - 1] {
             for child in self.children.iter_mut().rev() {
-                child.handle_down(cursor).or_fail()?;
+                if cursor.path.starts_with(&child.node.path) {
+                    if let Some(new_cursor) = child.node.cursor_down(cursor).or_fail()? {
+                        *cursor = new_cursor;
+                        child.node.get_node_mut(cursor).or_fail()?.expanded = true;
+                    }
+                }
             }
         }
-
-        // TODO: next higher level item if the last item of the level is reached.
 
         Ok(())
     }
@@ -696,7 +707,12 @@ impl DiffWidget {
             }
         } else if self.widget_path.last_index() == cursor.path[Self::LEVEL - 1] {
             for child in &mut self.children {
-                child.handle_up(cursor).or_fail()?;
+                if cursor.path.starts_with(&child.node.path) {
+                    if let Some(new_cursor) = child.node.cursor_up(cursor).or_fail()? {
+                        *cursor = new_cursor;
+                        child.node.get_node_mut(cursor).or_fail()?.expanded = true;
+                    }
+                }
             }
         }
 
@@ -850,70 +866,6 @@ impl FileDiffWidget {
         }
     }
 
-    fn handle_stage(&mut self, git: &Git, cursor: &Cursor, diff: &FileDiff) -> orfail::Result<()> {
-        cursor.path.starts_with(&self.node.path).or_fail()?;
-
-        if cursor.path != self.node.path {
-            let i = cursor.path[Self::LEVEL];
-            self.node
-                .children
-                .get_mut(i)
-                .or_fail()?
-                .stage(cursor, diff.chunks().nth(i).or_fail()?, git, diff.path())
-                .or_fail()?;
-        } else {
-            git.stage(&diff.to_diff()).or_fail()?;
-        }
-
-        Ok(())
-    }
-
-    fn handle_discard(
-        &mut self,
-        git: &Git,
-        cursor: &Cursor,
-        diff: &FileDiff,
-    ) -> orfail::Result<()> {
-        cursor.path.starts_with(&self.node.path).or_fail()?;
-
-        if cursor.path != self.node.path {
-            let i = cursor.path[Self::LEVEL];
-            self.node
-                .children
-                .get_mut(i)
-                .or_fail()?
-                .discard(cursor, diff.chunks().nth(i).or_fail()?, git, diff.path())
-                .or_fail()?;
-        } else {
-            git.discard(&diff.to_diff()).or_fail()?;
-        }
-
-        Ok(())
-    }
-
-    fn handle_unstage(
-        &mut self,
-        git: &Git,
-        cursor: &Cursor,
-        diff: &FileDiff,
-    ) -> orfail::Result<()> {
-        cursor.path.starts_with(&self.node.path).or_fail()?;
-
-        if cursor.path != self.node.path {
-            let i = cursor.path[Self::LEVEL];
-            self.node
-                .children
-                .get_mut(i)
-                .or_fail()?
-                .unstage(cursor, diff.chunks().nth(i).or_fail()?, git, diff.path())
-                .or_fail()?;
-        } else {
-            git.unstage(&diff.to_diff()).or_fail()?;
-        }
-
-        Ok(())
-    }
-
     pub fn is_togglable(&self, cursor: &Cursor) -> bool {
         if self.node.path == cursor.path {
             !self.node.children.is_empty()
@@ -925,78 +877,6 @@ impl FileDiffWidget {
         } else {
             false
         }
-    }
-
-    pub const LEVEL: usize = 2;
-
-    pub fn handle_right(&mut self, cursor: &mut Cursor) -> orfail::Result<()> {
-        (cursor.path.len() >= Self::LEVEL).or_fail()?;
-
-        if self.node.children.is_empty()
-            || Some(cursor.path[Self::LEVEL - 1]) != self.node.path.last().copied()
-        {
-            return Ok(());
-        }
-
-        if cursor.path.len() == Self::LEVEL {
-            cursor.path.push(0);
-            self.node.expanded = true;
-        } else {
-            for child in &mut self.node.children {
-                if cursor.path.starts_with(&child.path) {
-                    if let Some(new_cursor) = child.cursor_right(cursor).or_fail()? {
-                        *cursor = new_cursor;
-                        child.get_node_mut(cursor).or_fail()?.expanded = true;
-                    }
-                }
-            }
-        }
-
-        Ok(())
-    }
-
-    pub fn handle_down(&mut self, cursor: &mut Cursor) -> orfail::Result<()> {
-        (cursor.path.len() >= Self::LEVEL).or_fail()?;
-
-        if cursor.path.len() == Self::LEVEL {
-            if self.node.path.last().copied() == Some(cursor.path[Self::LEVEL - 1] + 1) {
-                cursor.path[Self::LEVEL - 1] += 1;
-            }
-        } else if self.node.path.last().copied() == Some(cursor.path[Self::LEVEL - 1]) {
-            for child in self.node.children.iter_mut().rev() {
-                if cursor.path.starts_with(&child.path) {
-                    if let Some(new_cursor) = child.cursor_down(cursor).or_fail()? {
-                        *cursor = new_cursor;
-                        child.get_node_mut(cursor).or_fail()?.expanded = true;
-                    }
-                }
-            }
-        }
-
-        // TODO: next higher level item if the last item of the level is reached.
-
-        Ok(())
-    }
-
-    pub fn handle_up(&mut self, cursor: &mut Cursor) -> orfail::Result<()> {
-        (cursor.path.len() >= Self::LEVEL).or_fail()?;
-
-        if cursor.path.len() == Self::LEVEL {
-            if self.node.path.last().copied() == cursor.path[Self::LEVEL - 1].checked_sub(1) {
-                cursor.path[Self::LEVEL - 1] -= 1;
-            }
-        } else if self.node.path.last().copied() == Some(cursor.path[Self::LEVEL - 1]) {
-            for child in &mut self.node.children {
-                if cursor.path.starts_with(&child.path) {
-                    if let Some(new_cursor) = child.cursor_up(cursor).or_fail()? {
-                        *cursor = new_cursor;
-                        child.get_node_mut(cursor).or_fail()?.expanded = true;
-                    }
-                }
-            }
-        }
-
-        Ok(())
     }
 }
 
@@ -1396,59 +1276,37 @@ impl DiffTreeNode {
         }
     }
 
-    pub fn stage(
-        &self,
-        cursor: &Cursor,
-        diff: &ChunkDiff,
-        git: &Git,
-        path: &Path,
-    ) -> orfail::Result<()> {
-        let diff = self.get_diff(cursor, diff, true, path).or_fail()?;
+    pub fn stage(&self, cursor: &Cursor, diff: &FileDiff, git: &Git) -> orfail::Result<()> {
+        let diff = self.get_diff(cursor, diff, true).or_fail()?;
         git.stage(&diff).or_fail()?;
         Ok(())
     }
 
-    pub fn discard(
-        &self,
-        cursor: &Cursor,
-        diff: &ChunkDiff,
-        git: &Git,
-        path: &Path,
-    ) -> orfail::Result<()> {
-        let diff = self.get_diff(cursor, diff, true, path).or_fail()?;
+    pub fn discard(&self, cursor: &Cursor, diff: &FileDiff, git: &Git) -> orfail::Result<()> {
+        let diff = self.get_diff(cursor, diff, true).or_fail()?;
         git.discard(&diff).or_fail()?;
         Ok(())
     }
 
-    pub fn unstage(
-        &self,
-        cursor: &Cursor,
-        diff: &ChunkDiff,
-        git: &Git,
-        path: &Path,
-    ) -> orfail::Result<()> {
-        let diff = self.get_diff(cursor, diff, false, path).or_fail()?;
+    pub fn unstage(&self, cursor: &Cursor, diff: &FileDiff, git: &Git) -> orfail::Result<()> {
+        let diff = self.get_diff(cursor, diff, false).or_fail()?;
         git.unstage(&diff).or_fail()?;
         Ok(())
     }
 
-    pub fn get_diff(
-        &self,
-        cursor: &Cursor,
-        chunk: &ChunkDiff,
-        stage: bool,
-        path: &Path,
-    ) -> orfail::Result<Diff> {
+    pub fn get_diff(&self, cursor: &Cursor, file: &FileDiff, stage: bool) -> orfail::Result<Diff> {
         // let Some((i, node)) = self.get_maybe_child(cursor).or_fail()? else {
         //     return Ok(diff.clone());
         // };
         // let file = diff.files.get(i).or_fail()?;
 
-        // let Some((i, node)) = node.get_maybe_child(cursor).or_fail()? else {
-        //     return Ok(file.to_diff());
-        // };
-        // let chunk = file.chunks().nth(i).or_fail()?;
         let node = self;
+        let path = file.path();
+
+        let Some((i, node)) = node.get_maybe_child(cursor).or_fail()? else {
+            return Ok(file.to_diff());
+        };
+        let chunk = file.chunks_slice().get(i).or_fail()?;
 
         let Some((i, _node)) = node.get_maybe_child(cursor).or_fail()? else {
             return Ok(chunk.to_diff(path));
