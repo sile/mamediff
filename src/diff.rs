@@ -105,15 +105,29 @@ impl ChunkDiff {
     pub fn old_line_range(&self) -> Range<usize> {
         Range {
             start: self.old_start_line_number,
-            end: self.old_start_line_number + self.old_columns(),
+            end: self.old_start_line_number + self.old_rows(),
         }
     }
 
     pub fn new_line_range(&self) -> Range<usize> {
         Range {
             start: self.new_start_line_number,
-            end: self.new_start_line_number + self.new_columns(),
+            end: self.new_start_line_number + self.new_rows(),
         }
+    }
+
+    fn added_lines(&self) -> usize {
+        self.lines
+            .iter()
+            .filter(|d| matches!(d, LineDiff::New(_)))
+            .count()
+    }
+
+    fn removed_lines(&self) -> usize {
+        self.lines
+            .iter()
+            .filter(|d| matches!(d, LineDiff::Old(_)))
+            .count()
     }
 
     pub fn get_line_chunk(&self, index: usize, stage: bool) -> Option<Self> {
@@ -176,9 +190,9 @@ impl ChunkDiff {
         s.push_str(&format!(
             "@@ -{},{} +{},{} @@",
             self.old_start_line_number,
-            self.old_columns(),
+            self.old_rows(),
             self.new_start_line_number,
-            self.new_columns()
+            self.new_rows()
         ));
         if let Some(line) = &self.start_line {
             s.push(' ');
@@ -187,14 +201,14 @@ impl ChunkDiff {
         s
     }
 
-    pub fn old_columns(&self) -> usize {
+    pub fn old_rows(&self) -> usize {
         self.lines
             .iter()
             .filter(|line| matches!(line, LineDiff::Both(_) | LineDiff::Old(_)))
             .count()
     }
 
-    pub fn new_columns(&self) -> usize {
+    pub fn new_rows(&self) -> usize {
         self.lines
             .iter()
             .filter(|line| matches!(line, LineDiff::Both(_) | LineDiff::New(_)))
@@ -252,9 +266,9 @@ impl std::fmt::Display for ChunkDiff {
             f,
             "@@ -{},{} +{},{} @@",
             self.old_start_line_number,
-            self.old_columns(),
+            self.old_rows(),
             self.new_start_line_number,
-            self.new_columns()
+            self.new_rows()
         )?;
         if let Some(start) = &self.start_line {
             write!(f, " {start}")?;
@@ -387,6 +401,14 @@ pub enum FileDiff {
 }
 
 impl FileDiff {
+    pub fn removed_lines(&self) -> usize {
+        self.chunks().map(|c| c.removed_lines()).sum()
+    }
+
+    pub fn added_lines(&self) -> usize {
+        self.chunks().map(|c| c.added_lines()).sum()
+    }
+
     pub fn to_diff(&self) -> Diff {
         Diff {
             files: vec![self.clone()],

@@ -998,22 +998,6 @@ impl FileDiffWidget {
         Ok(())
     }
 
-    fn added_lines(&self, diff: &FileDiff) -> usize {
-        self.children
-            .iter()
-            .zip(diff.chunks())
-            .map(|(c, d)| c.added_lines(d))
-            .sum()
-    }
-
-    fn removed_lines(&self, diff: &FileDiff) -> usize {
-        self.children
-            .iter()
-            .zip(diff.chunks())
-            .map(|(c, d)| c.removed_lines(d))
-            .sum()
-    }
-
     pub fn toggle(&mut self, cursor: &Cursor) -> orfail::Result<()> {
         (cursor.path.len() >= Self::LEVEL).or_fail()?;
 
@@ -1140,8 +1124,8 @@ impl RenderDiff for FileDiffWidget {
                     "modified {} ({} chunks, -{} +{} lines){}",
                     diff.path().display(),
                     self.children.len(),
-                    self.removed_lines(diff),
-                    self.added_lines(diff),
+                    diff.removed_lines(),
+                    diff.added_lines(),
                     if self.expanded { "" } else { COLLAPSED_MARK }
                 )
             }
@@ -1197,19 +1181,8 @@ pub struct ChunkDiffWidget {
 
 impl ChunkDiffWidget {
     pub fn new(diff: &ChunkDiff, widget_path: WidgetPath) -> Self {
-        let children = (0..diff.lines.len())
-            .map(|i| DiffTreeNode {
-                path: widget_path.join(i).path,
-                expanded: false,
-                children: Vec::new(),
-            })
-            .collect();
         Self {
-            node: DiffTreeNode {
-                path: widget_path.path,
-                expanded: true,
-                children,
-            },
+            node: DiffTreeNode::new_chunk_diff_node(widget_path.path, diff),
         }
     }
 
@@ -1313,20 +1286,6 @@ impl ChunkDiffWidget {
         } else {
             None
         }
-    }
-
-    fn added_lines(&self, diff: &ChunkDiff) -> usize {
-        diff.lines
-            .iter()
-            .filter(|d| matches!(d, LineDiff::New(_)))
-            .count()
-    }
-
-    fn removed_lines(&self, diff: &ChunkDiff) -> usize {
-        diff.lines
-            .iter()
-            .filter(|d| matches!(d, LineDiff::Old(_)))
-            .count()
     }
 
     // TODO: remove
@@ -1506,11 +1465,11 @@ impl Cursor {
         }
 
         if selected {
-            text.push_str(">|");
+            text.push_str(">| ");
         } else if diff_path.len() == self.path.len() {
-            text.push_str(" |");
+            text.push_str(" | ");
         } else {
-            text.push_str("  ");
+            text.push_str("   ");
         }
 
         canvas.draw(Token::new(text));
@@ -1560,6 +1519,29 @@ pub struct DiffTreeNode {
 }
 
 impl DiffTreeNode {
+    pub fn new_chunk_diff_node(path: Vec<usize>, diff: &ChunkDiff) -> Self {
+        let children = (0..diff.lines.len())
+            .map(|i| {
+                let mut path = path.clone();
+                path.push(i);
+                DiffTreeNode::new_line_diff_node(path)
+            })
+            .collect();
+        Self {
+            path,
+            expanded: true,
+            children,
+        }
+    }
+
+    pub fn new_line_diff_node(path: Vec<usize>) -> Self {
+        Self {
+            path,
+            expanded: false,
+            children: Vec::new(),
+        }
+    }
+
     pub fn render<T>(&self, canvas: &mut Canvas, cursor: &Cursor, content: &T)
     where
         T: DiffTreeNodeContent,
