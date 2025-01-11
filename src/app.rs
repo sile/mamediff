@@ -474,7 +474,6 @@ impl App {
 #[derive(Debug, Clone)]
 pub struct DiffWidget {
     widget_path: WidgetPath,
-    staged: bool,
     diff: PhasedDiff,
     node: DiffTreeNode,
 }
@@ -484,7 +483,6 @@ impl DiffWidget {
         let index = if staged { 1 } else { 0 };
         Self {
             widget_path: WidgetPath::new(vec![index]),
-            staged,
             diff: if staged {
                 PhasedDiff {
                     phase: DiffPhase::Staged,
@@ -603,7 +601,7 @@ impl DiffWidget {
     }
 
     pub fn can_stage(&self, cursor: &Cursor) -> bool {
-        if self.staged {
+        if self.diff.phase == DiffPhase::Staged {
             false
         } else if self.widget_path.path == cursor.path {
             !self.node.children.is_empty()
@@ -619,7 +617,7 @@ impl DiffWidget {
     }
 
     pub fn can_unstage(&self, cursor: &Cursor) -> bool {
-        if !self.staged {
+        if self.diff.phase == DiffPhase::Unstaged {
             false
         } else if self.widget_path.path == cursor.path {
             !self.node.children.is_empty()
