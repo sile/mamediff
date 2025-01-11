@@ -460,7 +460,30 @@ impl App {
     }
 }
 
-// TODO: AddRootNode
+// TODO: move to widget_diff.rs
+#[derive(Debug, Clone)]
+pub struct DiffTree {
+    // TODO: priv
+    pub unstaged_diff: PhasedDiff,
+    pub staged_diff: PhasedDiff,
+    pub root_node: DiffTreeNode,
+}
+
+impl DiffTree {
+    pub fn new() -> Self {
+        Self {
+            unstaged_diff: PhasedDiff {
+                phase: DiffPhase::Unstaged,
+                diff: Diff::default(),
+            },
+            staged_diff: PhasedDiff {
+                phase: DiffPhase::Staged,
+                diff: Diff::default(),
+            },
+            root_node: DiffTreeNode::new_root_node(),
+        }
+    }
+}
 
 #[derive(Debug, Clone)]
 pub struct DiffWidget {
@@ -728,6 +751,17 @@ pub struct DiffTreeNode {
 }
 
 impl DiffTreeNode {
+    pub fn new_root_node() -> Self {
+        Self {
+            path: vec![0],
+            expanded: true,
+            children: vec![
+                Self::new_diff_node(vec![0, 0]),
+                Self::new_diff_node(vec![0, 1]),
+            ],
+        }
+    }
+
     pub fn new_diff_node(path: Vec<usize>) -> Self {
         Self {
             path,
