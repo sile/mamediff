@@ -1,5 +1,6 @@
 use std::{
     iter::Peekable,
+    ops::Range,
     path::{Path, PathBuf},
     str::{FromStr, Lines},
 };
@@ -101,6 +102,20 @@ pub struct ChunkDiff {
 }
 
 impl ChunkDiff {
+    pub fn old_line_range(&self) -> Range<usize> {
+        Range {
+            start: self.old_start_line_number,
+            end: self.old_start_line_number + self.old_columns(),
+        }
+    }
+
+    pub fn new_line_range(&self) -> Range<usize> {
+        Range {
+            start: self.new_start_line_number,
+            end: self.new_start_line_number + self.new_columns(),
+        }
+    }
+
     pub fn get_line_chunk(&self, index: usize, stage: bool) -> Option<Self> {
         if index >= self.lines.len() {
             return None;

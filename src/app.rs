@@ -1,6 +1,5 @@
 use std::{
     cmp::Ordering,
-    ops::Range,
     path::{Path, PathBuf},
 };
 
@@ -725,12 +724,13 @@ impl DiffWidget {
         let i = self.widget_path.path[Self::LEVEL - 1];
         self.expanded = old_widgets[i].expanded;
 
-        for c in &mut self.children {
+        for (c, d) in self.children.iter_mut().zip(self.diff.files.iter()) {
             let old = old_widgets
                 .iter()
-                .filter_map(|w| w.children.iter().find(|old| old.name == c.name))
+                .flat_map(|w| w.children.iter().zip(w.diff.files.iter()))
+                .filter(|w| w.0.name == c.name)
                 .collect::<Vec<_>>();
-            c.restore_state(&old);
+            c.restore_state(d, &old);
         }
     }
 
@@ -842,17 +842,19 @@ impl FileDiffWidget {
         }
     }
 
-    fn restore_state(&mut self, old: &[&Self]) {
+    fn restore_state(&mut self, diff: &FileDiff, old: &[(&Self, &FileDiff)]) {
         if old.is_empty() {
             return;
         }
 
-        self.expanded = old.iter().any(|w| w.expanded);
+        self.expanded = old.iter().any(|w| w.0.expanded);
 
-        for c in &mut self.children {
+        for (c, d) in self.children.iter_mut().zip(diff.chunks()) {
             let old = old
                 .iter()
-                .filter_map(|w| w.children.iter().find(|old| old.intersect(c)))
+                .flat_map(|w| w.0.children.iter().zip(w.1.chunks()))
+                .filter(|w| w.1.is_intersect(d))
+                .map(|w| w.0)
                 .collect::<Vec<_>>();
             c.restore_state(&old);
         }
@@ -1190,8 +1192,6 @@ impl RenderDiff for FileDiffWidget {
 // TODO: remove
 #[derive(Debug, Clone)]
 pub struct ChunkDiffWidget {
-    pub old_range: Range<usize>,
-    pub new_range: Range<usize>,
     pub node: DiffTreeNode,
 }
 
@@ -1205,27 +1205,12 @@ impl ChunkDiffWidget {
             })
             .collect();
         Self {
-            old_range: Range {
-                start: diff.old_start_line_number,
-                end: diff.old_start_line_number + diff.old_columns(),
-            },
-            new_range: Range {
-                start: diff.new_start_line_number,
-                end: diff.new_start_line_number + diff.new_columns(),
-            },
             node: DiffTreeNode {
                 path: widget_path.path,
                 expanded: true,
                 children,
             },
         }
-    }
-
-    fn intersect(&self, other: &Self) -> bool {
-        self.old_range.contains(&other.new_range.start)
-            || self.old_range.contains(&other.new_range.end)
-            || self.new_range.contains(&other.old_range.start)
-            || self.new_range.contains(&other.old_range.end)
     }
 
     fn restore_state(&mut self, old: &[&Self]) {
@@ -1439,6 +1424,18 @@ impl DiffTreeNodeContent for ChunkDiff {
     fn children(&self) -> &[Self::Child] {
         &self.lines
     }
+
+    fn is_intersect(&self, other: &Self) -> bool {
+        let old_range = self.old_line_range();
+        let new_range = self.new_line_range();
+        let other_old_range = other.old_line_range();
+        let other_new_range = other.new_line_range();
+
+        old_range.contains(&other_new_range.start)
+            || old_range.contains(&other_new_range.end)
+            || new_range.contains(&other_old_range.start)
+            || new_range.contains(&other_old_range.end)
+    }
 }
 
 // TODO: rename: DiffPath
@@ -1539,6 +1536,10 @@ impl DiffTreeNodeContent for LineDiff {
     fn children(&self) -> &[Self::Child] {
         &[]
     }
+
+    fn is_intersect(&self, _other: &Self) -> bool {
+        false
+    }
 }
 
 // TODO
@@ -1548,6 +1549,7 @@ pub trait DiffTreeNodeContent {
     fn head_line_token(&self) -> Token;
     fn can_alter(&self) -> bool;
     fn children(&self) -> &[Self::Child];
+    fn is_intersect(&self, other: &Self) -> bool;
 }
 
 #[derive(Debug, Clone)]
