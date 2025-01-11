@@ -47,16 +47,6 @@ impl App {
         Ok(())
     }
 
-    fn full_rows(&self) -> usize {
-        self.widgets.iter().map(|w| w.node.full_rows()).sum()
-    }
-
-    fn expand_all(&mut self) {
-        for w in &mut self.widgets {
-            w.node.expand_all();
-        }
-    }
-
     fn render(&mut self) -> orfail::Result<()> {
         if self.terminal.size().is_empty() {
             return Ok(());
@@ -331,11 +321,7 @@ impl App {
         let old_widgets = self.widgets.clone(); // TODO
 
         let (unstaged_diff, staged_diff) = self.git.unstaged_and_staged_diffs().or_fail()?;
-        self.widgets[0]
-            .reload(unstaged_diff, &old_widgets)
-            .or_fail()?;
-        self.widgets[1]
-            .reload(staged_diff, &old_widgets)
+        self.reload_widgets(unstaged_diff, staged_diff, &old_widgets)
             .or_fail()?;
 
         while !self.is_valid_cursor() && self.cursor.prev() {}
@@ -403,23 +389,49 @@ impl App {
         let old_widgets = vec![DiffWidget::new(false), DiffWidget::new(true)];
         self.cursor = Cursor::root();
         let (unstaged_diff, staged_diff) = self.git.unstaged_and_staged_diffs().or_fail()?;
-        self.widgets[0]
-            .reload(unstaged_diff, &old_widgets)
+        self.reload_widgets(unstaged_diff, staged_diff, &old_widgets)
             .or_fail()?;
-        self.widgets[1]
-            .reload(staged_diff, &old_widgets)
-            .or_fail()?;
-        if self.full_rows() <= self.terminal.size().rows {
-            self.expand_all();
-        }
         self.render().or_fail()?; // TODO: optimize
+        Ok(())
+    }
+
+    fn reload_widgets(
+        &mut self,
+        unstaged_diff: Diff,
+        staged_diff: Diff,
+        old_widgets: &[DiffWidget],
+    ) -> orfail::Result<()> {
+        for (widget, diff) in self
+            .widgets
+            .iter_mut()
+            .zip([unstaged_diff, staged_diff].into_iter())
+        {
+            widget.diff.diff = diff;
+
+            widget.node.children.clear();
+            for (i, file) in widget.diff.diff.files.iter().enumerate() {
+                let mut path = widget.node.path.clone();
+                path.push(i);
+                let node = DiffTreeNode::new_file_diff_node(path, file);
+                widget.node.children.push(node);
+            }
+
+            widget.node.restore_diff_node_state(
+                &widget.diff.diff,
+                &old_widgets
+                    .iter()
+                    .map(|w| (&w.node, &w.diff.diff))
+                    .collect::<Vec<_>>(),
+            );
+        }
         Ok(())
     }
 
     fn handle_stage(&mut self) -> orfail::Result<()> {
         if self.can_stage() {
             self.widgets[0]
-                .handle_stage(&self.git, &self.cursor)
+                .node
+                .stage(&self.cursor, &self.widgets[0].diff.diff, &self.git)
                 .or_fail()?;
             self.reload_diff().or_fail()?;
         }
@@ -429,7 +441,8 @@ impl App {
     fn handle_discard(&mut self) -> orfail::Result<()> {
         if self.can_stage() {
             self.widgets[0]
-                .handle_discard(&self.git, &self.cursor)
+                .node
+                .discard(&self.cursor, &self.widgets[0].diff.diff, &self.git)
                 .or_fail()?;
             self.reload_diff().or_fail()?;
         }
@@ -439,9 +452,9 @@ impl App {
     fn handle_unstage(&mut self) -> orfail::Result<()> {
         if self.can_unstage() {
             self.widgets[1]
-                .handle_unstage(&self.git, &self.cursor)
+                .node
+                .unstage(&self.cursor, &self.widgets[1].diff.diff, &self.git)
                 .or_fail()?;
-            self.reload_diff().or_fail()?;
         }
         Ok(())
     }
@@ -471,92 +484,6 @@ impl DiffWidget {
                 }
             },
             node: DiffTreeNode::new_diff_node(vec![index]),
-        }
-    }
-
-    fn handle_stage(&mut self, git: &Git, cursor: &Cursor) -> orfail::Result<()> {
-        if cursor.path != self.node.path {
-            let i = cursor.path[Self::LEVEL];
-            self.node
-                .children
-                .get_mut(i)
-                .or_fail()?
-                .stage(cursor, self.diff.diff.files.get(i).or_fail()?, git)
-                .or_fail()?;
-        } else {
-            git.stage(&self.diff.diff).or_fail()?;
-        }
-
-        Ok(())
-    }
-
-    fn handle_discard(&mut self, git: &Git, cursor: &Cursor) -> orfail::Result<()> {
-        if cursor.path != self.node.path {
-            let i = cursor.path[Self::LEVEL];
-            self.node
-                .children
-                .get_mut(i)
-                .or_fail()?
-                .discard(cursor, self.diff.diff.files.get(i).or_fail()?, git)
-                .or_fail()?;
-        } else {
-            git.discard(&self.diff.diff).or_fail()?;
-        }
-
-        Ok(())
-    }
-
-    fn handle_unstage(&mut self, git: &Git, cursor: &Cursor) -> orfail::Result<()> {
-        if cursor.path != self.node.path {
-            let i = cursor.path[Self::LEVEL];
-            self.node
-                .children
-                .get_mut(i)
-                .or_fail()?
-                .unstage(cursor, self.diff.diff.files.get(i).or_fail()?, git)
-                .or_fail()?;
-        } else {
-            git.unstage(&self.diff.diff).or_fail()?;
-        }
-
-        Ok(())
-    }
-
-    // TODO: factor out
-    pub const LEVEL: usize = 1;
-
-    pub fn reload(&mut self, diff: Diff, old_widgets: &[DiffWidget]) -> orfail::Result<()> {
-        self.diff.diff = diff;
-
-        self.node.children.clear();
-        for (i, file) in self.diff.diff.files.iter().enumerate() {
-            let mut path = self.node.path.clone();
-            path.push(i);
-            let node = DiffTreeNode::new_file_diff_node(path, file);
-            self.node.children.push(node);
-        }
-
-        self.restore_state(old_widgets);
-
-        Ok(())
-    }
-
-    fn restore_state(&mut self, old_widgets: &[DiffWidget]) {
-        let i = self.node.path[Self::LEVEL - 1];
-        self.node.expanded = old_widgets[i].node.expanded;
-
-        for (c, d) in self
-            .node
-            .children
-            .iter_mut()
-            .zip(self.diff.diff.files.iter())
-        {
-            let old = old_widgets
-                .iter()
-                .flat_map(|w| w.node.children.iter().zip(w.diff.diff.files.iter()))
-                .filter(|w| w.1.is_intersect(d))
-                .collect::<Vec<_>>();
-            c.restore_file_node_state(d, &old);
         }
     }
 }
@@ -905,6 +832,7 @@ impl DiffTreeNode {
         1 + self.children.iter().map(|c| c.full_rows()).sum::<usize>()
     }
 
+    // TODO: delete
     pub fn expand_all(&mut self) {
         self.expanded = true;
         for child in &mut self.children {
@@ -971,6 +899,25 @@ impl DiffTreeNode {
     }
 
     // TODO: refactor
+    pub fn restore_diff_node_state(&mut self, diff: &Diff, old: &[(&Self, &Diff)]) {
+        if old.is_empty() {
+            return;
+        }
+
+        self.expanded = old.iter().any(|w| w.0.expanded);
+
+        for (c, d) in self.children.iter_mut().zip(diff.files.iter()) {
+            let old = old
+                .iter()
+                .flat_map(|w| w.0.children.iter().zip(w.1.files.iter()))
+                .filter(|w| w.1.is_intersect(d))
+                .map(|w| w.0)
+                .collect::<Vec<_>>();
+            c.restore_chunk_node_state(&old);
+        }
+    }
+
+    // TODO: refactor
     pub fn restore_file_node_state(&mut self, diff: &FileDiff, old: &[(&Self, &FileDiff)]) {
         if old.is_empty() {
             return;
@@ -1030,31 +977,29 @@ impl DiffTreeNode {
         }
     }
 
-    pub fn stage(&self, cursor: &Cursor, diff: &FileDiff, git: &Git) -> orfail::Result<()> {
+    pub fn stage(&self, cursor: &Cursor, diff: &Diff, git: &Git) -> orfail::Result<()> {
         let diff = self.get_diff(cursor, diff, true).or_fail()?;
         git.stage(&diff).or_fail()?;
         Ok(())
     }
 
-    pub fn discard(&self, cursor: &Cursor, diff: &FileDiff, git: &Git) -> orfail::Result<()> {
+    pub fn discard(&self, cursor: &Cursor, diff: &Diff, git: &Git) -> orfail::Result<()> {
         let diff = self.get_diff(cursor, diff, true).or_fail()?;
         git.discard(&diff).or_fail()?;
         Ok(())
     }
 
-    pub fn unstage(&self, cursor: &Cursor, diff: &FileDiff, git: &Git) -> orfail::Result<()> {
+    pub fn unstage(&self, cursor: &Cursor, diff: &Diff, git: &Git) -> orfail::Result<()> {
         let diff = self.get_diff(cursor, diff, false).or_fail()?;
         git.unstage(&diff).or_fail()?;
         Ok(())
     }
 
-    pub fn get_diff(&self, cursor: &Cursor, file: &FileDiff, stage: bool) -> orfail::Result<Diff> {
-        // let Some((i, node)) = self.get_maybe_child(cursor).or_fail()? else {
-        //     return Ok(diff.clone());
-        // };
-        // let file = diff.files.get(i).or_fail()?;
-
-        let node = self;
+    pub fn get_diff(&self, cursor: &Cursor, diff: &Diff, stage: bool) -> orfail::Result<Diff> {
+        let Some((i, node)) = self.get_maybe_child(cursor).or_fail()? else {
+            return Ok(diff.clone());
+        };
+        let file = diff.files.get(i).or_fail()?;
         let path = file.path();
 
         let Some((i, node)) = node.get_maybe_child(cursor).or_fail()? else {
