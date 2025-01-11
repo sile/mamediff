@@ -382,7 +382,7 @@ impl App {
             }
 
             for c in &w.children {
-                if matches!(c.node.cursor_right(&self.cursor), Ok(Some(_))) {
+                if matches!(c.cursor_right(&self.cursor), Ok(Some(_))) {
                     return true;
                 }
             }
@@ -473,7 +473,7 @@ pub struct DiffWidget {
     widget_path: WidgetPath,
     staged: bool,
     diff: Diff,
-    children: Vec<FileDiffWidget>,
+    children: Vec<DiffTreeNode>,
     expanded: bool,
 }
 
@@ -495,7 +495,6 @@ impl DiffWidget {
             self.children.len()
         } else if cursor.path.starts_with(&self.widget_path.path) && !self.children.is_empty() {
             self.children[cursor.path[Self::LEVEL]]
-                .node
                 .get_children(cursor)
                 .expect("TODO")
                 .len()
@@ -511,7 +510,7 @@ impl DiffWidget {
         } else if cursor.path.starts_with(&self.widget_path.path) {
             self.children
                 .get(cursor.path[Self::LEVEL])
-                .is_some_and(|c| c.node.is_valid_cursor(cursor))
+                .is_some_and(|c| c.is_valid_cursor(cursor))
         } else {
             false
         }
@@ -527,7 +526,6 @@ impl DiffWidget {
             self.children
                 .get_mut(i)
                 .or_fail()?
-                .node
                 .stage(cursor, self.diff.files.get(i).or_fail()?, git)
                 .or_fail()?;
         } else {
@@ -548,7 +546,6 @@ impl DiffWidget {
             self.children
                 .get_mut(i)
                 .or_fail()?
-                .node
                 .discard(cursor, self.diff.files.get(i).or_fail()?, git)
                 .or_fail()?;
         } else {
@@ -568,7 +565,6 @@ impl DiffWidget {
             self.children
                 .get_mut(i)
                 .or_fail()?
-                .node
                 .unstage(cursor, self.diff.files.get(i).or_fail()?, git)
                 .or_fail()?;
         } else {
@@ -582,7 +578,9 @@ impl DiffWidget {
         if self.widget_path.path == cursor.path {
             !self.children.is_empty()
         } else if cursor.path.starts_with(&self.widget_path.path) {
-            self.children.iter().any(|w| w.is_togglable(cursor))
+            self.children
+                .iter()
+                .any(|w| w.get_children(cursor).ok().is_some_and(|x| !x.is_empty()))
         } else {
             false
         }
@@ -597,7 +595,7 @@ impl DiffWidget {
             self.children
                 .iter()
                 .zip(self.diff.files.iter())
-                .any(|(w, d)| w.node.can_alter(cursor, d).expect("TODO"))
+                .any(|(w, d)| w.can_alter(cursor, d).expect("TODO"))
         } else {
             false
         }
@@ -612,7 +610,7 @@ impl DiffWidget {
             self.children
                 .iter()
                 .zip(self.diff.files.iter())
-                .any(|(w, d)| w.node.can_alter(cursor, d).expect("TODO"))
+                .any(|(w, d)| w.can_alter(cursor, d).expect("TODO"))
         } else {
             false
         }
@@ -630,8 +628,8 @@ impl DiffWidget {
             self.expanded = !self.expanded;
         } else {
             for child in &mut self.children {
-                if child.node.is_valid_cursor(cursor) {
-                    child.node.toggle(cursor).or_fail()?;
+                if child.is_valid_cursor(cursor) {
+                    child.toggle(cursor).or_fail()?;
                 }
             }
         }
@@ -665,10 +663,10 @@ impl DiffWidget {
             self.expanded = true;
         } else {
             for child in &mut self.children {
-                if cursor.path.starts_with(&child.node.path) {
-                    if let Some(new_cursor) = child.node.cursor_right(cursor).or_fail()? {
+                if cursor.path.starts_with(&child.path) {
+                    if let Some(new_cursor) = child.cursor_right(cursor).or_fail()? {
                         *cursor = new_cursor;
-                        child.node.get_node_mut(cursor).or_fail()?.expanded = true;
+                        child.get_node_mut(cursor).or_fail()?.expanded = true;
                     }
                 }
             }
@@ -686,10 +684,10 @@ impl DiffWidget {
             }
         } else if self.widget_path.last_index() == cursor.path[Self::LEVEL - 1] {
             for child in self.children.iter_mut().rev() {
-                if cursor.path.starts_with(&child.node.path) {
-                    if let Some(new_cursor) = child.node.cursor_down(cursor).or_fail()? {
+                if cursor.path.starts_with(&child.path) {
+                    if let Some(new_cursor) = child.cursor_down(cursor).or_fail()? {
                         *cursor = new_cursor;
-                        child.node.get_node_mut(cursor).or_fail()?.expanded = true;
+                        child.get_node_mut(cursor).or_fail()?.expanded = true;
                     }
                 }
             }
@@ -707,10 +705,10 @@ impl DiffWidget {
             }
         } else if self.widget_path.last_index() == cursor.path[Self::LEVEL - 1] {
             for child in &mut self.children {
-                if cursor.path.starts_with(&child.node.path) {
-                    if let Some(new_cursor) = child.node.cursor_up(cursor).or_fail()? {
+                if cursor.path.starts_with(&child.path) {
+                    if let Some(new_cursor) = child.cursor_up(cursor).or_fail()? {
                         *cursor = new_cursor;
-                        child.node.get_node_mut(cursor).or_fail()?.expanded = true;
+                        child.get_node_mut(cursor).or_fail()?.expanded = true;
                     }
                 }
             }
@@ -724,8 +722,8 @@ impl DiffWidget {
 
         self.children.clear();
         for (i, file) in self.diff.files.iter().enumerate() {
-            self.children
-                .push(FileDiffWidget::new(file, self.widget_path.join(i)));
+            let node = DiffTreeNode::new_file_diff_node(self.widget_path.join(i).path, file);
+            self.children.push(node);
         }
 
         self.restore_state(old_widgets);
@@ -743,30 +741,26 @@ impl DiffWidget {
                 .flat_map(|w| w.children.iter().zip(w.diff.files.iter()))
                 .filter(|w| w.1.is_intersect(d))
                 .collect::<Vec<_>>();
-            c.restore_state(d, &old);
+            c.restore_file_node_state(d, &old);
         }
     }
 
     pub fn rows(&self) -> usize {
         if self.expanded {
-            1 + self.children.iter().map(|c| c.node.rows()).sum::<usize>()
+            1 + self.children.iter().map(|c| c.rows()).sum::<usize>()
         } else {
             1
         }
     }
 
     pub fn full_rows(&self) -> usize {
-        1 + self
-            .children
-            .iter()
-            .map(|c| c.node.full_rows())
-            .sum::<usize>()
+        1 + self.children.iter().map(|c| c.full_rows()).sum::<usize>()
     }
 
     pub fn expand_all(&mut self) {
         self.expanded = true;
         for c in &mut self.children {
-            c.node.expand_all();
+            c.expand_all();
         }
     }
 
@@ -775,7 +769,7 @@ impl DiffWidget {
             Some(self.rows())
         } else if cursor.path.starts_with(&self.widget_path.path) {
             let i = cursor.path[Self::LEVEL];
-            Some(self.children[i].node.get_node(cursor).expect("TODO").rows())
+            Some(self.children[i].get_node(cursor).expect("TODO").rows())
         } else {
             None
         }
@@ -791,7 +785,7 @@ impl DiffWidget {
                     1 + self
                         .children
                         .iter()
-                        .map(|c| c.node.cursor_row(cursor))
+                        .map(|c| c.cursor_row(cursor))
                         .sum::<usize>()
                 }
             }
@@ -820,7 +814,7 @@ impl RenderDiff for DiffWidget {
 
         if self.expanded {
             for (child, diff) in self.children.iter().zip(diff.files.iter()) {
-                if !child.node.render_if_need(canvas, cursor, diff) {
+                if !child.render_if_need(canvas, cursor, diff) {
                     break;
                 }
             }
@@ -829,53 +823,9 @@ impl RenderDiff for DiffWidget {
 
     fn rows(&self) -> usize {
         if self.expanded {
-            1 + self.children.iter().map(|c| c.node.rows()).sum::<usize>()
+            1 + self.children.iter().map(|c| c.rows()).sum::<usize>()
         } else {
             1
-        }
-    }
-}
-
-#[derive(Debug, Clone)]
-pub struct FileDiffWidget {
-    pub node: DiffTreeNode,
-}
-
-impl FileDiffWidget {
-    pub fn new(diff: &FileDiff, widget_path: WidgetPath) -> Self {
-        Self {
-            node: DiffTreeNode::new_file_diff_node(widget_path.path, diff),
-        }
-    }
-
-    fn restore_state(&mut self, diff: &FileDiff, old: &[(&Self, &FileDiff)]) {
-        if old.is_empty() {
-            return;
-        }
-
-        self.node.expanded = old.iter().any(|w| w.0.node.expanded);
-
-        for (c, d) in self.node.children.iter_mut().zip(diff.chunks()) {
-            let old = old
-                .iter()
-                .flat_map(|w| w.0.node.children.iter().zip(w.1.chunks()))
-                .filter(|w| w.1.is_intersect(d))
-                .map(|w| w.0)
-                .collect::<Vec<_>>();
-            c.restore_chunk_node_state(&old);
-        }
-    }
-
-    pub fn is_togglable(&self, cursor: &Cursor) -> bool {
-        if self.node.path == cursor.path {
-            !self.node.children.is_empty()
-        } else if cursor.path.starts_with(&self.node.path) {
-            self.node
-                .children
-                .iter()
-                .any(|w| w.get_children(cursor).ok().is_some_and(|x| !x.is_empty()))
-        } else {
-            false
         }
     }
 }
@@ -1233,6 +1183,25 @@ impl DiffTreeNode {
         let node = self.get_node_mut(cursor).or_fail()?;
         node.expanded = !node.expanded;
         Ok(())
+    }
+
+    // TODO: refactor
+    pub fn restore_file_node_state(&mut self, diff: &FileDiff, old: &[(&Self, &FileDiff)]) {
+        if old.is_empty() {
+            return;
+        }
+
+        self.expanded = old.iter().any(|w| w.0.expanded);
+
+        for (c, d) in self.children.iter_mut().zip(diff.chunks()) {
+            let old = old
+                .iter()
+                .flat_map(|w| w.0.children.iter().zip(w.1.chunks()))
+                .filter(|w| w.1.is_intersect(d))
+                .map(|w| w.0)
+                .collect::<Vec<_>>();
+            c.restore_chunk_node_state(&old);
+        }
     }
 
     // TODO: refactor
