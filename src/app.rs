@@ -1192,7 +1192,6 @@ impl RenderDiff for FileDiffWidget {
 pub struct ChunkDiffWidget {
     pub old_range: Range<usize>,
     pub new_range: Range<usize>,
-    pub widget_path: WidgetPath,
     pub node: DiffTreeNode,
 }
 
@@ -1214,7 +1213,6 @@ impl ChunkDiffWidget {
                 start: diff.new_start_line_number,
                 end: diff.new_start_line_number + diff.new_columns(),
             },
-            widget_path: widget_path.clone(),
             node: DiffTreeNode {
                 path: widget_path.path,
                 expanded: true,
@@ -1239,9 +1237,9 @@ impl ChunkDiffWidget {
     }
 
     fn get_children_len(&self, cursor: &Cursor) -> usize {
-        if self.widget_path.path == cursor.path {
+        if self.node.path == cursor.path {
             self.node.children.len()
-        } else if cursor.path.starts_with(&self.widget_path.path) {
+        } else if cursor.path.starts_with(&self.node.path) {
             0
         } else {
             // TODO: error?
@@ -1250,9 +1248,9 @@ impl ChunkDiffWidget {
     }
 
     fn is_valid_cursor(&self, cursor: &Cursor) -> bool {
-        if self.widget_path.path == cursor.path {
+        if self.node.path == cursor.path {
             true
-        } else if cursor.path.starts_with(&self.widget_path.path) {
+        } else if cursor.path.starts_with(&self.node.path) {
             self.node
                 .children
                 .get(cursor.path[Self::LEVEL])
@@ -1269,9 +1267,9 @@ impl ChunkDiffWidget {
         path: &Path,
         diff: &ChunkDiff,
     ) -> orfail::Result<()> {
-        cursor.path.starts_with(&self.widget_path.path).or_fail()?;
+        cursor.path.starts_with(&self.node.path).or_fail()?;
 
-        if cursor.path != self.widget_path.path {
+        if cursor.path != self.node.path {
             let i = cursor.path[Self::LEVEL];
             let chunk = diff.get_line_chunk(i, true).or_fail()?;
             git.stage(&chunk.to_diff(path)).or_fail()?;
@@ -1289,9 +1287,9 @@ impl ChunkDiffWidget {
         path: &Path,
         diff: &ChunkDiff,
     ) -> orfail::Result<()> {
-        cursor.path.starts_with(&self.widget_path.path).or_fail()?;
+        cursor.path.starts_with(&self.node.path).or_fail()?;
 
-        if cursor.path != self.widget_path.path {
+        if cursor.path != self.node.path {
             let i = cursor.path[Self::LEVEL];
             let chunk = diff.get_line_chunk(i, true).or_fail()?;
             git.discard(&chunk.to_diff(path)).or_fail()?;
@@ -1309,9 +1307,9 @@ impl ChunkDiffWidget {
         path: &Path,
         diff: &ChunkDiff,
     ) -> orfail::Result<()> {
-        cursor.path.starts_with(&self.widget_path.path).or_fail()?;
+        cursor.path.starts_with(&self.node.path).or_fail()?;
 
-        if cursor.path != self.widget_path.path {
+        if cursor.path != self.node.path {
             let i = cursor.path[Self::LEVEL];
             let chunk = diff.get_line_chunk(i, false).or_fail()?;
             git.unstage(&chunk.to_diff(path)).or_fail()?;
@@ -1323,9 +1321,9 @@ impl ChunkDiffWidget {
     }
 
     pub fn current_rows(&self, cursor: &Cursor) -> Option<usize> {
-        if self.widget_path.path == cursor.path {
+        if self.node.path == cursor.path {
             Some(self.node.rows())
-        } else if cursor.path.starts_with(&self.widget_path.path) {
+        } else if cursor.path.starts_with(&self.node.path) {
             Some(1)
         } else {
             None
@@ -1352,7 +1350,7 @@ impl ChunkDiffWidget {
 
         if self.node.children.is_empty()
             || cursor.path.len() > Self::LEVEL
-            || cursor.path[Self::LEVEL - 1] != self.widget_path.last_index()
+            || cursor.path[Self::LEVEL - 1] != self.node.path.last().copied().expect("TODO")
         {
             return Ok(());
         }
@@ -1365,7 +1363,7 @@ impl ChunkDiffWidget {
     pub const LEVEL: usize = 3;
 
     pub fn is_togglable(&self, cursor: &Cursor) -> bool {
-        if self.widget_path.path == cursor.path {
+        if self.node.path == cursor.path {
             !self.node.children.is_empty()
         } else {
             false
@@ -1376,7 +1374,7 @@ impl ChunkDiffWidget {
         (cursor.path.len() >= Self::LEVEL).or_fail()?;
 
         if self.node.children.is_empty()
-            || cursor.path[Self::LEVEL - 1] != self.widget_path.last_index()
+            || cursor.path[Self::LEVEL - 1] != self.node.path.last().copied().expect("TODO")
         {
             return Ok(());
         }
@@ -1393,10 +1391,10 @@ impl ChunkDiffWidget {
         (cursor.path.len() >= Self::LEVEL).or_fail()?;
 
         if cursor.path.len() == Self::LEVEL {
-            if self.widget_path.last_index() == cursor.path[Self::LEVEL - 1] + 1 {
+            if self.node.path.last().copied().expect("TODO") == cursor.path[Self::LEVEL - 1] + 1 {
                 cursor.path[Self::LEVEL - 1] += 1;
             }
-        } else if self.widget_path.last_index() == cursor.path[Self::LEVEL - 1] {
+        } else if self.node.path.last().copied().expect("TODO") == cursor.path[Self::LEVEL - 1] {
             for child in self.node.children.iter_mut().rev() {
                 if child.path.last().copied() == Some(cursor.path[Self::LEVEL] + 1) {
                     cursor.path[Self::LEVEL] += 1;
@@ -1412,10 +1410,10 @@ impl ChunkDiffWidget {
         (cursor.path.len() >= Self::LEVEL).or_fail()?;
 
         if cursor.path.len() == Self::LEVEL {
-            if Some(self.widget_path.last_index()) == cursor.path[Self::LEVEL - 1].checked_sub(1) {
+            if self.node.path.last().copied() == cursor.path[Self::LEVEL - 1].checked_sub(1) {
                 cursor.path[Self::LEVEL - 1] -= 1;
             }
-        } else if self.widget_path.last_index() == cursor.path[Self::LEVEL - 1] {
+        } else if self.node.path.last().copied().expect("TODO") == cursor.path[Self::LEVEL - 1] {
             for child in self.node.children.iter_mut() {
                 if child.path.last().copied() == cursor.path[Self::LEVEL].checked_sub(1) {
                     cursor.path[Self::LEVEL] -= 1;
