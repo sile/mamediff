@@ -1,6 +1,6 @@
 use crate::{
-    app::App,
     canvas::{Canvas, Token, TokenPosition},
+    widget_diff_tree::DiffTreeWidget,
 };
 
 #[derive(Debug, Default)]
@@ -12,8 +12,7 @@ impl LegendWidget {
     const SHOW_COLS: usize = 19;
     const HIDE_COLS: usize = 11;
 
-    // TODO: s/App/TreeNodeWidget/
-    pub fn render(&self, canvas: &mut Canvas, app: &App) {
+    pub fn render(&self, canvas: &mut Canvas, tree: &DiffTreeWidget) {
         if canvas.frame_size().cols <= Self::SHOW_COLS {
             return;
         }
@@ -29,28 +28,28 @@ impl LegendWidget {
             canvas.set_col_offset(col);
             canvas.drawl(Token::new("| (q)uit [ESC,C-c]"));
 
-            if app.tree.cursor.prev_sibling().is_some() {
+            if tree.can_cursor_up() {
                 canvas.drawl(Token::new("| (↑)        [C-p]"));
             }
-            if app.can_down() {
+            if tree.can_cursor_down() {
                 canvas.drawl(Token::new("| (↓)        [C-n]"));
             }
-            if app.tree.cursor.path.len() > 2 {
+            if tree.can_cursor_left() {
                 canvas.drawl(Token::new("| (←)        [C-f]"));
             }
-            if app.can_right() {
+            if tree.can_cursor_right() {
                 canvas.drawl(Token::new("| (→)        [C-b]"));
             }
-            if app.is_togglable() {
+            if tree.can_toggle() {
                 canvas.drawl(Token::new("| (t)oggle   [TAB]"));
             }
-            if app.can_stage() {
+            if tree.can_stage_or_discard() {
                 canvas.drawl(Token::new("| (s)tage         "));
             }
-            if app.can_stage() {
+            if tree.can_stage_or_discard() {
                 canvas.drawl(Token::new("| (D)iscard       "));
             }
-            if app.can_unstage() {
+            if tree.can_unstage() {
                 canvas.drawl(Token::new("| (u)nstage       "));
             }
             canvas.drawl(Token::new("+---- (h)ide -----"));

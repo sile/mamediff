@@ -6,7 +6,7 @@ use crate::{
     diff::Diff,
     git,
     terminal::Terminal,
-    widget_diff_tree::{Cursor, DiffTreeNode, DiffTreeWidget},
+    widget_diff_tree::{DiffTreeNode, DiffTreeWidget},
     widget_legend::LegendWidget,
 };
 
@@ -15,7 +15,7 @@ pub struct App {
     terminal: Terminal,
     exit: bool,
     row_offset: usize,
-    pub tree: DiffTreeWidget, // TODO: priv
+    tree: DiffTreeWidget,
     legend: LegendWidget,
 }
 
@@ -32,12 +32,14 @@ impl App {
     }
 
     pub fn run(mut self) -> orfail::Result<()> {
-        self.reload_diff_reset().or_fail()?;
+        self.reload_diff().or_fail()?;
+        self.tree.expand_if_possible(self.terminal.size());
 
         while !self.exit {
             let event = self.terminal.next_event().or_fail()?;
             self.handle_event(event).or_fail()?;
         }
+
         Ok(())
     }
 
@@ -46,52 +48,12 @@ impl App {
             return Ok(());
         }
 
-        let cursor_abs_row = self.cursor_abs_row();
-        if cursor_abs_row
-            .checked_sub(self.row_offset)
-            .is_none_or(|p| p >= self.terminal.size().rows)
-        {
-            let rows = self.terminal.size().rows;
-            self.row_offset = cursor_abs_row.saturating_sub(rows / 2);
-        }
-
         let mut canvas = Canvas::new(self.row_offset, self.terminal.size());
-        for (node, diff) in self.tree.children_and_diffs() {
-            if !node.render_if_need(&mut canvas, &self.tree.cursor, diff) {
-                break;
-            }
-        }
+        self.tree.render(&mut canvas);
+        self.legend.render(&mut canvas, &self.tree);
+        self.terminal.draw_frame(canvas.into_frame()).or_fail()?;
 
-        self.legend.render(&mut canvas, self);
-
-        self.terminal.render(canvas.into_frame()).or_fail()?;
         Ok(())
-    }
-
-    fn cursor_abs_row(&self) -> usize {
-        self.tree.root_node.cursor_row(&self.tree.cursor)
-    }
-
-    pub fn is_togglable(&self) -> bool {
-        self.tree
-            .root_node
-            .get_children(&self.tree.cursor)
-            .ok()
-            .is_some_and(|c| !c.is_empty())
-    }
-
-    pub fn can_stage(&self) -> bool {
-        self.tree.root_node.children[0]
-            .can_alter(&self.tree.cursor, &self.tree.unstaged_diff)
-            .ok()
-            .is_some_and(|b| b)
-    }
-
-    pub fn can_unstage(&self) -> bool {
-        self.tree.root_node.children[1]
-            .can_alter(&self.tree.cursor, &self.tree.staged_diff)
-            .ok()
-            .is_some_and(|b| b)
     }
 
     fn handle_event(&mut self, event: Event) -> orfail::Result<()> {
@@ -99,12 +61,12 @@ impl App {
             Event::FocusGained => Ok(()),
             Event::FocusLost => Ok(()),
             Event::Key(event) => self.handle_key_event(event).or_fail(),
-            Event::Mouse(_) => Ok(()), // TODO: Add mouse handling
+            Event::Mouse(_) => Ok(()),
             Event::Paste(_) => Ok(()),
             Event::Resize(_, _) => {
-                let cursor_abs_row = self.cursor_abs_row();
+                let cursor_row = self.tree.cursor_row();
                 let rows = self.terminal.size().rows;
-                self.row_offset = cursor_abs_row.saturating_sub(rows / 2);
+                self.row_offset = cursor_row.saturating_sub(rows / 2);
                 self.render().or_fail()
             }
         }
@@ -115,11 +77,12 @@ impl App {
             return Ok(());
         }
 
+        let ctrl = event.modifiers.contains(KeyModifiers::CONTROL);
         match event.code {
             KeyCode::Char('q') | KeyCode::Esc => {
                 self.exit = true;
             }
-            KeyCode::Char('c') if event.modifiers.contains(KeyModifiers::CONTROL) => {
+            KeyCode::Char('c') if ctrl => {
                 self.exit = true;
             }
             KeyCode::Char('u') => {
@@ -135,40 +98,40 @@ impl App {
                 self.legend.toggle_hide();
                 self.render().or_fail()?;
             }
-            KeyCode::Char('p') if event.modifiers.contains(KeyModifiers::CONTROL) => {
-                self.handle_up().or_fail()?;
+            KeyCode::Char('p') if ctrl => {
+                self.handle_up_key().or_fail()?;
                 self.render().or_fail()?;
             }
             KeyCode::Up => {
-                self.handle_up().or_fail()?;
+                self.handle_up_key().or_fail()?;
                 self.render().or_fail()?;
             }
-            KeyCode::Char('n') if event.modifiers.contains(KeyModifiers::CONTROL) => {
-                self.handle_down().or_fail()?;
+            KeyCode::Char('n') if ctrl => {
+                self.handle_down_key().or_fail()?;
                 self.render().or_fail()?;
             }
             KeyCode::Down => {
-                self.handle_down().or_fail()?;
+                self.handle_down_key().or_fail()?;
                 self.render().or_fail()?;
             }
-            KeyCode::Char('f') if event.modifiers.contains(KeyModifiers::CONTROL) => {
-                self.handle_right().or_fail()?;
+            KeyCode::Char('f') if ctrl => {
+                self.tree.cursor_right().or_fail()?;
                 self.render().or_fail()?;
             }
             KeyCode::Right => {
-                self.handle_right().or_fail()?;
+                self.tree.cursor_right().or_fail()?;
                 self.render().or_fail()?;
             }
-            KeyCode::Char('b') if event.modifiers.contains(KeyModifiers::CONTROL) => {
-                self.handle_left().or_fail()?;
+            KeyCode::Char('b') if ctrl => {
+                self.tree.cursor_left();
                 self.render().or_fail()?;
             }
             KeyCode::Left => {
-                self.handle_left().or_fail()?;
+                self.tree.cursor_left();
                 self.render().or_fail()?;
             }
             KeyCode::Char('t') | KeyCode::Tab => {
-                self.handle_tab().or_fail()?;
+                self.tree.toggle_expansion().or_fail()?;
                 self.render().or_fail()?;
             }
             _ => {}
@@ -176,23 +139,13 @@ impl App {
         Ok(())
     }
 
-    fn handle_tab(&mut self) -> orfail::Result<()> {
-        self.tree.root_node.toggle(&self.tree.cursor).or_fail()?;
-        Ok(())
-    }
-
-    fn handle_up(&mut self) -> orfail::Result<()> {
-        if let Some(new_cursor) = self.tree.root_node.cursor_up(&self.tree.cursor).or_fail()? {
-            self.tree.cursor = new_cursor;
-            self.tree
-                .root_node
-                .get_node_mut(&self.tree.cursor)
-                .or_fail()?
-                .expanded = true;
+    fn handle_up_key(&mut self) -> orfail::Result<()> {
+        if !self.tree.cursor_up().or_fail()? {
+            return Ok(());
         }
 
         // TODO: factor out
-        let cursor_abs_row = self.cursor_abs_row();
+        let cursor_abs_row = self.tree.cursor_row();
         let current_rows = self
             .tree
             .root_node
@@ -209,23 +162,13 @@ impl App {
         Ok(())
     }
 
-    fn handle_down(&mut self) -> orfail::Result<()> {
-        if let Some(new_cursor) = self
-            .tree
-            .root_node
-            .cursor_down(&self.tree.cursor)
-            .or_fail()?
-        {
-            self.tree.cursor = new_cursor;
-            self.tree
-                .root_node
-                .get_node_mut(&self.tree.cursor)
-                .or_fail()?
-                .expanded = true;
+    fn handle_down_key(&mut self) -> orfail::Result<()> {
+        if !self.tree.cursor_down().or_fail()? {
+            return Ok(());
         }
 
         // TODO: factor out
-        let cursor_abs_row = self.cursor_abs_row();
+        let cursor_abs_row = self.tree.cursor_row();
         let current_rows = self
             .tree
             .root_node
@@ -239,31 +182,6 @@ impl App {
                 cursor_abs_row.min(desired_end_row.saturating_sub(self.terminal.size().rows));
         }
 
-        Ok(())
-    }
-
-    fn handle_right(&mut self) -> orfail::Result<()> {
-        if let Some(new_cursor) = self
-            .tree
-            .root_node
-            .cursor_right(&self.tree.cursor)
-            .or_fail()?
-        {
-            self.tree.cursor = new_cursor;
-            self.tree
-                .root_node
-                .get_node_mut(&self.tree.cursor)
-                .or_fail()?
-                .expanded = true;
-        }
-        Ok(())
-    }
-
-    // TODO: remove
-    fn handle_left(&mut self) -> orfail::Result<()> {
-        if let Some(parent) = self.tree.cursor.parent() {
-            self.tree.cursor = parent;
-        }
         Ok(())
     }
 
@@ -275,9 +193,9 @@ impl App {
             .or_fail()?;
 
         while !self.is_valid_cursor() {
-            self.handle_up().or_fail()?;
+            self.handle_up_key().or_fail()?;
             if !self.is_valid_cursor() {
-                self.handle_left().or_fail()?;
+                self.tree.cursor_left();
             }
         }
         // TODO: expand cursor position if need
@@ -288,31 +206,6 @@ impl App {
 
     fn is_valid_cursor(&self) -> bool {
         self.tree.root_node.is_valid_cursor(&self.tree.cursor)
-    }
-
-    pub fn can_right(&self) -> bool {
-        matches!(
-            self.tree.root_node.cursor_right(&self.tree.cursor),
-            Ok(Some(_))
-        )
-    }
-
-    pub fn can_down(&self) -> bool {
-        matches!(
-            self.tree.root_node.cursor_down(&self.tree.cursor),
-            Ok(Some(_))
-        )
-    }
-
-    // TODO: maybe unnecessary
-    fn reload_diff_reset(&mut self) -> orfail::Result<()> {
-        let old_tree = DiffTreeWidget::new();
-        self.tree.cursor = Cursor::root();
-        let (unstaged_diff, staged_diff) = git::unstaged_and_staged_diffs().or_fail()?;
-        self.reload_tree(unstaged_diff, staged_diff, &old_tree)
-            .or_fail()?;
-        self.render().or_fail()?; // TODO: optimize
-        Ok(())
     }
 
     // TODO: refactor
@@ -344,7 +237,7 @@ impl App {
     }
 
     fn handle_stage(&mut self) -> orfail::Result<()> {
-        if self.can_stage() {
+        if self.tree.can_stage_or_discard() {
             self.tree.root_node.children[0]
                 .stage(&self.tree.cursor, &self.tree.unstaged_diff.diff)
                 .or_fail()?;
@@ -354,7 +247,7 @@ impl App {
     }
 
     fn handle_discard(&mut self) -> orfail::Result<()> {
-        if self.can_stage() {
+        if self.tree.can_stage_or_discard() {
             self.tree.root_node.children[0]
                 .discard(&self.tree.cursor, &self.tree.unstaged_diff.diff)
                 .or_fail()?;
@@ -364,7 +257,7 @@ impl App {
     }
 
     fn handle_unstage(&mut self) -> orfail::Result<()> {
-        if self.can_unstage() {
+        if self.tree.can_unstage() {
             self.tree.root_node.children[1]
                 .unstage(&self.tree.cursor, &self.tree.staged_diff.diff)
                 .or_fail()?;

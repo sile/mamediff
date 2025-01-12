@@ -54,7 +54,7 @@ impl Terminal {
         Ok(event)
     }
 
-    pub fn render(&mut self, frame: Frame) -> orfail::Result<()> {
+    pub fn draw_frame(&mut self, frame: Frame) -> orfail::Result<()> {
         let stdout = std::io::stdout();
         let mut writer = stdout.lock();
         for (row, line) in frame.dirty_lines(&self.prev) {

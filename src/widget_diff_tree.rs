@@ -6,6 +6,7 @@ use crate::{
     canvas::{Canvas, Token, TokenStyle},
     diff::{ChunkDiff, Diff, FileDiff, LineDiff},
     git,
+    terminal::TerminalSize,
 };
 
 #[derive(Debug, Clone)]
@@ -31,6 +32,104 @@ impl DiffTreeWidget {
             root_node: DiffTreeNode::new_root_node(),
             cursor: Cursor::root(),
         }
+    }
+
+    pub fn expand_if_possible(&mut self, _terminal_size: TerminalSize) {
+        // TODO:
+    }
+
+    pub fn render(&self, canvas: &mut Canvas) {
+        for (node, diff) in self.children_and_diffs() {
+            if !node.render_if_need(canvas, &self.cursor, diff) {
+                break;
+            }
+        }
+    }
+
+    pub fn can_cursor_up(&self) -> bool {
+        matches!(self.root_node.cursor_up(&self.cursor), Ok(Some(_)))
+    }
+
+    pub fn can_cursor_down(&self) -> bool {
+        matches!(self.root_node.cursor_down(&self.cursor), Ok(Some(_)))
+    }
+
+    pub fn can_cursor_right(&self) -> bool {
+        matches!(self.root_node.cursor_right(&self.cursor), Ok(Some(_)))
+    }
+
+    pub fn can_cursor_left(&self) -> bool {
+        self.cursor.parent().is_some()
+    }
+
+    pub fn can_toggle(&self) -> bool {
+        self.root_node
+            .get_node(&self.cursor)
+            .ok()
+            .is_some_and(|n| !n.children.is_empty())
+    }
+
+    pub fn can_stage_or_discard(&self) -> bool {
+        self.root_node.children[0]
+            .can_alter(&self.cursor, &self.unstaged_diff)
+            .ok()
+            .is_some_and(|b| b)
+    }
+
+    pub fn can_unstage(&self) -> bool {
+        self.root_node.children[1]
+            .can_alter(&self.cursor, &self.staged_diff)
+            .ok()
+            .is_some_and(|b| b)
+    }
+
+    fn expand_parent(&mut self) -> orfail::Result<()> {
+        if let Some(parent) = self.cursor.parent() {
+            self.root_node.get_node_mut(&parent).or_fail()?.expanded = true;
+        }
+        Ok(())
+    }
+
+    pub fn cursor_up(&mut self) -> orfail::Result<bool> {
+        if let Some(new_cursor) = self.root_node.cursor_up(&self.cursor).or_fail()? {
+            self.cursor = new_cursor;
+            self.expand_parent().or_fail()?;
+            Ok(true)
+        } else {
+            Ok(false)
+        }
+    }
+
+    pub fn cursor_down(&mut self) -> orfail::Result<bool> {
+        if let Some(new_cursor) = self.root_node.cursor_down(&self.cursor).or_fail()? {
+            self.cursor = new_cursor;
+            self.expand_parent().or_fail()?;
+            Ok(true)
+        } else {
+            Ok(false)
+        }
+    }
+
+    pub fn cursor_right(&mut self) -> orfail::Result<()> {
+        if let Some(new_cursor) = self.root_node.cursor_right(&self.cursor).or_fail()? {
+            self.cursor = new_cursor;
+            self.expand_parent().or_fail()?;
+        }
+        Ok(())
+    }
+
+    pub fn cursor_left(&mut self) {
+        if let Some(parent) = self.cursor.parent() {
+            self.cursor = parent;
+        }
+    }
+
+    pub fn cursor_row(&self) -> usize {
+        self.root_node.cursor_row(&self.cursor)
+    }
+
+    pub fn toggle_expansion(&mut self) -> orfail::Result<()> {
+        self.root_node.toggle(&self.cursor).or_fail()
     }
 
     pub fn children_and_diffs(&self) -> impl '_ + Iterator<Item = (&DiffTreeNode, &PhasedDiff)> {
