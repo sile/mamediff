@@ -6,7 +6,7 @@ use orfail::OrFail;
 use crate::{
     canvas::{Canvas, Token, TokenStyle},
     diff::{ChunkDiff, Diff, FileDiff, LineDiff},
-    git::Git,
+    git,
     terminal::Terminal,
     widget_legend::LegendWidget,
 };
@@ -17,7 +17,6 @@ const COLLAPSED_MARK: &str = "…";
 pub struct App {
     terminal: Terminal,
     exit: bool,
-    git: Git,
     pub cursor: Cursor, // TODO: priv
     row_offset: usize,
     tree: DiffTree,
@@ -25,12 +24,11 @@ pub struct App {
 }
 
 impl App {
-    pub fn new(git: Git) -> orfail::Result<Self> {
+    pub fn new() -> orfail::Result<Self> {
         let terminal = Terminal::new().or_fail()?;
         Ok(Self {
             terminal,
             exit: false,
-            git,
             cursor: Cursor::root(),
             row_offset: 0,
             tree: DiffTree::new(),
@@ -266,7 +264,7 @@ impl App {
     fn reload_diff(&mut self) -> orfail::Result<()> {
         let old_tree = self.tree.clone(); // TODO
 
-        let (unstaged_diff, staged_diff) = self.git.unstaged_and_staged_diffs().or_fail()?;
+        let (unstaged_diff, staged_diff) = git::unstaged_and_staged_diffs().or_fail()?;
         self.reload_tree(unstaged_diff, staged_diff, &old_tree)
             .or_fail()?;
 
@@ -293,7 +291,7 @@ impl App {
     fn reload_diff_reset(&mut self) -> orfail::Result<()> {
         let old_tree = DiffTree::new();
         self.cursor = Cursor::root();
-        let (unstaged_diff, staged_diff) = self.git.unstaged_and_staged_diffs().or_fail()?;
+        let (unstaged_diff, staged_diff) = git::unstaged_and_staged_diffs().or_fail()?;
         self.reload_tree(unstaged_diff, staged_diff, &old_tree)
             .or_fail()?;
         self.render().or_fail()?; // TODO: optimize
@@ -332,7 +330,7 @@ impl App {
     fn handle_stage(&mut self) -> orfail::Result<()> {
         if self.can_stage() {
             self.tree.root_node.children[0]
-                .stage(&self.cursor, &self.tree.unstaged_diff.diff, &self.git)
+                .stage(&self.cursor, &self.tree.unstaged_diff.diff)
                 .or_fail()?;
             self.reload_diff().or_fail()?;
         }
@@ -342,7 +340,7 @@ impl App {
     fn handle_discard(&mut self) -> orfail::Result<()> {
         if self.can_stage() {
             self.tree.root_node.children[0]
-                .discard(&self.cursor, &self.tree.unstaged_diff.diff, &self.git)
+                .discard(&self.cursor, &self.tree.unstaged_diff.diff)
                 .or_fail()?;
             self.reload_diff().or_fail()?;
         }
@@ -352,7 +350,7 @@ impl App {
     fn handle_unstage(&mut self) -> orfail::Result<()> {
         if self.can_unstage() {
             self.tree.root_node.children[1]
-                .unstage(&self.cursor, &self.tree.staged_diff.diff, &self.git)
+                .unstage(&self.cursor, &self.tree.staged_diff.diff)
                 .or_fail()?;
         }
         Ok(())
@@ -900,21 +898,21 @@ impl DiffTreeNode {
         }
     }
 
-    pub fn stage(&self, cursor: &Cursor, diff: &Diff, git: &Git) -> orfail::Result<()> {
+    pub fn stage(&self, cursor: &Cursor, diff: &Diff) -> orfail::Result<()> {
         let diff = self.get_diff(cursor, diff, true).or_fail()?;
-        git.stage(&diff).or_fail()?;
+        git::stage(&diff).or_fail()?;
         Ok(())
     }
 
-    pub fn discard(&self, cursor: &Cursor, diff: &Diff, git: &Git) -> orfail::Result<()> {
+    pub fn discard(&self, cursor: &Cursor, diff: &Diff) -> orfail::Result<()> {
         let diff = self.get_diff(cursor, diff, true).or_fail()?;
-        git.discard(&diff).or_fail()?;
+        git::discard(&diff).or_fail()?;
         Ok(())
     }
 
-    pub fn unstage(&self, cursor: &Cursor, diff: &Diff, git: &Git) -> orfail::Result<()> {
+    pub fn unstage(&self, cursor: &Cursor, diff: &Diff) -> orfail::Result<()> {
         let diff = self.get_diff(cursor, diff, false).or_fail()?;
-        git.unstage(&diff).or_fail()?;
+        git::unstage(&diff).or_fail()?;
         Ok(())
     }
 
