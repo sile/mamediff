@@ -21,6 +21,7 @@ pub struct App {
     cursor: Cursor,
     show_legend: bool,
     row_offset: usize,
+    tree: DiffTree,
 }
 
 impl App {
@@ -34,6 +35,7 @@ impl App {
             cursor: Cursor::root(),
             show_legend: true,
             row_offset: 0,
+            tree: DiffTree::new(),
         })
     }
 

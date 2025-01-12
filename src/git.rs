@@ -9,6 +9,7 @@ use orfail::OrFail;
 
 use crate::diff::{Diff, FileDiff};
 
+// TODO: remove
 #[derive(Debug)]
 pub struct Git {}
 
