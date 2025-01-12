@@ -29,7 +29,9 @@ impl App {
     }
 
     pub fn run(mut self) -> orfail::Result<()> {
-        self.tree.expand_if_possible(self.terminal.size());
+        self.tree
+            .expand_if_possible(self.terminal.size())
+            .or_fail()?;
         self.render().or_fail()?;
 
         while !self.exit {
