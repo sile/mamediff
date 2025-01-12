@@ -294,7 +294,9 @@ impl DiffTreeNode {
         T: DiffTreeNodeContent,
     {
         cursor.render(canvas, &self.path);
-        canvas.draw(content.head_line_token());
+        for token in content.head_line_tokens() {
+            canvas.draw(token);
+        }
         if !self.expanded && !self.children.is_empty() {
             canvas.draw(Token::new("…"));
         }
@@ -598,7 +600,7 @@ impl DiffTreeNode {
 pub trait DiffTreeNodeContent {
     type Child: DiffTreeNodeContent;
 
-    fn head_line_token(&self) -> Token;
+    fn head_line_tokens(&self) -> impl Iterator<Item = Token>;
     fn can_alter(&self) -> bool;
     fn children(&self) -> &[Self::Child];
     fn is_intersect(&self, other: &Self) -> bool;
@@ -607,12 +609,12 @@ pub trait DiffTreeNodeContent {
 impl DiffTreeNodeContent for PhasedDiff {
     type Child = FileDiff;
 
-    fn head_line_token(&self) -> Token {
-        Token::new(format!(
+    fn head_line_tokens(&self) -> impl Iterator<Item = Token> {
+        std::iter::once(Token::new(format!(
             "{:?} changes ({} files)",
             self.phase,
             self.diff.files.len(),
-        ))
+        )))
     }
 
     fn can_alter(&self) -> bool {
@@ -631,42 +633,44 @@ impl DiffTreeNodeContent for PhasedDiff {
 impl DiffTreeNodeContent for FileDiff {
     type Child = ChunkDiff;
 
-    fn head_line_token(&self) -> Token {
-        let text = match self {
+    fn head_line_tokens(&self) -> impl Iterator<Item = Token> {
+        let path = Token::with_style(self.path().display().to_string(), TokenStyle::Underlined);
+        let tokens = match self {
             FileDiff::Update { .. } => {
-                format!(
-                    "modified {} ({} chunks, -{} +{} lines)",
-                    self.path().display(),
-                    self.children().len(),
-                    self.removed_lines(),
-                    self.added_lines(),
-                )
+                vec![
+                    Token::new("modified "),
+                    path,
+                    Token::new(format!(
+                        " ({} chunks, -{} +{} lines)",
+                        self.children().len(),
+                        self.removed_lines(),
+                        self.added_lines(),
+                    )),
+                ]
             }
             FileDiff::New { .. } | FileDiff::Added { .. } => {
-                format!("added {}", self.path().display())
+                vec![Token::new("added "), path]
             }
             FileDiff::Rename { old_path, .. } => {
-                format!(
-                    "renamed {} -> {}",
-                    old_path.display(),
-                    self.path().display()
-                )
+                let old_path =
+                    Token::with_style(old_path.display().to_string(), TokenStyle::Underlined);
+
+                vec![Token::new("renamed "), old_path, Token::new(" -> "), path]
             }
             FileDiff::Delete { .. } => {
-                format!("deleted {}", self.path().display())
+                vec![Token::new("deleted "), path]
             }
             FileDiff::Chmod {
                 old_mode, new_mode, ..
             } => {
-                format!(
-                    "mode changed {} {} -> {}",
-                    self.path().display(),
-                    old_mode,
-                    new_mode
-                )
+                vec![
+                    Token::new("mode changed "),
+                    path,
+                    Token::new(format!(" {} -> {}", old_mode, new_mode)),
+                ]
             }
         };
-        Token::new(text)
+        tokens.into_iter()
     }
 
     fn can_alter(&self) -> bool {
@@ -685,8 +689,8 @@ impl DiffTreeNodeContent for FileDiff {
 impl DiffTreeNodeContent for ChunkDiff {
     type Child = LineDiff;
 
-    fn head_line_token(&self) -> Token {
-        Token::new(self.head_line())
+    fn head_line_tokens(&self) -> impl Iterator<Item = Token> {
+        std::iter::once(Token::new(self.head_line()))
     }
 
     fn can_alter(&self) -> bool {
@@ -713,13 +717,13 @@ impl DiffTreeNodeContent for ChunkDiff {
 impl DiffTreeNodeContent for LineDiff {
     type Child = Self;
 
-    fn head_line_token(&self) -> Token {
+    fn head_line_tokens(&self) -> impl Iterator<Item = Token> {
         let style = match self {
             LineDiff::Old(_) => TokenStyle::Dim,
             LineDiff::New(_) => TokenStyle::Bold,
             LineDiff::Both(_) => TokenStyle::Plain,
         };
-        Token::with_style(self.to_string(), style)
+        std::iter::once(Token::with_style(self.to_string(), style))
     }
 
     fn can_alter(&self) -> bool {

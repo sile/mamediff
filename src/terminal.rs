@@ -70,6 +70,7 @@ impl Terminal {
                     TokenStyle::Plain => Attributes::none(),
                     TokenStyle::Bold => Attributes::none().with(Attribute::Bold),
                     TokenStyle::Dim => Attributes::none().with(Attribute::Dim),
+                    TokenStyle::Underlined => Attributes::none().with(Attribute::Underlined),
                 };
                 let content = StyledContent::new(
                     ContentStyle {
