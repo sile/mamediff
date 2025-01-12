@@ -4,10 +4,11 @@ use crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use orfail::OrFail;
 
 use crate::{
-    canvas::{Canvas, Token, TokenPosition, TokenStyle},
+    canvas::{Canvas, Token, TokenStyle},
     diff::{ChunkDiff, Diff, FileDiff, LineDiff},
     git::Git,
     terminal::Terminal,
+    widget_legend::LegendWidget,
 };
 
 const COLLAPSED_MARK: &str = "…";
@@ -17,10 +18,10 @@ pub struct App {
     terminal: Terminal,
     exit: bool,
     git: Git,
-    cursor: Cursor,
-    show_legend: bool,
+    pub cursor: Cursor, // TODO: priv
     row_offset: usize,
     tree: DiffTree,
+    legend: LegendWidget,
 }
 
 impl App {
@@ -31,9 +32,9 @@ impl App {
             exit: false,
             git,
             cursor: Cursor::root(),
-            show_legend: true,
             row_offset: 0,
             tree: DiffTree::new(),
+            legend: LegendWidget::default(),
         })
     }
 
@@ -68,7 +69,7 @@ impl App {
             }
         }
 
-        self.render_legend(&mut canvas).or_fail()?;
+        self.legend.render(&mut canvas, self);
 
         self.terminal.render(canvas.into_frame()).or_fail()?;
         Ok(())
@@ -78,7 +79,7 @@ impl App {
         self.tree.root_node.cursor_row(&self.cursor)
     }
 
-    fn is_togglable(&self) -> bool {
+    pub fn is_togglable(&self) -> bool {
         self.tree
             .root_node
             .get_children(&self.cursor)
@@ -86,61 +87,18 @@ impl App {
             .is_some_and(|c| !c.is_empty())
     }
 
-    fn can_stage(&self) -> bool {
+    pub fn can_stage(&self) -> bool {
         self.tree.root_node.children[0]
             .can_alter(&self.cursor, &self.tree.unstaged_diff)
             .ok()
             .is_some_and(|b| b)
     }
 
-    fn can_unstage(&self) -> bool {
+    pub fn can_unstage(&self) -> bool {
         self.tree.root_node.children[1]
             .can_alter(&self.cursor, &self.tree.staged_diff)
             .ok()
             .is_some_and(|b| b)
-    }
-
-    fn render_legend(&mut self, canvas: &mut Canvas) -> orfail::Result<()> {
-        // TODO: Skip rendering if the terminal size is too small.
-        canvas.set_cursor(TokenPosition::row(canvas.frame_row_range().start));
-        if self.show_legend {
-            let col = self.terminal.size().cols.saturating_sub(19);
-            canvas.set_col_offset(col);
-            canvas.drawl(Token::new("| (q)uit [ESC,C-c]"));
-
-            if self.cursor.path.last() != Some(&0) {
-                canvas.drawl(Token::new("| (↑)        [C-p]"));
-            }
-            if self.can_down() {
-                canvas.drawl(Token::new("| (↓)        [C-n]"));
-            }
-            if self.cursor.path.len() > 1 {
-                canvas.drawl(Token::new("| (←)        [C-f]"));
-            }
-            if self.can_right() {
-                canvas.drawl(Token::new("| (→)        [C-b]"));
-            }
-            if self.is_togglable() {
-                canvas.drawl(Token::new("| (t)oggle   [TAB]"));
-            }
-            if self.can_stage() {
-                canvas.drawl(Token::new("| (s)tage         "));
-            }
-            if self.can_stage() {
-                canvas.drawl(Token::new("| (D)iscard       "));
-            }
-            if self.can_unstage() {
-                canvas.drawl(Token::new("| (u)nstage       "));
-            }
-            canvas.drawl(Token::new("+---- (h)ide -----"));
-        } else {
-            let col = self.terminal.size().cols.saturating_sub(11);
-            canvas.set_col_offset(col);
-            canvas.drawl(Token::new("|   ...    "));
-            canvas.drawl(Token::new("+- s(h)ow -"));
-        };
-
-        Ok(())
     }
 
     fn handle_event(&mut self, event: Event) -> orfail::Result<()> {
@@ -181,7 +139,7 @@ impl App {
                 self.handle_discard().or_fail()?;
             }
             KeyCode::Char('h') => {
-                self.show_legend = !self.show_legend;
+                self.legend.toggle_hide();
                 self.render().or_fail()?;
             }
             KeyCode::Char('p') if event.modifiers.contains(KeyModifiers::CONTROL) => {
@@ -299,7 +257,7 @@ impl App {
     }
 
     fn handle_left(&mut self) -> orfail::Result<()> {
-        if self.cursor.path.len() > 1 {
+        if self.cursor.path.len() > 2 {
             self.cursor.path.pop();
         }
         Ok(())
@@ -323,11 +281,11 @@ impl App {
         self.tree.root_node.is_valid_cursor(&self.cursor)
     }
 
-    fn can_right(&self) -> bool {
+    pub fn can_right(&self) -> bool {
         matches!(self.tree.root_node.cursor_right(&self.cursor), Ok(Some(_)))
     }
 
-    fn can_down(&self) -> bool {
+    pub fn can_down(&self) -> bool {
         matches!(self.tree.root_node.cursor_down(&self.cursor), Ok(Some(_)))
     }
 
@@ -590,7 +548,7 @@ pub struct Cursor {
 
 impl Cursor {
     pub fn root() -> Self {
-        Self { path: vec![0] }
+        Self { path: vec![0, 0] }
     }
 
     // TODO: rename
@@ -617,7 +575,7 @@ impl Cursor {
             text.push(' ');
         }
 
-        for i in 1..diff_path.len() {
+        for i in 2..diff_path.len() {
             if i == self.path.len() && diff_path.starts_with(&self.path) {
                 text.push_str(" :")
             } else if selected {

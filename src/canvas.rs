@@ -29,6 +29,10 @@ impl Canvas {
         }
     }
 
+    pub fn frame_size(&self) -> TerminalSize {
+        self.frame.size
+    }
+
     pub fn is_frame_exceeded(&self) -> bool {
         self.cursor.row >= self.frame_row_range().end
     }
