@@ -19,8 +19,8 @@ pub struct DiffTreeWidget {
 }
 
 impl DiffTreeWidget {
-    pub fn new() -> Self {
-        Self {
+    pub fn new() -> orfail::Result<Self> {
+        let mut this = Self {
             unstaged_diff: PhasedDiff {
                 phase: DiffPhase::Unstaged,
                 diff: Diff::default(),
@@ -31,7 +31,9 @@ impl DiffTreeWidget {
             },
             root_node: DiffTreeNode::new_root_node(),
             cursor: Cursor::root(),
-        }
+        };
+        this.reload().or_fail()?;
+        Ok(this)
     }
 
     pub fn expand_if_possible(&mut self, _terminal_size: TerminalSize) {
@@ -51,7 +53,7 @@ impl DiffTreeWidget {
     }
 
     pub fn can_cursor_down(&self) -> bool {
-        matches!(self.root_node.cursor_down(&self.cursor), Ok(Some(_)))
+        matches!(self.root_node.cursor_down(&self.cursor), Some(_))
     }
 
     pub fn can_cursor_right(&self) -> bool {
@@ -101,7 +103,7 @@ impl DiffTreeWidget {
     }
 
     pub fn cursor_down(&mut self) -> orfail::Result<bool> {
-        if let Some(new_cursor) = self.root_node.cursor_down(&self.cursor).or_fail()? {
+        if let Some(new_cursor) = self.root_node.cursor_down(&self.cursor) {
             self.cursor = new_cursor;
             self.expand_parent().or_fail()?;
             Ok(true)
@@ -110,17 +112,22 @@ impl DiffTreeWidget {
         }
     }
 
-    pub fn cursor_right(&mut self) -> orfail::Result<()> {
+    pub fn cursor_right(&mut self) -> orfail::Result<bool> {
         if let Some(new_cursor) = self.root_node.cursor_right(&self.cursor).or_fail()? {
             self.cursor = new_cursor;
             self.expand_parent().or_fail()?;
+            Ok(true)
+        } else {
+            Ok(false)
         }
-        Ok(())
     }
 
-    pub fn cursor_left(&mut self) {
+    pub fn cursor_left(&mut self) -> bool {
         if let Some(parent) = self.cursor.parent() {
             self.cursor = parent;
+            true
+        } else {
+            false
         }
     }
 
@@ -130,6 +137,78 @@ impl DiffTreeWidget {
 
     pub fn toggle_expansion(&mut self) -> orfail::Result<()> {
         self.root_node.toggle(&self.cursor).or_fail()
+    }
+
+    // TODO: refactor
+    fn reload(&mut self) -> orfail::Result<()> {
+        let old = self.clone();
+        let (unstaged_diff, staged_diff) = git::unstaged_and_staged_diffs().or_fail()?;
+
+        self.unstaged_diff.diff = unstaged_diff;
+        self.staged_diff.diff = staged_diff;
+        for (node, diff) in self.children_and_diffs_mut() {
+            node.children.clear();
+            for (i, file) in diff.diff.files.iter().enumerate() {
+                let path = node.path.join(i);
+                let child = DiffTreeNode::new_file_diff_node(path, file);
+                node.children.push(child);
+            }
+
+            node.restore_diff_node_state(
+                &diff.diff,
+                &old.children_and_diffs()
+                    .map(|x| (x.0, &x.1.diff))
+                    .collect::<Vec<_>>(),
+            );
+        }
+
+        while !self.root_node.is_valid_cursor(&self.cursor) {
+            if let Some(sibling_cursor) = self.cursor.prev_sibling() {
+                self.cursor = sibling_cursor;
+            } else if let Some(parent_cursor) = self.cursor.parent() {
+                self.cursor = parent_cursor;
+            } else {
+                self.cursor = Cursor::root();
+                break;
+            }
+        }
+
+        self.expand_parent().or_fail()?;
+
+        Ok(())
+    }
+
+    pub fn stage(&mut self) -> orfail::Result<()> {
+        if !self.can_stage_or_discard() {
+            return Ok(());
+        }
+        self.root_node.children[0]
+            .stage(&self.cursor, &self.unstaged_diff.diff)
+            .or_fail()?;
+        self.reload().or_fail()?;
+        Ok(())
+    }
+
+    pub fn discard(&mut self) -> orfail::Result<()> {
+        if !self.can_stage_or_discard() {
+            return Ok(());
+        }
+        self.root_node.children[0]
+            .discard(&self.cursor, &self.unstaged_diff.diff)
+            .or_fail()?;
+        self.reload().or_fail()?;
+        Ok(())
+    }
+
+    pub fn unstage(&mut self) -> orfail::Result<()> {
+        if !self.can_unstage() {
+            return Ok(());
+        }
+        self.root_node.children[1]
+            .unstage(&self.cursor, &self.staged_diff.diff)
+            .or_fail()?;
+        self.reload().or_fail()?;
+        Ok(())
     }
 
     pub fn children_and_diffs(&self) -> impl '_ + Iterator<Item = (&DiffTreeNode, &PhasedDiff)> {
@@ -467,15 +546,13 @@ impl DiffTreeNode {
         Ok(None)
     }
 
-    pub fn cursor_down(&self, cursor: &Cursor) -> orfail::Result<Option<Cursor>> {
-        let mut cursor = cursor.clone();
-
+    pub fn cursor_down(&self, cursor: &Cursor) -> Option<Cursor> {
         let sibling_cursor = cursor.next_sibling();
         if self.is_valid_cursor(&sibling_cursor) {
-            return Ok(Some(sibling_cursor));
+            return Some(sibling_cursor);
         }
 
-        cursor = cursor.parent().or_fail()?;
+        let mut cursor = cursor.parent()?;
         while self.is_valid_cursor(&cursor) {
             let sibling_cursor = cursor.next_sibling();
             if self
@@ -483,12 +560,12 @@ impl DiffTreeNode {
                 .ok()
                 .is_some_and(|n| !n.children.is_empty())
             {
-                return Ok(Some(sibling_cursor.first_child()));
+                return Some(sibling_cursor.first_child());
             }
             cursor = sibling_cursor;
         }
 
-        Ok(None)
+        None
     }
 
     pub fn cursor_up(&self, cursor: &Cursor) -> orfail::Result<Option<Cursor>> {
