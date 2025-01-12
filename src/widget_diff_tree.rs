@@ -8,8 +8,45 @@ use crate::{
     git,
 };
 
-#[derive(Debug)]
-pub struct DiffTreeWidget {}
+#[derive(Debug, Clone)]
+pub struct DiffTreeWidget {
+    // TODO: priv
+    pub unstaged_diff: PhasedDiff,
+    pub staged_diff: PhasedDiff,
+    pub root_node: DiffTreeNode,
+}
+
+impl DiffTreeWidget {
+    pub fn children_and_diffs(&self) -> impl '_ + Iterator<Item = (&DiffTreeNode, &PhasedDiff)> {
+        self.root_node
+            .children
+            .iter()
+            .zip([&self.unstaged_diff, &self.staged_diff])
+    }
+
+    pub fn children_and_diffs_mut(
+        &mut self,
+    ) -> impl '_ + Iterator<Item = (&mut DiffTreeNode, &mut PhasedDiff)> {
+        self.root_node
+            .children
+            .iter_mut()
+            .zip([&mut self.unstaged_diff, &mut self.staged_diff])
+    }
+
+    pub fn new() -> Self {
+        Self {
+            unstaged_diff: PhasedDiff {
+                phase: DiffPhase::Unstaged,
+                diff: Diff::default(),
+            },
+            staged_diff: PhasedDiff {
+                phase: DiffPhase::Staged,
+                diff: Diff::default(),
+            },
+            root_node: DiffTreeNode::new_root_node(),
+        }
+    }
+}
 
 #[derive(Debug, Clone)]
 pub struct DiffTreeNode {

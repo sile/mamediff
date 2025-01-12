@@ -6,7 +6,7 @@ use crate::{
     diff::Diff,
     git,
     terminal::Terminal,
-    widget_diff_tree::{Cursor, DiffPhase, DiffTreeNode, PhasedDiff},
+    widget_diff_tree::{Cursor, DiffTreeNode, DiffTreeWidget},
     widget_legend::LegendWidget,
 };
 
@@ -16,7 +16,7 @@ pub struct App {
     exit: bool,
     pub cursor: Cursor, // TODO: priv
     row_offset: usize,
-    tree: DiffTree,
+    tree: DiffTreeWidget,
     legend: LegendWidget,
 }
 
@@ -28,7 +28,7 @@ impl App {
             exit: false,
             cursor: Cursor::root(),
             row_offset: 0,
-            tree: DiffTree::new(),
+            tree: DiffTreeWidget::new(),
             legend: LegendWidget::default(),
         })
     }
@@ -292,7 +292,7 @@ impl App {
 
     // TODO: maybe unnecessary
     fn reload_diff_reset(&mut self) -> orfail::Result<()> {
-        let old_tree = DiffTree::new();
+        let old_tree = DiffTreeWidget::new();
         self.cursor = Cursor::root();
         let (unstaged_diff, staged_diff) = git::unstaged_and_staged_diffs().or_fail()?;
         self.reload_tree(unstaged_diff, staged_diff, &old_tree)
@@ -306,7 +306,7 @@ impl App {
         &mut self,
         unstaged_diff: Diff,
         staged_diff: Diff,
-        old_tree: &DiffTree,
+        old_tree: &DiffTreeWidget,
     ) -> orfail::Result<()> {
         self.tree.unstaged_diff.diff = unstaged_diff;
         self.tree.staged_diff.diff = staged_diff;
@@ -356,46 +356,5 @@ impl App {
                 .or_fail()?;
         }
         Ok(())
-    }
-}
-
-// TODO: move to widget_diff.rs
-#[derive(Debug, Clone)]
-pub struct DiffTree {
-    // TODO: priv
-    pub unstaged_diff: PhasedDiff,
-    pub staged_diff: PhasedDiff,
-    pub root_node: DiffTreeNode,
-}
-
-impl DiffTree {
-    pub fn children_and_diffs(&self) -> impl '_ + Iterator<Item = (&DiffTreeNode, &PhasedDiff)> {
-        self.root_node
-            .children
-            .iter()
-            .zip([&self.unstaged_diff, &self.staged_diff])
-    }
-
-    pub fn children_and_diffs_mut(
-        &mut self,
-    ) -> impl '_ + Iterator<Item = (&mut DiffTreeNode, &mut PhasedDiff)> {
-        self.root_node
-            .children
-            .iter_mut()
-            .zip([&mut self.unstaged_diff, &mut self.staged_diff])
-    }
-
-    pub fn new() -> Self {
-        Self {
-            unstaged_diff: PhasedDiff {
-                phase: DiffPhase::Unstaged,
-                diff: Diff::default(),
-            },
-            staged_diff: PhasedDiff {
-                phase: DiffPhase::Staged,
-                diff: Diff::default(),
-            },
-            root_node: DiffTreeNode::new_root_node(),
-        }
     }
 }
