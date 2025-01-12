@@ -10,7 +10,7 @@ use crate::{
 pub struct App {
     terminal: Terminal,
     exit: bool,
-    row_offset: usize,
+    frame_row_start: usize,
     tree: DiffTreeWidget,
     legend: LegendWidget,
 }
@@ -22,7 +22,7 @@ impl App {
         Ok(Self {
             terminal,
             exit: false,
-            row_offset: 0,
+            frame_row_start: 0,
             tree,
             legend: LegendWidget::default(),
         })
@@ -45,7 +45,7 @@ impl App {
             return Ok(());
         }
 
-        let mut canvas = Canvas::new(self.row_offset, self.terminal.size());
+        let mut canvas = Canvas::new(self.frame_row_start, self.terminal.size());
         self.tree.render(&mut canvas);
         self.legend.render(&mut canvas, &self.tree);
         self.terminal.draw_frame(canvas.into_frame()).or_fail()?;
@@ -63,7 +63,7 @@ impl App {
             Event::Resize(_, _) => {
                 let cursor_row = self.tree.cursor_row();
                 let rows = self.terminal.size().rows;
-                self.row_offset = cursor_row.saturating_sub(rows / 2);
+                self.frame_row_start = cursor_row.saturating_sub(rows / 2);
                 self.render().or_fail()
             }
         }
@@ -84,19 +84,19 @@ impl App {
             }
             KeyCode::Char('u') => {
                 if self.tree.unstage().or_fail()? {
-                    self.scroll_if_need().or_fail()?;
+                    self.scroll_if_need();
                     self.render().or_fail()?;
                 }
             }
             KeyCode::Char('s') => {
                 if self.tree.stage().or_fail()? {
-                    self.scroll_if_need().or_fail()?;
+                    self.scroll_if_need();
                     self.render().or_fail()?;
                 }
             }
             KeyCode::Char('D') => {
                 if self.tree.discard().or_fail()? {
-                    self.scroll_if_need().or_fail()?;
+                    self.scroll_if_need();
                     self.render().or_fail()?;
                 }
             }
@@ -106,49 +106,49 @@ impl App {
             }
             KeyCode::Char('p') if ctrl => {
                 if self.tree.cursor_up().or_fail()? {
-                    self.scroll_if_need().or_fail()?;
+                    self.scroll_if_need();
                     self.render().or_fail()?;
                 }
             }
             KeyCode::Up => {
                 if self.tree.cursor_up().or_fail()? {
-                    self.scroll_if_need().or_fail()?;
+                    self.scroll_if_need();
                     self.render().or_fail()?;
                 }
             }
             KeyCode::Char('n') if ctrl => {
                 if self.tree.cursor_down().or_fail()? {
-                    self.scroll_if_need().or_fail()?;
+                    self.scroll_if_need();
                     self.render().or_fail()?;
                 }
             }
             KeyCode::Down => {
                 if self.tree.cursor_down().or_fail()? {
-                    self.scroll_if_need().or_fail()?;
+                    self.scroll_if_need();
                     self.render().or_fail()?;
                 }
             }
             KeyCode::Char('f') if ctrl => {
                 if self.tree.cursor_right().or_fail()? {
-                    self.scroll_if_need().or_fail()?;
+                    self.scroll_if_need();
                     self.render().or_fail()?;
                 }
             }
             KeyCode::Right => {
                 if self.tree.cursor_right().or_fail()? {
-                    self.scroll_if_need().or_fail()?;
+                    self.scroll_if_need();
                     self.render().or_fail()?;
                 }
             }
             KeyCode::Char('b') if ctrl => {
                 if self.tree.cursor_left() {
-                    self.scroll_if_need().or_fail()?;
+                    self.scroll_if_need();
                     self.render().or_fail()?;
                 }
             }
             KeyCode::Left => {
                 if self.tree.cursor_left() {
-                    self.scroll_if_need().or_fail()?;
+                    self.scroll_if_need();
                     self.render().or_fail()?;
                 }
             }
@@ -156,20 +156,45 @@ impl App {
                 self.tree.toggle_expansion().or_fail()?;
                 self.render().or_fail()?;
             }
-            // TODO: Add a key bind to scroll
+            KeyCode::Char('r') => {
+                self.recenter();
+                self.render().or_fail()?;
+            }
+            KeyCode::Char('l') if ctrl => {
+                self.recenter();
+                self.render().or_fail()?;
+            }
             _ => {}
         }
         Ok(())
     }
 
-    fn scroll_if_need(&mut self) -> orfail::Result<()> {
+    fn scroll_if_need(&mut self) {
         let cursor_row = self.tree.cursor_row();
-
         let terminal_rows = self.terminal.size().rows;
-        if !(self.row_offset..self.row_offset + terminal_rows).contains(&cursor_row) {
-            self.row_offset = cursor_row.saturating_sub(terminal_rows / 2);
+        let frame_row_end = self.frame_row_start + terminal_rows;
+
+        if !(self.frame_row_start..frame_row_end).contains(&cursor_row) {
+            self.frame_row_start = cursor_row.saturating_sub(terminal_rows / 2);
+        }
+    }
+
+    fn recenter(&mut self) {
+        if self.terminal.size().is_empty() {
+            return;
         }
 
-        Ok(())
+        let current = self.frame_row_start;
+        let cursor_row = self.tree.cursor_row();
+        let top = cursor_row;
+        let bottom = cursor_row.saturating_sub(self.terminal.size().rows - 1);
+        let center = cursor_row.saturating_sub(self.terminal.size().rows / 2);
+        self.frame_row_start = if current != center && current != top {
+            center
+        } else if current == center {
+            top
+        } else {
+            bottom
+        };
     }
 }

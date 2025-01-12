@@ -140,14 +140,6 @@ impl DiffTreeWidget {
         self.root_node.toggle(&self.cursor).or_fail()
     }
 
-    pub fn current_node_rows(&self) -> orfail::Result<usize> {
-        self.root_node
-            .get_node(&self.cursor)
-            .ok()
-            .map(|n| n.rows())
-            .or_fail()
-    }
-
     // TODO: refactor
     fn reload(&mut self) -> orfail::Result<()> {
         let old = self.clone();

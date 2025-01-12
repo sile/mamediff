@@ -21,13 +21,14 @@ impl LegendWidget {
         if self.hide {
             let col = canvas.frame_size().cols - Self::HIDE_COLS;
             canvas.set_col_offset(col);
-            canvas.drawl(Token::new("|   ...    "));
             canvas.drawl(Token::new("+- s(h)ow -"));
         } else {
             let col = canvas.frame_size().cols - Self::SHOW_COLS;
             canvas.set_col_offset(col);
             canvas.drawl(Token::new("| (q)uit [ESC,C-c]"));
-
+            if tree.cursor_row() != 0 {
+                canvas.drawl(Token::new("| (r)ecenter [C-l]"));
+            }
             if tree.can_cursor_up() {
                 canvas.drawl(Token::new("| (↑)        [C-p]"));
             }
