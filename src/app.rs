@@ -8,6 +8,7 @@ use crate::{
     diff::{ChunkDiff, Diff, FileDiff, LineDiff},
     git,
     terminal::Terminal,
+    widget_diff_tree::{Cursor, NodePath},
     widget_legend::LegendWidget,
 };
 
@@ -254,9 +255,10 @@ impl App {
         Ok(())
     }
 
+    // TODO: remove
     fn handle_left(&mut self) -> orfail::Result<()> {
-        if self.cursor.path.len() > 2 {
-            self.cursor.path.pop();
+        if let Some(parent) = self.cursor.parent() {
+            self.cursor = parent;
         }
         Ok(())
     }
@@ -268,7 +270,12 @@ impl App {
         self.reload_tree(unstaged_diff, staged_diff, &old_tree)
             .or_fail()?;
 
-        while !self.is_valid_cursor() && self.cursor.prev() {}
+        while !self.is_valid_cursor() {
+            self.handle_up().or_fail()?;
+            if !self.is_valid_cursor() {
+                self.handle_left().or_fail()?;
+            }
+        }
         // TODO: expand cursor position if need
 
         self.render().or_fail()?;
@@ -310,8 +317,7 @@ impl App {
         for (node, diff) in self.tree.children_and_diffs_mut() {
             node.children.clear();
             for (i, file) in diff.diff.files.iter().enumerate() {
-                let mut path = node.path.clone();
-                path.push(i);
+                let path = node.path.join(i);
                 let child = DiffTreeNode::new_file_diff_node(path, file);
                 node.children.push(child);
             }
@@ -516,85 +522,6 @@ impl DiffTreeNodeContent for ChunkDiff {
     }
 }
 
-// TODO: rename: DiffPath
-#[derive(Debug, Clone)]
-pub struct WidgetPath {
-    pub path: Vec<usize>,
-}
-
-impl WidgetPath {
-    pub fn new(path: Vec<usize>) -> Self {
-        Self { path }
-    }
-
-    pub fn last_index(&self) -> usize {
-        // bar
-        self.path[self.path.len() - 1]
-    }
-
-    pub fn join(&self, index: usize) -> Self {
-        let mut path = self.path.clone();
-        path.push(index);
-        Self::new(path)
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Cursor {
-    pub path: Vec<usize>,
-}
-
-impl Cursor {
-    pub fn root() -> Self {
-        Self { path: vec![0, 0] }
-    }
-
-    // TODO: rename
-    pub fn prev(&mut self) -> bool {
-        let last = self.path.last_mut().expect("infallible");
-        if let Some(x) = last.checked_sub(1) {
-            *last = x;
-            true
-        } else if self.path.len() > 1 {
-            self.path.pop();
-            true
-        } else {
-            false
-        }
-    }
-
-    pub fn render(&self, canvas: &mut Canvas, diff_path: &[usize]) {
-        let mut text = String::with_capacity(diff_path.len() * 2);
-        let selected = diff_path == self.path;
-
-        if selected {
-            text.push('-');
-        } else {
-            text.push(' ');
-        }
-
-        for i in 2..diff_path.len() {
-            if i == self.path.len() && diff_path.starts_with(&self.path) {
-                text.push_str(" :")
-            } else if selected {
-                text.push_str("--")
-            } else {
-                text.push_str("  ")
-            }
-        }
-
-        if selected {
-            text.push_str(">| ");
-        } else if diff_path.len() == self.path.len() {
-            text.push_str(" | ");
-        } else {
-            text.push_str("   ");
-        }
-
-        canvas.draw(Token::new(text));
-    }
-}
-
 impl DiffTreeNodeContent for LineDiff {
     type Child = Self;
 
@@ -632,24 +559,25 @@ pub trait DiffTreeNodeContent {
 
 #[derive(Debug, Clone)]
 pub struct DiffTreeNode {
-    pub path: Vec<usize>,
+    pub path: NodePath,
     pub expanded: bool,
     pub children: Vec<Self>,
 }
 
 impl DiffTreeNode {
     pub fn new_root_node() -> Self {
+        let root_path = NodePath::root();
         Self {
-            path: vec![0],
+            path: root_path.clone(),
             expanded: true,
             children: vec![
-                Self::new_diff_node(vec![0, 0]),
-                Self::new_diff_node(vec![0, 1]),
+                Self::new_diff_node(root_path.join(0)),
+                Self::new_diff_node(root_path.join(1)),
             ],
         }
     }
 
-    pub fn new_diff_node(path: Vec<usize>) -> Self {
+    pub fn new_diff_node(path: NodePath) -> Self {
         Self {
             path,
             expanded: true,
@@ -657,15 +585,11 @@ impl DiffTreeNode {
         }
     }
 
-    pub fn new_file_diff_node(path: Vec<usize>, diff: &FileDiff) -> Self {
+    pub fn new_file_diff_node(path: NodePath, diff: &FileDiff) -> Self {
         let children = diff
             .chunks()
             .enumerate()
-            .map(|(i, c)| {
-                let mut path = path.clone();
-                path.push(i);
-                DiffTreeNode::new_chunk_diff_node(path, c)
-            })
+            .map(|(i, c)| DiffTreeNode::new_chunk_diff_node(path.join(i), c))
             .collect();
         Self {
             path,
@@ -674,13 +598,9 @@ impl DiffTreeNode {
         }
     }
 
-    pub fn new_chunk_diff_node(path: Vec<usize>, diff: &ChunkDiff) -> Self {
+    pub fn new_chunk_diff_node(path: NodePath, diff: &ChunkDiff) -> Self {
         let children = (0..diff.lines.len())
-            .map(|i| {
-                let mut path = path.clone();
-                path.push(i);
-                DiffTreeNode::new_line_diff_node(path)
-            })
+            .map(|i| DiffTreeNode::new_line_diff_node(path.join(i)))
             .collect();
         Self {
             path,
@@ -689,7 +609,7 @@ impl DiffTreeNode {
         }
     }
 
-    pub fn new_line_diff_node(path: Vec<usize>) -> Self {
+    pub fn new_line_diff_node(path: NodePath) -> Self {
         Self {
             path,
             expanded: false,
@@ -762,7 +682,7 @@ impl DiffTreeNode {
     }
 
     pub fn cursor_row(&self, cursor: &Cursor) -> usize {
-        match cursor.path[..self.path.len()].cmp(&self.path) {
+        match cursor.path.as_slice()[..self.path.len()].cmp(self.path.as_slice()) {
             Ordering::Less => 0,
             Ordering::Equal if cursor.path.len() == self.path.len() => 0,
             Ordering::Equal => {
@@ -796,7 +716,7 @@ impl DiffTreeNode {
         if cursor.path.len() == level {
             Ok(content.can_alter())
         } else {
-            let i = cursor.path[level];
+            let i = cursor.path.as_slice()[level];
             let child_node = self.children.get(i).or_fail()?;
             let child_content = content.children().get(i).or_fail()?;
             child_node.can_alter(cursor, child_content).or_fail()
@@ -879,7 +799,7 @@ impl DiffTreeNode {
         if cursor.path.len() == level {
             Ok(self)
         } else {
-            let i = cursor.path[level];
+            let i = cursor.path.as_slice()[level];
             let child = self.children.get_mut(i).or_fail()?;
             child.get_node_mut(cursor).or_fail()
         }
@@ -892,7 +812,7 @@ impl DiffTreeNode {
         if cursor.path.len() == level {
             Ok(None)
         } else {
-            let i = cursor.path[level];
+            let i = cursor.path.as_slice()[level];
             let child = self.children.get(i).or_fail()?;
             Ok(Some((i, child)))
         }
@@ -939,17 +859,16 @@ impl DiffTreeNode {
         let mut cursor = cursor.clone();
 
         while cursor.path.len() >= self.path.len() {
-            cursor.path.push(0);
-            if self.is_valid_cursor(&cursor) {
-                return Ok(Some(cursor));
+            let child_cursor = cursor.first_child();
+            if self.is_valid_cursor(&child_cursor) {
+                return Ok(Some(child_cursor));
             }
-            cursor.path.pop();
 
-            if let Some(n) = cursor.path.last_mut() {
-                *n += 1;
-            }
-            if !self.is_valid_cursor(&cursor) {
-                cursor.path.pop();
+            let sibling_cursor = cursor.next_sibling();
+            if self.is_valid_cursor(&sibling_cursor) {
+                cursor = sibling_cursor;
+            } else {
+                break;
             }
         }
 
@@ -959,51 +878,42 @@ impl DiffTreeNode {
     pub fn cursor_down(&self, cursor: &Cursor) -> orfail::Result<Option<Cursor>> {
         let mut cursor = cursor.clone();
 
-        *cursor.path.last_mut().or_fail()? += 1;
-        if self.is_valid_cursor(&cursor) {
-            return Ok(Some(cursor));
+        let sibling_cursor = cursor.next_sibling();
+        if self.is_valid_cursor(&sibling_cursor) {
+            return Ok(Some(sibling_cursor));
         }
 
-        cursor.path.pop();
+        cursor = cursor.parent().or_fail()?;
         while self.is_valid_cursor(&cursor) {
-            *cursor.path.last_mut().or_fail()? += 1;
+            let sibling_cursor = cursor.next_sibling();
             if self
-                .get_node(&cursor)
+                .get_node(&sibling_cursor)
                 .ok()
                 .is_some_and(|n| !n.children.is_empty())
             {
-                cursor.path.push(0);
-                return Ok(Some(cursor));
+                return Ok(Some(sibling_cursor.first_child()));
             }
+            cursor = sibling_cursor;
         }
 
         Ok(None)
     }
 
     pub fn cursor_up(&self, cursor: &Cursor) -> orfail::Result<Option<Cursor>> {
-        let mut cursor = cursor.clone();
-
-        if let Some(n) = cursor.path.last_mut().filter(|n| **n > 1) {
-            *n -= 1;
-            return Ok(Some(cursor));
+        if let Some(sibling_cursor) = cursor.prev_sibling() {
+            return Ok(Some(sibling_cursor));
         }
 
-        cursor.path.pop();
-        while self.is_valid_cursor(&cursor) {
-            if let Some(n) = cursor.path.last_mut().filter(|n| **n > 1) {
-                *n -= 1;
-            } else {
-                break;
-            }
-
-            if let Some(node) = self
-                .get_node(&cursor)
+        let mut parent_cursor = cursor.parent().or_fail()?;
+        while let Some(parent_sibling_cursor) = parent_cursor.prev_sibling() {
+            if let Some(sibling_index) = self
+                .get_node(&parent_sibling_cursor)
                 .ok()
-                .filter(|node| !node.children.is_empty())
+                .and_then(|node| node.children.len().checked_sub(1))
             {
-                cursor.path.push(node.children.len() - 1);
-                return Ok(Some(cursor));
+                return Ok(Some(parent_sibling_cursor.join(sibling_index)));
             }
+            parent_cursor = parent_sibling_cursor;
         }
 
         Ok(None)

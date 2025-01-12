@@ -29,7 +29,7 @@ impl LegendWidget {
             canvas.set_col_offset(col);
             canvas.drawl(Token::new("| (q)uit [ESC,C-c]"));
 
-            if app.cursor.path.last() != Some(&0) {
+            if app.cursor.prev_sibling().is_some() {
                 canvas.drawl(Token::new("| (↑)        [C-p]"));
             }
             if app.can_down() {
