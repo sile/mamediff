@@ -36,8 +36,31 @@ impl DiffTreeWidget {
         Ok(this)
     }
 
-    pub fn expand_if_possible(&mut self, _terminal_size: TerminalSize) {
-        // TODO:
+    // TODO: priv
+    pub fn expand_if_possible(&mut self, terminal_size: TerminalSize) -> orfail::Result<()> {
+        if !self.cursor_right().or_fail()? {
+            return Ok(());
+        }
+
+        loop {
+            self.root_node
+                .get_node_mut(&self.cursor)
+                .or_fail()?
+                .expanded = true;
+            if self.rows() > terminal_size.rows {
+                self.root_node
+                    .get_node_mut(&self.cursor)
+                    .or_fail()?
+                    .expanded = false;
+                break;
+            }
+            if !self.cursor_down().or_fail()? {
+                break;
+            }
+        }
+
+        self.cursor = Cursor::root();
+        Ok(())
     }
 
     pub fn render(&self, canvas: &mut Canvas) {
@@ -134,6 +157,11 @@ impl DiffTreeWidget {
     pub fn cursor_row(&self) -> usize {
         let root_node_offset = 1;
         self.root_node.cursor_row(&self.cursor) - root_node_offset
+    }
+
+    pub fn rows(&self) -> usize {
+        let root_node_offset = 1;
+        self.root_node.rows() - root_node_offset
     }
 
     pub fn toggle_expansion(&mut self) -> orfail::Result<()> {
@@ -340,18 +368,6 @@ impl DiffTreeNode {
             1 + self.children.iter().map(|c| c.rows()).sum::<usize>()
         } else {
             1
-        }
-    }
-
-    pub fn full_rows(&self) -> usize {
-        1 + self.children.iter().map(|c| c.full_rows()).sum::<usize>()
-    }
-
-    // TODO: delete
-    pub fn expand_all(&mut self) {
-        self.expanded = true;
-        for child in &mut self.children {
-            child.expand_all();
         }
     }
 
