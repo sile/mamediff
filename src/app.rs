@@ -83,16 +83,22 @@ impl App {
                 self.exit = true;
             }
             KeyCode::Char('u') => {
-                self.tree.unstage().or_fail()?;
-                self.render().or_fail()?;
+                if self.tree.unstage().or_fail()? {
+                    self.scroll_if_need().or_fail()?;
+                    self.render().or_fail()?;
+                }
             }
             KeyCode::Char('s') => {
-                self.tree.stage().or_fail()?;
-                self.render().or_fail()?;
+                if self.tree.stage().or_fail()? {
+                    self.scroll_if_need().or_fail()?;
+                    self.render().or_fail()?;
+                }
             }
             KeyCode::Char('D') => {
-                self.tree.discard().or_fail()?;
-                self.render().or_fail()?;
+                if self.tree.discard().or_fail()? {
+                    self.scroll_if_need().or_fail()?;
+                    self.render().or_fail()?;
+                }
             }
             KeyCode::Char('h') => {
                 self.legend.toggle_hide();
@@ -150,25 +156,19 @@ impl App {
                 self.tree.toggle_expansion().or_fail()?;
                 self.render().or_fail()?;
             }
+            // TODO: Add a key bind to scroll
             _ => {}
         }
         Ok(())
     }
 
     fn scroll_if_need(&mut self) -> orfail::Result<()> {
-        // let cursor_abs_row = self.tree.cursor_row();
-        // let current_rows = self
-        //     .tree
-        //     .root_node
-        //     .get_node(&self.tree.cursor)
-        //     .ok()
-        //     .map(|n| n.rows())
-        //     .or_fail()?;
-        // let desired_end_row = cursor_abs_row + current_rows + 1;
-        // if self.row_offset + self.terminal.size().rows < desired_end_row {
-        //     self.row_offset =
-        //         cursor_abs_row.min(desired_end_row.saturating_sub(self.terminal.size().rows));
-        // }
+        let cursor_row = self.tree.cursor_row();
+
+        let terminal_rows = self.terminal.size().rows;
+        if !(self.row_offset..self.row_offset + terminal_rows).contains(&cursor_row) {
+            self.row_offset = cursor_row.saturating_sub(terminal_rows / 2);
+        }
 
         Ok(())
     }

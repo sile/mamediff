@@ -49,7 +49,7 @@ impl DiffTreeWidget {
     }
 
     pub fn can_cursor_up(&self) -> bool {
-        matches!(self.root_node.cursor_up(&self.cursor), Ok(Some(_)))
+        matches!(self.root_node.cursor_up(&self.cursor), Some(_))
     }
 
     pub fn can_cursor_down(&self) -> bool {
@@ -57,7 +57,7 @@ impl DiffTreeWidget {
     }
 
     pub fn can_cursor_right(&self) -> bool {
-        matches!(self.root_node.cursor_right(&self.cursor), Ok(Some(_)))
+        matches!(self.root_node.cursor_right(&self.cursor), Some(_))
     }
 
     pub fn can_cursor_left(&self) -> bool {
@@ -93,7 +93,7 @@ impl DiffTreeWidget {
     }
 
     pub fn cursor_up(&mut self) -> orfail::Result<bool> {
-        if let Some(new_cursor) = self.root_node.cursor_up(&self.cursor).or_fail()? {
+        if let Some(new_cursor) = self.root_node.cursor_up(&self.cursor) {
             self.cursor = new_cursor;
             self.expand_parent().or_fail()?;
             Ok(true)
@@ -113,7 +113,7 @@ impl DiffTreeWidget {
     }
 
     pub fn cursor_right(&mut self) -> orfail::Result<bool> {
-        if let Some(new_cursor) = self.root_node.cursor_right(&self.cursor).or_fail()? {
+        if let Some(new_cursor) = self.root_node.cursor_right(&self.cursor) {
             self.cursor = new_cursor;
             self.expand_parent().or_fail()?;
             Ok(true)
@@ -132,11 +132,20 @@ impl DiffTreeWidget {
     }
 
     pub fn cursor_row(&self) -> usize {
-        self.root_node.cursor_row(&self.cursor)
+        let root_node_offset = 1;
+        self.root_node.cursor_row(&self.cursor) - root_node_offset
     }
 
     pub fn toggle_expansion(&mut self) -> orfail::Result<()> {
         self.root_node.toggle(&self.cursor).or_fail()
+    }
+
+    pub fn current_node_rows(&self) -> orfail::Result<usize> {
+        self.root_node
+            .get_node(&self.cursor)
+            .ok()
+            .map(|n| n.rows())
+            .or_fail()
     }
 
     // TODO: refactor
@@ -178,37 +187,37 @@ impl DiffTreeWidget {
         Ok(())
     }
 
-    pub fn stage(&mut self) -> orfail::Result<()> {
+    pub fn stage(&mut self) -> orfail::Result<bool> {
         if !self.can_stage_or_discard() {
-            return Ok(());
+            return Ok(false);
         }
         self.root_node.children[0]
             .stage(&self.cursor, &self.unstaged_diff.diff)
             .or_fail()?;
         self.reload().or_fail()?;
-        Ok(())
+        Ok(true)
     }
 
-    pub fn discard(&mut self) -> orfail::Result<()> {
+    pub fn discard(&mut self) -> orfail::Result<bool> {
         if !self.can_stage_or_discard() {
-            return Ok(());
+            return Ok(false);
         }
         self.root_node.children[0]
             .discard(&self.cursor, &self.unstaged_diff.diff)
             .or_fail()?;
         self.reload().or_fail()?;
-        Ok(())
+        Ok(true)
     }
 
-    pub fn unstage(&mut self) -> orfail::Result<()> {
+    pub fn unstage(&mut self) -> orfail::Result<bool> {
         if !self.can_unstage() {
-            return Ok(());
+            return Ok(false);
         }
         self.root_node.children[1]
             .unstage(&self.cursor, &self.staged_diff.diff)
             .or_fail()?;
         self.reload().or_fail()?;
-        Ok(())
+        Ok(true)
     }
 
     pub fn children_and_diffs(&self) -> impl '_ + Iterator<Item = (&DiffTreeNode, &PhasedDiff)> {
@@ -526,13 +535,13 @@ impl DiffTreeNode {
         Ok(chunk.get_line_chunk(i, stage).or_fail()?.to_diff(path))
     }
 
-    pub fn cursor_right(&self, cursor: &Cursor) -> orfail::Result<Option<Cursor>> {
+    pub fn cursor_right(&self, cursor: &Cursor) -> Option<Cursor> {
         let mut cursor = cursor.clone();
 
         while cursor.path.len() >= self.path.len() {
             let child_cursor = cursor.first_child();
             if self.is_valid_cursor(&child_cursor) {
-                return Ok(Some(child_cursor));
+                return Some(child_cursor);
             }
 
             let sibling_cursor = cursor.next_sibling();
@@ -543,7 +552,7 @@ impl DiffTreeNode {
             }
         }
 
-        Ok(None)
+        None
     }
 
     pub fn cursor_down(&self, cursor: &Cursor) -> Option<Cursor> {
@@ -552,40 +561,45 @@ impl DiffTreeNode {
             return Some(sibling_cursor);
         }
 
-        let mut cursor = cursor.parent()?;
-        while self.is_valid_cursor(&cursor) {
-            let sibling_cursor = cursor.next_sibling();
-            if self
-                .get_node(&sibling_cursor)
-                .ok()
-                .is_some_and(|n| !n.children.is_empty())
-            {
-                return Some(sibling_cursor.first_child());
-            }
-            cursor = sibling_cursor;
-        }
+        let mut base_cursor = cursor.clone();
+        loop {
+            base_cursor = base_cursor.parent()?;
 
-        None
+            let mut next_cursor = base_cursor.next_sibling();
+            while next_cursor.path.len() < cursor.path.len() {
+                next_cursor = next_cursor.first_child();
+            }
+
+            if self.is_valid_cursor(&next_cursor) {
+                return Some(next_cursor);
+            }
+        }
     }
 
-    pub fn cursor_up(&self, cursor: &Cursor) -> orfail::Result<Option<Cursor>> {
+    pub fn cursor_up(&self, cursor: &Cursor) -> Option<Cursor> {
         if let Some(sibling_cursor) = cursor.prev_sibling() {
-            return Ok(Some(sibling_cursor));
+            return Some(sibling_cursor);
         }
 
-        let mut parent_cursor = cursor.parent().or_fail()?;
-        while let Some(parent_sibling_cursor) = parent_cursor.prev_sibling() {
-            if let Some(sibling_index) = self
-                .get_node(&parent_sibling_cursor)
-                .ok()
-                .and_then(|node| node.children.len().checked_sub(1))
-            {
-                return Ok(Some(parent_sibling_cursor.join(sibling_index)));
+        let mut base_cursor = cursor.clone();
+        loop {
+            base_cursor = base_cursor.parent()?;
+
+            let Some(mut next_cursor) = base_cursor.prev_sibling() else {
+                continue;
+            };
+            while next_cursor.path.len() < cursor.path.len() {
+                let index = self
+                    .get_node(&next_cursor)
+                    .ok()
+                    .map(|n| n.children.len().saturating_sub(1))
+                    .unwrap_or_default();
+                next_cursor = next_cursor.join(index);
             }
-            parent_cursor = parent_sibling_cursor;
+            if self.is_valid_cursor(&next_cursor) {
+                return Some(next_cursor);
+            }
         }
-
-        Ok(None)
     }
 }
 
