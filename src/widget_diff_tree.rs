@@ -49,15 +49,15 @@ impl DiffTreeWidget {
     }
 
     pub fn can_cursor_up(&self) -> bool {
-        matches!(self.root_node.cursor_up(&self.cursor), Some(_))
+        self.root_node.cursor_up(&self.cursor).is_some()
     }
 
     pub fn can_cursor_down(&self) -> bool {
-        matches!(self.root_node.cursor_down(&self.cursor), Some(_))
+        self.root_node.cursor_down(&self.cursor).is_some()
     }
 
     pub fn can_cursor_right(&self) -> bool {
-        matches!(self.root_node.cursor_right(&self.cursor), Some(_))
+        self.root_node.cursor_right(&self.cursor).is_some()
     }
 
     pub fn can_cursor_left(&self) -> bool {
