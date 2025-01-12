@@ -29,13 +29,13 @@ impl LegendWidget {
             canvas.set_col_offset(col);
             canvas.drawl(Token::new("| (q)uit [ESC,C-c]"));
 
-            if app.cursor.prev_sibling().is_some() {
+            if app.tree.cursor.prev_sibling().is_some() {
                 canvas.drawl(Token::new("| (↑)        [C-p]"));
             }
             if app.can_down() {
                 canvas.drawl(Token::new("| (↓)        [C-n]"));
             }
-            if app.cursor.path.len() > 2 {
+            if app.tree.cursor.path.len() > 2 {
                 canvas.drawl(Token::new("| (←)        [C-f]"));
             }
             if app.can_right() {

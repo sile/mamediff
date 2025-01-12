@@ -14,9 +14,25 @@ pub struct DiffTreeWidget {
     pub unstaged_diff: PhasedDiff,
     pub staged_diff: PhasedDiff,
     pub root_node: DiffTreeNode,
+    pub cursor: Cursor,
 }
 
 impl DiffTreeWidget {
+    pub fn new() -> Self {
+        Self {
+            unstaged_diff: PhasedDiff {
+                phase: DiffPhase::Unstaged,
+                diff: Diff::default(),
+            },
+            staged_diff: PhasedDiff {
+                phase: DiffPhase::Staged,
+                diff: Diff::default(),
+            },
+            root_node: DiffTreeNode::new_root_node(),
+            cursor: Cursor::root(),
+        }
+    }
+
     pub fn children_and_diffs(&self) -> impl '_ + Iterator<Item = (&DiffTreeNode, &PhasedDiff)> {
         self.root_node
             .children
@@ -31,20 +47,6 @@ impl DiffTreeWidget {
             .children
             .iter_mut()
             .zip([&mut self.unstaged_diff, &mut self.staged_diff])
-    }
-
-    pub fn new() -> Self {
-        Self {
-            unstaged_diff: PhasedDiff {
-                phase: DiffPhase::Unstaged,
-                diff: Diff::default(),
-            },
-            staged_diff: PhasedDiff {
-                phase: DiffPhase::Staged,
-                diff: Diff::default(),
-            },
-            root_node: DiffTreeNode::new_root_node(),
-        }
     }
 }
 

@@ -14,9 +14,8 @@ use crate::{
 pub struct App {
     terminal: Terminal,
     exit: bool,
-    pub cursor: Cursor, // TODO: priv
     row_offset: usize,
-    tree: DiffTreeWidget,
+    pub tree: DiffTreeWidget, // TODO: priv
     legend: LegendWidget,
 }
 
@@ -26,7 +25,6 @@ impl App {
         Ok(Self {
             terminal,
             exit: false,
-            cursor: Cursor::root(),
             row_offset: 0,
             tree: DiffTreeWidget::new(),
             legend: LegendWidget::default(),
@@ -59,7 +57,7 @@ impl App {
 
         let mut canvas = Canvas::new(self.row_offset, self.terminal.size());
         for (node, diff) in self.tree.children_and_diffs() {
-            if !node.render_if_need(&mut canvas, &self.cursor, diff) {
+            if !node.render_if_need(&mut canvas, &self.tree.cursor, diff) {
                 break;
             }
         }
@@ -71,27 +69,27 @@ impl App {
     }
 
     fn cursor_abs_row(&self) -> usize {
-        self.tree.root_node.cursor_row(&self.cursor)
+        self.tree.root_node.cursor_row(&self.tree.cursor)
     }
 
     pub fn is_togglable(&self) -> bool {
         self.tree
             .root_node
-            .get_children(&self.cursor)
+            .get_children(&self.tree.cursor)
             .ok()
             .is_some_and(|c| !c.is_empty())
     }
 
     pub fn can_stage(&self) -> bool {
         self.tree.root_node.children[0]
-            .can_alter(&self.cursor, &self.tree.unstaged_diff)
+            .can_alter(&self.tree.cursor, &self.tree.unstaged_diff)
             .ok()
             .is_some_and(|b| b)
     }
 
     pub fn can_unstage(&self) -> bool {
         self.tree.root_node.children[1]
-            .can_alter(&self.cursor, &self.tree.staged_diff)
+            .can_alter(&self.tree.cursor, &self.tree.staged_diff)
             .ok()
             .is_some_and(|b| b)
     }
@@ -179,16 +177,16 @@ impl App {
     }
 
     fn handle_tab(&mut self) -> orfail::Result<()> {
-        self.tree.root_node.toggle(&self.cursor).or_fail()?;
+        self.tree.root_node.toggle(&self.tree.cursor).or_fail()?;
         Ok(())
     }
 
     fn handle_up(&mut self) -> orfail::Result<()> {
-        if let Some(new_cursor) = self.tree.root_node.cursor_up(&self.cursor).or_fail()? {
-            self.cursor = new_cursor;
+        if let Some(new_cursor) = self.tree.root_node.cursor_up(&self.tree.cursor).or_fail()? {
+            self.tree.cursor = new_cursor;
             self.tree
                 .root_node
-                .get_node_mut(&self.cursor)
+                .get_node_mut(&self.tree.cursor)
                 .or_fail()?
                 .expanded = true;
         }
@@ -198,7 +196,7 @@ impl App {
         let current_rows = self
             .tree
             .root_node
-            .get_node(&self.cursor)
+            .get_node(&self.tree.cursor)
             .ok()
             .map(|n| n.rows())
             .or_fail()?;
@@ -212,11 +210,16 @@ impl App {
     }
 
     fn handle_down(&mut self) -> orfail::Result<()> {
-        if let Some(new_cursor) = self.tree.root_node.cursor_down(&self.cursor).or_fail()? {
-            self.cursor = new_cursor;
+        if let Some(new_cursor) = self
+            .tree
+            .root_node
+            .cursor_down(&self.tree.cursor)
+            .or_fail()?
+        {
+            self.tree.cursor = new_cursor;
             self.tree
                 .root_node
-                .get_node_mut(&self.cursor)
+                .get_node_mut(&self.tree.cursor)
                 .or_fail()?
                 .expanded = true;
         }
@@ -226,7 +229,7 @@ impl App {
         let current_rows = self
             .tree
             .root_node
-            .get_node(&self.cursor)
+            .get_node(&self.tree.cursor)
             .ok()
             .map(|n| n.rows())
             .or_fail()?;
@@ -240,11 +243,16 @@ impl App {
     }
 
     fn handle_right(&mut self) -> orfail::Result<()> {
-        if let Some(new_cursor) = self.tree.root_node.cursor_right(&self.cursor).or_fail()? {
-            self.cursor = new_cursor;
+        if let Some(new_cursor) = self
+            .tree
+            .root_node
+            .cursor_right(&self.tree.cursor)
+            .or_fail()?
+        {
+            self.tree.cursor = new_cursor;
             self.tree
                 .root_node
-                .get_node_mut(&self.cursor)
+                .get_node_mut(&self.tree.cursor)
                 .or_fail()?
                 .expanded = true;
         }
@@ -253,8 +261,8 @@ impl App {
 
     // TODO: remove
     fn handle_left(&mut self) -> orfail::Result<()> {
-        if let Some(parent) = self.cursor.parent() {
-            self.cursor = parent;
+        if let Some(parent) = self.tree.cursor.parent() {
+            self.tree.cursor = parent;
         }
         Ok(())
     }
@@ -279,21 +287,27 @@ impl App {
     }
 
     fn is_valid_cursor(&self) -> bool {
-        self.tree.root_node.is_valid_cursor(&self.cursor)
+        self.tree.root_node.is_valid_cursor(&self.tree.cursor)
     }
 
     pub fn can_right(&self) -> bool {
-        matches!(self.tree.root_node.cursor_right(&self.cursor), Ok(Some(_)))
+        matches!(
+            self.tree.root_node.cursor_right(&self.tree.cursor),
+            Ok(Some(_))
+        )
     }
 
     pub fn can_down(&self) -> bool {
-        matches!(self.tree.root_node.cursor_down(&self.cursor), Ok(Some(_)))
+        matches!(
+            self.tree.root_node.cursor_down(&self.tree.cursor),
+            Ok(Some(_))
+        )
     }
 
     // TODO: maybe unnecessary
     fn reload_diff_reset(&mut self) -> orfail::Result<()> {
         let old_tree = DiffTreeWidget::new();
-        self.cursor = Cursor::root();
+        self.tree.cursor = Cursor::root();
         let (unstaged_diff, staged_diff) = git::unstaged_and_staged_diffs().or_fail()?;
         self.reload_tree(unstaged_diff, staged_diff, &old_tree)
             .or_fail()?;
@@ -332,7 +346,7 @@ impl App {
     fn handle_stage(&mut self) -> orfail::Result<()> {
         if self.can_stage() {
             self.tree.root_node.children[0]
-                .stage(&self.cursor, &self.tree.unstaged_diff.diff)
+                .stage(&self.tree.cursor, &self.tree.unstaged_diff.diff)
                 .or_fail()?;
             self.reload_diff().or_fail()?;
         }
@@ -342,7 +356,7 @@ impl App {
     fn handle_discard(&mut self) -> orfail::Result<()> {
         if self.can_stage() {
             self.tree.root_node.children[0]
-                .discard(&self.cursor, &self.tree.unstaged_diff.diff)
+                .discard(&self.tree.cursor, &self.tree.unstaged_diff.diff)
                 .or_fail()?;
             self.reload_diff().or_fail()?;
         }
@@ -352,7 +366,7 @@ impl App {
     fn handle_unstage(&mut self) -> orfail::Result<()> {
         if self.can_unstage() {
             self.tree.root_node.children[1]
-                .unstage(&self.cursor, &self.tree.staged_diff.diff)
+                .unstage(&self.tree.cursor, &self.tree.staged_diff.diff)
                 .or_fail()?;
         }
         Ok(())
