@@ -626,11 +626,10 @@ impl DiffTreeNodeContent for PhasedDiff {
     type Child = FileDiff;
 
     fn head_line_tokens(&self) -> impl Iterator<Item = Token> {
-        std::iter::once(Token::new(format!(
-            "{:?} changes ({} files)",
-            self.phase,
-            self.diff.files.len(),
-        )))
+        std::iter::once(Token::with_style(
+            format!("{:?} changes ({} files)", self.phase, self.diff.files.len(),),
+            TokenStyle::Bold,
+        ))
     }
 
     fn can_alter(&self) -> bool {
