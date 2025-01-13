@@ -9,14 +9,28 @@ mamediff
 A TUI editor for managing unstaged and staged Git diffs.
 Inspired by [Magit], this tool focuses on providing a simpler, specialized interface for staging, unstaging, and discarding diffs.
 
-**NOTE: This tool is still under development (version 0.1.0 is scheduled for release in January 2025).**
-
 [Magit]: https://github.com/magit/magit
 
 ![mamediff](mamediff.gif)
 
 Installation
 ------------
+
+### Pre-built binaries
+
+Pre-built binaries for Linux and MacOS are available in [the releases page](https://github.com/sile/mamediff/releases).
+
+```console
+// An example to download the binary for Linux.
+$ VERSION=...  # Set the target mamediff version such as "0.1.0"
+$ curl -L https://github.com/sile/mamediff/releases/download/${VERSION}/mamediff-${VERSION}.x86_64-unknown-linux-musl -o mamediff
+$ chmod +x mamediff
+$ ./mamediff -h
+```
+
+### With [Cargo](https://doc.rust-lang.org/cargo/)
+
+If you have installed `cargo` (the package manager for Rust), you can install `mamediff` with the following command:
 
 ```console
 $ cargo install mamediff
@@ -31,16 +45,12 @@ The available key bindings will be displayed in the top-right corner of the wind
 
 ```console
 $ mamediff
->| Unstaged changes (1 files)                      | (q)uit [ESC,C-c]
- :   modified src/main.rs (1 chunks, -0 +2 lines)  | (r)eload
- :     @@ -5,6 +5,8 @@ use mamediff::app::App;     | (↓)        [C-n]
- :        use orfail::OrFail;                      | (→)        [C-b]
- :                                                 | (t)oggle   [TAB]
- :        fn main() -> orfail::Result<()> {        | (s)tage
- :       +    println!("Hello World!");            | (D)iscard
- :       +                                         +---- (h)ide -----
- :            check_args().or_fail()?;
- :
- :            let app = App::new().or_fail()?;
- | Staged changes (0 files)
+->| Unstaged changes (1 files)                     | (q)uit [ESC,C-c]
+  :   modified src/main.rs (1 chunks, -1 +1 lines) | (↓)        [C-n]
+  :     @@ -1,3 +1,3 @@                            | (→)        [C-b]
+  :        fn main() {                             | (t)oggle   [TAB]
+  :       -    println!("Hello, World!");          | (s)tage
+  :       +    println!("Hello, mamediff!");       | (D)iscard
+  :        }                                       +---- (h)ide -----
+  | Staged changes (0 files)
 ```
