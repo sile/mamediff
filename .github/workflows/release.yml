@@ -1,0 +1,73 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - '*'
+
+jobs:
+  github-release-draft:
+    name: 'Create GitHub Release Draft'
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.get_version.outputs.VERSION }}
+      upload-url: ${{ steps.create-release.outputs.upload_url }}
+    steps:
+      - name: Get the version
+        id: get_version
+        run: echo ::set-output name=VERSION::${GITHUB_REF/refs\/tags\//}
+
+      - id: create-release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ steps.get_version.outputs.VERSION }}
+          name: v${{ steps.get_version.outputs.VERSION }}
+          draft: true
+
+  linux-binary:
+    name: 'Uplaod Binary for Linux'
+    runs-on: ubuntu-latest
+    needs: github-release-draft
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@v4
+
+      - name: Install dependent packages
+        run: sudo apt install -y musl-tools
+
+      - run: rustup update stable
+      - run: rustup target add x86_64-unknown-linux-musl
+      - run: cargo build --release --target=x86_64-unknown-linux-musl
+
+      - uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ needs.github-release-draft.outputs.upload-url }}
+          asset_path: target/x86_64-unknown-linux-musl/release/mamediff
+          asset_name: mamediff-${{ needs.github-release-draft.outputs.version }}.x86_64-unknown-linux-musl
+          asset_content_type: application/octet-stream
+
+  macos-binary:
+    name: 'Uplaod Binary for MacOS'
+    runs-on: macos-latest
+    needs: github-release-draft
+    strategy:
+      matrix:
+        target: ["x86_64-apple-darwin", "aarch64-apple-darwin"]
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@v4
+
+      - run: rustup update stable
+      - run: rustup target add ${{ matrix.target }}
+      - run: cargo build --release --target=${{ matrix.target }}
+
+      - uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ needs.github-release-draft.outputs.upload-url }}
+          asset_path: target/${{ matrix.target }}/release/mamediff
+          asset_name: mamediff-${{ needs.github-release-draft.outputs.version }}.${{ matrix.target }}
+          asset_content_type: application/octet-stream
