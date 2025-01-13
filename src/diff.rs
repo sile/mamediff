@@ -242,7 +242,7 @@ impl std::fmt::Display for ChunkDiff {
 #[derive(Debug, Clone)]
 pub enum ContentDiff {
     Text { chunks: Vec<ChunkDiff> },
-    Binary {},
+    Binary,
     Empty,
 }
 
@@ -251,8 +251,7 @@ impl ContentDiff {
         let bytes = std::fs::read(path).or_fail()?;
         if bytes.is_empty() {
             Ok(Self::Empty)
-        } else if let Ok(text) = String::from_utf8(bytes.clone()) {
-            // TODO: remove above clone
+        } else if let Ok(text) = String::from_utf8(bytes) {
             Ok(Self::Text {
                 chunks: vec![ChunkDiff {
                     old_start_line_number: 0,
@@ -262,15 +261,14 @@ impl ContentDiff {
                 }],
             })
         } else {
-            // TODO: git diff --no-index --binary /dev/null $PATH
-            Ok(Self::Binary {})
+            Ok(Self::Binary)
         }
     }
 
     fn chunks(&self) -> &[ChunkDiff] {
         match self {
             ContentDiff::Text { chunks } => chunks,
-            ContentDiff::Binary { .. } | ContentDiff::Empty => &[],
+            ContentDiff::Binary | ContentDiff::Empty => &[],
         }
     }
 
@@ -281,9 +279,7 @@ impl ContentDiff {
 
         let line = lines.next().or_fail()?;
         if line.starts_with("Binary files ") {
-            return Ok(Self::Binary {
-                // TODO: message: line.to_owned(),
-            });
+            return Ok(Self::Binary);
         }
 
         line.starts_with("--- ").or_fail()?;
@@ -308,10 +304,7 @@ impl std::fmt::Display for ContentDiff {
                     write!(f, "{chunk}")?;
                 }
             }
-            ContentDiff::Binary {} => {
-                // TODO:                write!(f, "{message}")?;
-            }
-            ContentDiff::Empty => {}
+            ContentDiff::Binary | ContentDiff::Empty => {}
         }
         Ok(())
     }
@@ -544,7 +537,6 @@ impl std::fmt::Display for FileDiff {
                 let path = path.display();
                 writeln!(f, "diff --git a/{path} b/{path}")?;
                 writeln!(f, "new file mode {mode}")?;
-                // TODO: writeln!(f, "index 0000000..{hash}")?;
                 if !matches!(content, ContentDiff::Empty) {
                     writeln!(f, "{content}")?;
                 }
@@ -583,10 +575,7 @@ impl std::fmt::Display for FileDiff {
                 write!(f, "{content}")?;
             }
             FileDiff::Rename {
-                old_path,
-                new_path,
-                // similarity_index,
-                ..
+                old_path, new_path, ..
             } => {
                 let old_path = old_path.display();
                 let new_path = new_path.display();
