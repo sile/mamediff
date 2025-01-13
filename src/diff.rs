@@ -1,44 +1,14 @@
 use std::{
     iter::Peekable,
-    ops::Range,
     path::{Path, PathBuf},
     str::{FromStr, Lines},
 };
 
 use orfail::OrFail;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct Mode(pub u32);
-
-impl FromStr for Mode {
-    type Err = orfail::Failure;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        (s.len() == 6).or_fail()?;
-        let mode = u32::from_str_radix(s, 8).or_fail()?;
-        Ok(Self(mode))
-    }
-}
-
-impl std::fmt::Display for Mode {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{:06o}", self.0)
-    }
-}
-
 #[derive(Debug, Default, Clone)]
 pub struct Diff {
     pub files: Vec<FileDiff>,
-}
-
-impl Diff {
-    pub fn len(&self) -> usize {
-        self.files.len()
-    }
-
-    pub fn is_empty(&self) -> bool {
-        self.files.is_empty()
-    }
 }
 
 impl FromStr for Diff {
@@ -102,20 +72,6 @@ pub struct ChunkDiff {
 }
 
 impl ChunkDiff {
-    pub fn old_line_range(&self) -> Range<usize> {
-        Range {
-            start: self.old_start_line_number,
-            end: self.old_start_line_number + self.old_rows(),
-        }
-    }
-
-    pub fn new_line_range(&self) -> Range<usize> {
-        Range {
-            start: self.new_start_line_number,
-            end: self.new_start_line_number + self.new_rows(),
-        }
-    }
-
     fn added_lines(&self) -> usize {
         self.lines
             .iter()
@@ -174,8 +130,8 @@ impl ChunkDiff {
             path: path.to_path_buf(),
             old_hash: "0000000".to_owned(), // dummy
             new_hash: "0000000".to_owned(), // dummy
-            old_mode: None,                 // TODO
-            new_mode: Mode(0),              // dummy
+            old_mode: None,
+            new_mode: Mode(0), // dummy
             content: ContentDiff::Text {
                 chunks: vec![self.clone()],
             },
@@ -201,21 +157,21 @@ impl ChunkDiff {
         s
     }
 
-    pub fn old_rows(&self) -> usize {
+    fn old_rows(&self) -> usize {
         self.lines
             .iter()
             .filter(|line| matches!(line, LineDiff::Both(_) | LineDiff::Old(_)))
             .count()
     }
 
-    pub fn new_rows(&self) -> usize {
+    fn new_rows(&self) -> usize {
         self.lines
             .iter()
             .filter(|line| matches!(line, LineDiff::Both(_) | LineDiff::New(_)))
             .count()
     }
 
-    pub fn parse(lines: &mut Peekable<Lines>) -> orfail::Result<Option<Self>> {
+    fn parse(lines: &mut Peekable<Lines>) -> orfail::Result<Option<Self>> {
         let Some(line) = lines.peek() else {
             return Ok(None);
         };
@@ -311,23 +267,14 @@ impl ContentDiff {
         }
     }
 
-    // TODO: rename
-    pub fn chunks_slice(&self) -> &[ChunkDiff] {
+    fn chunks(&self) -> &[ChunkDiff] {
         match self {
             ContentDiff::Text { chunks } => chunks,
             ContentDiff::Binary { .. } | ContentDiff::Empty => &[],
         }
     }
 
-    // TODO: remove
-    pub fn chunks(&self) -> impl '_ + Iterator<Item = &ChunkDiff> {
-        match self {
-            ContentDiff::Text { chunks } => Some(chunks.iter()).into_iter().flatten(),
-            ContentDiff::Binary { .. } | ContentDiff::Empty => None.into_iter().flatten(),
-        }
-    }
-
-    pub fn parse(lines: &mut Peekable<Lines>) -> orfail::Result<Self> {
+    fn parse(lines: &mut Peekable<Lines>) -> orfail::Result<Self> {
         if lines.peek().is_none_or(|line| line.starts_with("diff ")) {
             return Ok(Self::Empty);
         }
@@ -437,7 +384,7 @@ impl FileDiff {
 
     pub fn chunks(&self) -> &[ChunkDiff] {
         match self {
-            FileDiff::Update { content, .. } => content.chunks_slice(),
+            FileDiff::Update { content, .. } => content.chunks(),
             FileDiff::Added { .. }
             | FileDiff::Delete { .. }
             | FileDiff::New { .. }
@@ -446,7 +393,7 @@ impl FileDiff {
         }
     }
 
-    pub fn parse(lines: &mut Peekable<Lines>) -> orfail::Result<Option<Self>> {
+    fn parse(lines: &mut Peekable<Lines>) -> orfail::Result<Option<Self>> {
         let Some(line) = lines.next() else {
             return Ok(None);
         };
@@ -666,9 +613,9 @@ impl std::fmt::Display for FileDiff {
 }
 
 #[derive(Debug)]
-pub struct LineRange {
-    pub start: usize,
-    pub count: Option<usize>,
+struct LineRange {
+    start: usize,
+    count: Option<usize>,
 }
 
 impl FromStr for LineRange {
@@ -690,15 +637,6 @@ impl std::fmt::Display for LineRange {
             write!(f, "{}", self.start)
         }
     }
-}
-
-// TODO: rename
-#[derive(Debug, Default)]
-pub enum FileDiffPhase {
-    #[default]
-    DiffHeader,
-    ExtendedHeader,
-    Chunk,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -730,8 +668,8 @@ impl std::fmt::Display for SimilarityIndexHeaderLine {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct RenameFromHeaderLine {
-    pub path: PathBuf,
+struct RenameFromHeaderLine {
+    path: PathBuf,
 }
 
 impl RenameFromHeaderLine {
@@ -755,8 +693,8 @@ impl std::fmt::Display for RenameFromHeaderLine {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct RenameToHeaderLine {
-    pub path: PathBuf,
+struct RenameToHeaderLine {
+    path: PathBuf,
 }
 
 impl RenameToHeaderLine {
@@ -780,8 +718,8 @@ impl std::fmt::Display for RenameToHeaderLine {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct NewModeHeaderLine {
-    pub mode: Mode,
+struct NewModeHeaderLine {
+    mode: Mode,
 }
 
 impl NewModeHeaderLine {
@@ -806,8 +744,8 @@ impl std::fmt::Display for NewModeHeaderLine {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct OldModeHeaderLine {
-    pub mode: Mode,
+struct OldModeHeaderLine {
+    mode: Mode,
 }
 
 impl OldModeHeaderLine {
@@ -832,8 +770,8 @@ impl std::fmt::Display for OldModeHeaderLine {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct NewFileModeHeaderLine {
-    pub mode: Mode,
+struct NewFileModeHeaderLine {
+    mode: Mode,
 }
 
 impl NewFileModeHeaderLine {
@@ -858,8 +796,8 @@ impl std::fmt::Display for NewFileModeHeaderLine {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct DeletedFileModeHeaderLine {
-    pub mode: Mode,
+struct DeletedFileModeHeaderLine {
+    mode: Mode,
 }
 
 impl DeletedFileModeHeaderLine {
@@ -884,10 +822,10 @@ impl std::fmt::Display for DeletedFileModeHeaderLine {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct IndexHeaderLine {
-    pub old_hash: String,
-    pub new_hash: String,
-    pub mode: Option<Mode>,
+struct IndexHeaderLine {
+    old_hash: String,
+    new_hash: String,
+    mode: Option<Mode>,
 }
 
 impl IndexHeaderLine {
@@ -923,6 +861,25 @@ impl std::fmt::Display for IndexHeaderLine {
             write!(f, " {mode}")?;
         }
         Ok(())
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct Mode(pub u32);
+
+impl FromStr for Mode {
+    type Err = orfail::Failure;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        (s.len() == 6).or_fail()?;
+        let mode = u32::from_str_radix(s, 8).or_fail()?;
+        Ok(Self(mode))
+    }
+}
+
+impl std::fmt::Display for Mode {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:06o}", self.0)
     }
 }
 
