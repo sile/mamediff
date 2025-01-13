@@ -69,6 +69,7 @@ pub struct ChunkDiff {
     pub new_start_line_number: usize,
     pub start_line: Option<String>,
     pub lines: Vec<LineDiff>,
+    pub no_eof_newline: bool,
 }
 
 impl ChunkDiff {
@@ -122,6 +123,7 @@ impl ChunkDiff {
             new_start_line_number: start,
             start_line: self.start_line.clone(),
             lines,
+            no_eof_newline: false,
         })
     }
 
@@ -180,7 +182,6 @@ impl ChunkDiff {
         }
         let line = lines.next().expect("infallible");
 
-        // TODO: Handle "no newline end of file" of emacs temp files
         line.starts_with("@@ -").or_fail()?;
 
         let (range_end, start_line) = if line.ends_with(" @@") {
@@ -207,11 +208,22 @@ impl ChunkDiff {
             line_diffs.push(diff);
         }
 
+        let no_eof_newline = if lines
+            .peek()
+            .is_some_and(|l| *l == "\\ No newline at end of file")
+        {
+            let _ = lines.next();
+            true
+        } else {
+            false
+        };
+
         Ok(Some(Self {
             old_start_line_number: old_range.start,
             new_start_line_number: new_range.start,
             start_line,
             lines: line_diffs,
+            no_eof_newline,
         }))
     }
 }
@@ -233,6 +245,10 @@ impl std::fmt::Display for ChunkDiff {
 
         for line in &self.lines {
             writeln!(f, "{line}")?;
+        }
+
+        if self.no_eof_newline {
+            writeln!(f, "\\ No newline at end of file")?;
         }
 
         Ok(())
@@ -258,6 +274,7 @@ impl ContentDiff {
                     new_start_line_number: 1,
                     start_line: None,
                     lines: text.lines().map(|l| LineDiff::New(l.to_string())).collect(),
+                    no_eof_newline: false, // TODO
                 }],
             })
         } else {
@@ -1020,6 +1037,19 @@ Binary files a/ls and b/ls differ"#;
         let diff = Diff::from_str(text).or_fail()?;
         assert_eq!(diff.files.len(), 1);
         assert!(matches!(diff.files[0], FileDiff::Update { .. }));
+
+        let text = r#"diff --git a/src/.#diff.rs b/src/.#diff.rs
+new file mode 120000
+index 0000000..684e22a
+--- /dev/null
++++ b/src/.#diff.rs
+@@ -0,0 +1 @@
++u0_a327@localhost.11073
+\ No newline at end of file"#;
+
+        let diff = Diff::from_str(text).or_fail()?;
+        assert_eq!(diff.files.len(), 1);
+        assert!(matches!(diff.files[0], FileDiff::New { .. }));
 
         Ok(())
     }
