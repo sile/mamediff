@@ -11,6 +11,16 @@ pub struct Diff {
     pub files: Vec<FileDiff>,
 }
 
+impl Diff {
+    pub fn to_patch(&self) -> String {
+        let mut patch = String::new();
+        for file in &self.files {
+            patch.push_str(&file.to_patch());
+        }
+        patch
+    }
+}
+
 impl FromStr for Diff {
     type Err = orfail::Failure;
 
@@ -21,15 +31,6 @@ impl FromStr for Diff {
             file_diffs.push(file_diff);
         }
         Ok(Self { files: file_diffs })
-    }
-}
-
-impl std::fmt::Display for Diff {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        for file in &self.files {
-            write!(f, "{file}")?;
-        }
-        Ok(())
     }
 }
 
@@ -274,7 +275,7 @@ impl ContentDiff {
                     new_start_line_number: 1,
                     start_line: None,
                     lines: text.lines().map(|l| LineDiff::New(l.to_string())).collect(),
-                    no_eof_newline: false, // TODO
+                    no_eof_newline: text.chars().last() != Some('\n'),
                 }],
             })
         } else {
@@ -539,11 +540,9 @@ impl FileDiff {
             content,
         })
     }
-}
 
-// TODO: Introduce a new method for generating patch file
-impl std::fmt::Display for FileDiff {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn to_patch(&self) -> String {
+        let mut patch = String::new();
         match self {
             FileDiff::New {
                 path,
@@ -552,10 +551,10 @@ impl std::fmt::Display for FileDiff {
                 ..
             } => {
                 let path = path.display();
-                writeln!(f, "diff --git a/{path} b/{path}")?;
-                writeln!(f, "new file mode {mode}")?;
+                patch.push_str(&format!("diff --git a/{path} b/{path}\n"));
+                patch.push_str(&format!("new file mode {mode}\n"));
                 if !matches!(content, ContentDiff::Empty) {
-                    writeln!(f, "{content}")?;
+                    patch.push_str(&format!("{content}\n"));
                 }
             }
             FileDiff::Delete {
@@ -565,40 +564,35 @@ impl std::fmt::Display for FileDiff {
                 ..
             } => {
                 let path = path.display();
-                writeln!(f, "diff --git a/{path} b/{path}")?;
-                writeln!(f, "deleted file mode {mode}")?;
-                writeln!(f, "{content}")?;
+                patch.push_str(&format!("diff --git a/{path} b/{path}\n"));
+                patch.push_str(&format!("deleted file mode {mode}\n"));
+                patch.push_str(&format!("{content}\n"));
             }
             FileDiff::Update {
                 path,
-                old_hash,
-                new_hash,
                 old_mode,
-                new_mode,
                 content,
+                ..
             } => {
                 if old_mode.is_some() {
+                    // TODO
                     todo!();
                 }
 
                 let path = path.display();
-                writeln!(f, "diff --git a/{path} b/{path}")?;
-                if new_mode.0 != 0 {
-                    // TODO: Add comment
-                    writeln!(f, "index {old_hash}..{new_hash} {new_mode}")?;
-                }
-                writeln!(f, "--- a/{path}")?;
-                writeln!(f, "+++ b/{path}")?;
-                write!(f, "{content}")?;
+                patch.push_str(&format!("diff --git a/{path} b/{path}\n"));
+                patch.push_str(&format!("--- a/{path}\n"));
+                patch.push_str(&format!("+++ b/{path}\n"));
+                patch.push_str(&format!("{content}\n"));
             }
             FileDiff::Rename {
                 old_path, new_path, ..
             } => {
                 let old_path = old_path.display();
                 let new_path = new_path.display();
-                writeln!(f, "diff --git a/{old_path} b/{new_path}")?;
-                writeln!(f, "rename from {old_path}")?;
-                writeln!(f, "rename to {new_path}")?;
+                patch.push_str(&format!("diff --git a/{old_path} b/{new_path}\n"));
+                patch.push_str(&format!("rename from {old_path}\n"));
+                patch.push_str(&format!("rename to {new_path}\n"));
             }
             FileDiff::Chmod {
                 path,
@@ -606,15 +600,15 @@ impl std::fmt::Display for FileDiff {
                 new_mode,
             } => {
                 let path = path.display();
-                writeln!(f, "diff --git a/{path} b/{path}")?;
-                writeln!(f, "old mode {old_mode}")?;
-                writeln!(f, "new mode {new_mode}")?;
+                patch.push_str(&format!("diff --git a/{path} b/{path}\n"));
+                patch.push_str(&format!("old mode {old_mode}\n"));
+                patch.push_str(&format!("new mode {new_mode}\n"));
             }
             FileDiff::Added { diff, .. } => {
-                write!(f, "{diff}")?;
+                patch.push_str(&format!("{diff}\n"));
             }
         }
-        Ok(())
+        patch
     }
 }
 

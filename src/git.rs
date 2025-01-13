@@ -18,19 +18,19 @@ pub fn is_available() -> bool {
 }
 
 pub fn stage(diff: &Diff) -> orfail::Result<()> {
-    let patch = diff.to_string();
+    let patch = diff.to_patch();
     call_with_input(&["apply", "--cached"], &patch).or_fail()?;
     Ok(())
 }
 
 pub fn unstage(diff: &Diff) -> orfail::Result<()> {
-    let patch = diff.to_string();
+    let patch = diff.to_patch();
     call_with_input(&["apply", "--cached", "--reverse"], &patch).or_fail()?;
     Ok(())
 }
 
 pub fn discard(diff: &Diff) -> orfail::Result<()> {
-    let patch = diff.to_string();
+    let patch = diff.to_patch();
     call_with_input(&["apply", "--reverse"], &patch).or_fail()?;
     Ok(())
 }
