@@ -36,10 +36,10 @@ impl LegendWidget {
                 canvas.drawl(Token::new("| (↓)        [C-n]"));
             }
             if tree.can_cursor_left() {
-                canvas.drawl(Token::new("| (←)        [C-f]"));
+                canvas.drawl(Token::new("| (←)        [C-b]"));
             }
             if tree.can_cursor_right() {
-                canvas.drawl(Token::new("| (→)        [C-b]"));
+                canvas.drawl(Token::new("| (→)        [C-f]"));
             }
             if tree.can_toggle() {
                 canvas.drawl(Token::new("| (t)oggle   [TAB]"));
