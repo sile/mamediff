@@ -194,7 +194,6 @@ impl DiffTreeWidget {
         self.root_node.rows() - root_node_offset
     }
 
-    // TODO: refactor
     fn reload(&mut self) -> orfail::Result<()> {
         let old = self.clone();
         let (unstaged_diff, staged_diff) = git::unstaged_and_staged_diffs().or_fail()?;
@@ -209,7 +208,7 @@ impl DiffTreeWidget {
                 node.children.push(child);
             }
 
-            node.restore_diff_node_state(
+            node.restore_expanded_state(
                 &diff.diff,
                 &old.children_and_diffs()
                     .map(|x| (x.0, &x.1.diff))
@@ -281,6 +280,7 @@ impl DiffTreeNode {
     fn new_file_diff_node(path: NodePath, diff: &FileDiff) -> Self {
         let children = diff
             .chunks()
+            .iter()
             .enumerate()
             .map(|(i, c)| DiffTreeNode::new_chunk_diff_node(path.join(i), c))
             .collect();
@@ -307,6 +307,23 @@ impl DiffTreeNode {
             path,
             expanded: false,
             children: Vec::new(),
+        }
+    }
+
+    fn restore_expanded_state(&mut self, diff: &Diff, old: &[(&Self, &Diff)]) {
+        if old.is_empty() {
+            return;
+        }
+
+        self.expanded = old.iter().any(|x| x.0.expanded);
+
+        for (c, d) in self.children.iter_mut().zip(diff.files.iter()) {
+            let expanded = old
+                .iter()
+                .flat_map(|x| x.0.children.iter().zip(x.1.files.iter()))
+                .filter(|x| x.1.path() == d.path())
+                .any(|x| x.0.expanded);
+            c.expanded = expanded;
         }
     }
 
@@ -365,7 +382,7 @@ impl DiffTreeNode {
     }
 
     fn cursor_row(&self, cursor: &Cursor) -> usize {
-        match cursor.path.as_slice()[..self.path.len()].cmp(self.path.as_slice()) {
+        match cursor.path.0[..self.path.len()].cmp(&self.path.0) {
             Ordering::Less => 0,
             Ordering::Equal if cursor.path.len() == self.path.len() => 0,
             Ordering::Equal => {
@@ -395,14 +412,12 @@ impl DiffTreeNode {
     {
         self.check_cursor(cursor).or_fail()?;
 
-        let level = self.path.len();
-        if cursor.path.len() == level {
-            Ok(content.can_alter())
-        } else {
-            let i = cursor.path.as_slice()[level];
+        if let Some(i) = cursor.path.get(self.path.len()) {
             let child_node = self.children.get(i).or_fail()?;
             let child_content = content.children().get(i).or_fail()?;
             child_node.can_alter(cursor, child_content).or_fail()
+        } else {
+            Ok(content.can_alter())
         }
     }
 
@@ -416,32 +431,6 @@ impl DiffTreeNode {
         Ok(())
     }
 
-    // TODO: refactor
-    fn restore_diff_node_state(&mut self, diff: &Diff, old: &[(&Self, &Diff)]) {
-        if old.is_empty() {
-            return;
-        }
-
-        self.expanded = old.iter().any(|w| w.0.expanded);
-
-        for (c, d) in self.children.iter_mut().zip(diff.files.iter()) {
-            let old = old
-                .iter()
-                .flat_map(|w| w.0.children.iter().zip(w.1.files.iter()))
-                .filter(|w| w.1.is_intersect(d))
-                .map(|w| w.0)
-                .collect::<Vec<_>>();
-            c.restore_chunk_node_state(&old);
-        }
-    }
-
-    // TODO: refactor
-    fn restore_chunk_node_state(&mut self, old: &[&Self]) {
-        if !old.is_empty() {
-            self.expanded = old.iter().any(|n| n.expanded);
-        }
-    }
-
     fn get_node(&self, cursor: &Cursor) -> orfail::Result<&Self> {
         if let Some((_, child)) = self.get_maybe_child(cursor).or_fail()? {
             child.get_node(cursor).or_fail()
@@ -453,26 +442,22 @@ impl DiffTreeNode {
     fn get_node_mut(&mut self, cursor: &Cursor) -> orfail::Result<&mut Self> {
         cursor.path.starts_with(&self.path).or_fail()?;
 
-        let level = self.path.len();
-        if cursor.path.len() == level {
-            Ok(self)
-        } else {
-            let i = cursor.path.as_slice()[level];
+        if let Some(i) = cursor.path.get(self.path.len()) {
             let child = self.children.get_mut(i).or_fail()?;
             child.get_node_mut(cursor).or_fail()
+        } else {
+            Ok(self)
         }
     }
 
     fn get_maybe_child(&self, cursor: &Cursor) -> orfail::Result<Option<(usize, &Self)>> {
         cursor.path.starts_with(&self.path).or_fail()?;
 
-        let level = self.path.len();
-        if cursor.path.len() == level {
-            Ok(None)
-        } else {
-            let i = cursor.path.as_slice()[level];
+        if let Some(i) = cursor.path.get(self.path.len()) {
             let child = self.children.get(i).or_fail()?;
             Ok(Some((i, child)))
+        } else {
+            Ok(None)
         }
     }
 
@@ -504,7 +489,7 @@ impl DiffTreeNode {
         let Some((i, node)) = node.get_maybe_child(cursor).or_fail()? else {
             return Ok(file.to_diff());
         };
-        let chunk = file.chunks_slice().get(i).or_fail()?;
+        let chunk = file.chunks().get(i).or_fail()?;
 
         let Some((i, _node)) = node.get_maybe_child(cursor).or_fail()? else {
             return Ok(chunk.to_diff(path));
@@ -587,7 +572,6 @@ pub trait DiffTreeNodeContent {
     fn head_line_tokens(&self) -> impl Iterator<Item = Token>;
     fn can_alter(&self) -> bool;
     fn children(&self) -> &[Self::Child];
-    fn is_intersect(&self, other: &Self) -> bool;
 }
 
 impl DiffTreeNodeContent for PhasedDiff {
@@ -595,7 +579,7 @@ impl DiffTreeNodeContent for PhasedDiff {
 
     fn head_line_tokens(&self) -> impl Iterator<Item = Token> {
         std::iter::once(Token::with_style(
-            format!("{:?} changes ({} files)", self.phase, self.diff.files.len(),),
+            format!("{:?} changes ({} files)", self.phase, self.diff.files.len()),
             TokenStyle::Bold,
         ))
     }
@@ -606,10 +590,6 @@ impl DiffTreeNodeContent for PhasedDiff {
 
     fn children(&self) -> &[Self::Child] {
         &self.diff.files
-    }
-
-    fn is_intersect(&self, _other: &Self) -> bool {
-        true
     }
 }
 
@@ -661,11 +641,7 @@ impl DiffTreeNodeContent for FileDiff {
     }
 
     fn children(&self) -> &[Self::Child] {
-        self.chunks_slice()
-    }
-
-    fn is_intersect(&self, other: &Self) -> bool {
-        self.path() == other.path()
+        self.chunks()
     }
 }
 
@@ -682,18 +658,6 @@ impl DiffTreeNodeContent for ChunkDiff {
 
     fn children(&self) -> &[Self::Child] {
         &self.lines
-    }
-
-    fn is_intersect(&self, other: &Self) -> bool {
-        let old_range = self.old_line_range();
-        let new_range = self.new_line_range();
-        let other_old_range = other.old_line_range();
-        let other_new_range = other.new_line_range();
-
-        old_range.contains(&other_new_range.start)
-            || old_range.contains(&other_new_range.end)
-            || new_range.contains(&other_old_range.start)
-            || new_range.contains(&other_old_range.end)
     }
 }
 
@@ -715,10 +679,6 @@ impl DiffTreeNodeContent for LineDiff {
 
     fn children(&self) -> &[Self::Child] {
         &[]
-    }
-
-    fn is_intersect(&self, _other: &Self) -> bool {
-        false
     }
 }
 
@@ -744,21 +704,26 @@ impl NodePath {
         self.0.len()
     }
 
-    // TODO: remove
-    fn as_slice(&self) -> &[usize] {
-        &self.0
+    fn get(&self, i: usize) -> Option<usize> {
+        self.0.get(i).copied()
     }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct Cursor {
-    pub path: NodePath,
+    path: NodePath,
 }
 
 impl Cursor {
     fn root() -> Self {
         Self {
             path: NodePath::root().join(0),
+        }
+    }
+
+    fn join(&self, index: usize) -> Self {
+        Self {
+            path: self.path.join(index),
         }
     }
 
@@ -773,12 +738,6 @@ impl Cursor {
     fn first_child(&self) -> Self {
         let path = self.path.join(0);
         Self { path }
-    }
-
-    fn join(&self, index: usize) -> Self {
-        Self {
-            path: self.path.join(index),
-        }
     }
 
     fn next_sibling(&self) -> Self {

@@ -411,11 +411,11 @@ pub enum FileDiff {
 
 impl FileDiff {
     pub fn removed_lines(&self) -> usize {
-        self.chunks().map(|c| c.removed_lines()).sum()
+        self.chunks().iter().map(|c| c.removed_lines()).sum()
     }
 
     pub fn added_lines(&self) -> usize {
-        self.chunks().map(|c| c.added_lines()).sum()
+        self.chunks().iter().map(|c| c.added_lines()).sum()
     }
 
     pub fn to_diff(&self) -> Diff {
@@ -435,8 +435,7 @@ impl FileDiff {
         }
     }
 
-    // TODO: remoev
-    pub fn chunks_slice(&self) -> &[ChunkDiff] {
+    pub fn chunks(&self) -> &[ChunkDiff] {
         match self {
             FileDiff::Update { content, .. } => content.chunks_slice(),
             FileDiff::Added { .. }
@@ -444,21 +443,6 @@ impl FileDiff {
             | FileDiff::New { .. }
             | FileDiff::Rename { .. }
             | FileDiff::Chmod { .. } => &[],
-        }
-    }
-
-    // TODO: delete
-    pub fn chunks(&self) -> impl '_ + Iterator<Item = &ChunkDiff> {
-        match self {
-            // FileDiff::Delete { content, .. } | FileDiff::Update { content, .. } => {
-            //     Some(content.chunks()).into_iter().flatten()
-            // }
-            FileDiff::Update { content, .. } => Some(content.chunks()).into_iter().flatten(),
-            FileDiff::Added { .. }
-            | FileDiff::Delete { .. }
-            | FileDiff::New { .. }
-            | FileDiff::Rename { .. }
-            | FileDiff::Chmod { .. } => None.into_iter().flatten(),
         }
     }
 
