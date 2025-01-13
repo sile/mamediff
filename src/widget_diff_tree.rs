@@ -4,7 +4,7 @@ use orfail::OrFail;
 
 use crate::{
     canvas::{Canvas, Token, TokenStyle},
-    diff::{ChunkDiff, Diff, FileDiff, LineDiff},
+    diff::{ChunkDiff, ContentDiff, Diff, FileDiff, LineDiff},
     git,
     terminal::TerminalSize,
 };
@@ -619,15 +619,16 @@ impl DiffTreeNodeContent for FileDiff {
                     )),
                 ]
             }
-            FileDiff::New { .. } => {
+            FileDiff::New { content, .. } => {
                 vec![
                     Token::new("added "),
                     path,
-                    Token::new(format!(" (+{} lines)", self.added_lines())),
+                    if matches!(content, ContentDiff::Binary { .. }) {
+                        Token::new(" (binary)")
+                    } else {
+                        Token::new(format!(" (+{} lines)", self.added_lines()))
+                    },
                 ]
-            }
-            FileDiff::Added { .. } => {
-                vec![Token::new("added "), path]
             }
             FileDiff::Rename { old_path, .. } => {
                 let old_path =
@@ -635,11 +636,15 @@ impl DiffTreeNodeContent for FileDiff {
 
                 vec![Token::new("renamed "), old_path, Token::new(" -> "), path]
             }
-            FileDiff::Delete { .. } => {
+            FileDiff::Delete { content, .. } => {
                 vec![
                     Token::new("deleted "),
                     path,
-                    Token::new(format!(" (-{} lines)", self.removed_lines())),
+                    if matches!(content, ContentDiff::Binary { .. }) {
+                        Token::new(" (binary)")
+                    } else {
+                        Token::new(format!(" (-{} lines)", self.removed_lines()))
+                    },
                 ]
             }
             FileDiff::Chmod {

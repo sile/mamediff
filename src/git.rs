@@ -1,13 +1,13 @@
 use std::{
     io::Write,
-    path::PathBuf,
+    path::{Path, PathBuf},
     process::{Command, Stdio},
     str::FromStr,
 };
 
 use orfail::OrFail;
 
-use crate::diff::{Diff, FileDiff};
+use crate::diff::{ContentDiff, Diff, FileDiff, Mode};
 
 pub fn is_available() -> bool {
     // Check if `git` is accessible and we are within a Git directory.
@@ -18,19 +18,19 @@ pub fn is_available() -> bool {
 }
 
 pub fn stage(diff: &Diff) -> orfail::Result<()> {
-    let patch = diff.to_patch();
+    let patch = diff.to_patch().or_fail()?;
     call_with_input(&["apply", "--cached"], &patch).or_fail()?;
     Ok(())
 }
 
 pub fn unstage(diff: &Diff) -> orfail::Result<()> {
-    let patch = diff.to_patch();
+    let patch = diff.to_patch().or_fail()?;
     call_with_input(&["apply", "--cached", "--reverse"], &patch).or_fail()?;
     Ok(())
 }
 
 pub fn discard(diff: &Diff) -> orfail::Result<()> {
-    let patch = diff.to_patch();
+    let patch = diff.to_patch().or_fail()?;
     call_with_input(&["apply", "--reverse"], &patch).or_fail()?;
     Ok(())
 }
@@ -73,17 +73,18 @@ pub fn unstaged_and_staged_diffs() -> orfail::Result<(Diff, Diff)> {
         let mut handles = Vec::new();
         for path in &untracked_files {
             handles.push(s.spawn(move || {
-                // This command exits with code 1 even upon success.
-                // Therefore, specify `check_status=false` here.
-                let diff = call(
-                    &["diff", "--no-index", "--binary", "/dev/null", path],
-                    false,
-                )
-                .or_fail()?;
-                Ok(FileDiff::Added {
-                    path: PathBuf::from(path),
-                    diff,
-                })
+                let content = std::fs::read(path).or_fail()?;
+                if std::str::from_utf8(&content).is_ok() {
+                    let diff = new_file_diff(path, false).or_fail()?;
+                    FileDiff::from_str(&diff).or_fail()
+                } else {
+                    Ok(FileDiff::New {
+                        path: PathBuf::from(path),
+                        hash: "0000000".to_string(), // dummy
+                        mode: Mode(0),               // dummy
+                        content: ContentDiff::Binary,
+                    })
+                }
             }));
         }
 
@@ -101,6 +102,21 @@ pub fn unstaged_and_staged_diffs() -> orfail::Result<(Diff, Diff)> {
     .or_fail()?;
 
     Ok((unstaged_diff, staged_diff))
+}
+
+pub fn new_file_diff<P: AsRef<Path>>(path: P, binary: bool) -> orfail::Result<String> {
+    // This command exits with code 1 even upon success.
+    // Therefore, specify `check_status=false` here.
+    let path = &path.as_ref().display().to_string();
+    if binary {
+        call(
+            &["diff", "--no-index", "--binary", "/dev/null", path],
+            false,
+        )
+        .or_fail()
+    } else {
+        call(&["diff", "--no-index", "/dev/null", path], false).or_fail()
+    }
 }
 
 fn call(args: &[&str], check_status: bool) -> orfail::Result<String> {

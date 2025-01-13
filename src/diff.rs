@@ -6,18 +6,20 @@ use std::{
 
 use orfail::OrFail;
 
+use crate::git;
+
 #[derive(Debug, Default, Clone)]
 pub struct Diff {
     pub files: Vec<FileDiff>,
 }
 
 impl Diff {
-    pub fn to_patch(&self) -> String {
+    pub fn to_patch(&self) -> orfail::Result<String> {
         let mut patch = String::new();
         for file in &self.files {
-            patch.push_str(&file.to_patch());
+            patch.push_str(&file.to_patch().or_fail()?);
         }
-        patch
+        Ok(patch)
     }
 }
 
@@ -264,25 +266,6 @@ pub enum ContentDiff {
 }
 
 impl ContentDiff {
-    pub fn from_file(path: &PathBuf) -> orfail::Result<Self> {
-        let bytes = std::fs::read(path).or_fail()?;
-        if bytes.is_empty() {
-            Ok(Self::Empty)
-        } else if let Ok(text) = String::from_utf8(bytes) {
-            Ok(Self::Text {
-                chunks: vec![ChunkDiff {
-                    old_start_line_number: 0,
-                    new_start_line_number: 1,
-                    start_line: None,
-                    lines: text.lines().map(|l| LineDiff::New(l.to_string())).collect(),
-                    no_eof_newline: text.chars().last() != Some('\n'),
-                }],
-            })
-        } else {
-            Ok(Self::Binary)
-        }
-    }
-
     fn chunks(&self) -> &[ChunkDiff] {
         match self {
             ContentDiff::Text { chunks } => chunks,
@@ -360,11 +343,6 @@ pub enum FileDiff {
         old_mode: Mode,
         new_mode: Mode,
     },
-    // TODO: merge with New
-    Added {
-        path: PathBuf,
-        diff: String,
-    },
 }
 
 impl FileDiff {
@@ -388,7 +366,6 @@ impl FileDiff {
             | FileDiff::Delete { path, .. }
             | FileDiff::Update { path, .. }
             | FileDiff::Rename { new_path: path, .. }
-            | FileDiff::Added { path, .. }
             | FileDiff::Chmod { path, .. } => path,
         }
     }
@@ -398,7 +375,7 @@ impl FileDiff {
             FileDiff::Update { content, .. }
             | FileDiff::New { content, .. }
             | FileDiff::Delete { content, .. } => content.chunks(),
-            FileDiff::Added { .. } | FileDiff::Rename { .. } | FileDiff::Chmod { .. } => &[],
+            FileDiff::Rename { .. } | FileDiff::Chmod { .. } => &[],
         }
     }
 
@@ -539,7 +516,7 @@ impl FileDiff {
         })
     }
 
-    fn to_patch(&self) -> String {
+    fn to_patch(&self) -> orfail::Result<String> {
         let mut patch = String::new();
         match self {
             FileDiff::New {
@@ -548,11 +525,16 @@ impl FileDiff {
                 content,
                 ..
             } => {
-                let path = path.display();
-                patch.push_str(&format!("diff --git a/{path} b/{path}\n"));
-                patch.push_str(&format!("new file mode {mode}\n"));
-                if !matches!(content, ContentDiff::Empty) {
-                    patch.push_str(&format!("{content}\n"));
+                if let ContentDiff::Binary = content {
+                    let diff = git::new_file_diff(path, true).or_fail()?;
+                    patch.push_str(&diff);
+                } else {
+                    let path = path.display();
+                    patch.push_str(&format!("diff --git a/{path} b/{path}\n"));
+                    patch.push_str(&format!("new file mode {mode}\n"));
+                    if !matches!(content, ContentDiff::Empty) {
+                        patch.push_str(&format!("{content}\n"));
+                    }
                 }
             }
             FileDiff::Delete {
@@ -602,11 +584,18 @@ impl FileDiff {
                 patch.push_str(&format!("old mode {old_mode}\n"));
                 patch.push_str(&format!("new mode {new_mode}\n"));
             }
-            FileDiff::Added { diff, .. } => {
-                patch.push_str(&format!("{diff}\n"));
-            }
         }
-        patch
+        Ok(patch)
+    }
+}
+
+impl FromStr for FileDiff {
+    type Err = orfail::Failure;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Ok(Self::parse(&mut s.lines().peekable())
+            .or_fail()?
+            .or_fail()?)
     }
 }
 
