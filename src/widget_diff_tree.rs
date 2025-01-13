@@ -11,15 +11,14 @@ use crate::{
 
 #[derive(Debug, Clone)]
 pub struct DiffTreeWidget {
-    // TODO: priv
-    pub unstaged_diff: PhasedDiff,
-    pub staged_diff: PhasedDiff,
-    pub root_node: DiffTreeNode,
-    pub cursor: Cursor,
+    unstaged_diff: PhasedDiff,
+    staged_diff: PhasedDiff,
+    root_node: DiffTreeNode,
+    cursor: Cursor,
 }
 
 impl DiffTreeWidget {
-    pub fn new() -> orfail::Result<Self> {
+    pub fn new(terminal_size: TerminalSize) -> orfail::Result<Self> {
         let mut this = Self {
             unstaged_diff: PhasedDiff {
                 phase: DiffPhase::Unstaged,
@@ -33,34 +32,8 @@ impl DiffTreeWidget {
             cursor: Cursor::root(),
         };
         this.reload().or_fail()?;
+        this.expand_if_possible(terminal_size).or_fail()?;
         Ok(this)
-    }
-
-    // TODO: priv
-    pub fn expand_if_possible(&mut self, terminal_size: TerminalSize) -> orfail::Result<()> {
-        if !self.cursor_right().or_fail()? {
-            return Ok(());
-        }
-
-        loop {
-            self.root_node
-                .get_node_mut(&self.cursor)
-                .or_fail()?
-                .expanded = true;
-            if self.rows() > terminal_size.rows {
-                self.root_node
-                    .get_node_mut(&self.cursor)
-                    .or_fail()?
-                    .expanded = false;
-                break;
-            }
-            if !self.cursor_down().or_fail()? {
-                break;
-            }
-        }
-
-        self.cursor = Cursor::root();
-        Ok(())
     }
 
     pub fn render(&self, canvas: &mut Canvas) {
@@ -108,13 +81,6 @@ impl DiffTreeWidget {
             .is_some_and(|b| b)
     }
 
-    fn expand_parent(&mut self) -> orfail::Result<()> {
-        if let Some(parent) = self.cursor.parent() {
-            self.root_node.get_node_mut(&parent).or_fail()?.expanded = true;
-        }
-        Ok(())
-    }
-
     pub fn cursor_up(&mut self) -> orfail::Result<bool> {
         if let Some(new_cursor) = self.root_node.cursor_up(&self.cursor) {
             self.cursor = new_cursor;
@@ -159,13 +125,73 @@ impl DiffTreeWidget {
         self.root_node.cursor_row(&self.cursor) - root_node_offset
     }
 
-    pub fn rows(&self) -> usize {
-        let root_node_offset = 1;
-        self.root_node.rows() - root_node_offset
+    pub fn toggle(&mut self) -> orfail::Result<()> {
+        self.root_node.toggle(&self.cursor).or_fail()
     }
 
-    pub fn toggle_expansion(&mut self) -> orfail::Result<()> {
-        self.root_node.toggle(&self.cursor).or_fail()
+    pub fn stage(&mut self) -> orfail::Result<bool> {
+        if !self.can_stage_or_discard() {
+            return Ok(false);
+        }
+        self.root_node.children[0]
+            .stage(&self.cursor, &self.unstaged_diff.diff)
+            .or_fail()?;
+        self.reload().or_fail()?;
+        Ok(true)
+    }
+
+    pub fn discard(&mut self) -> orfail::Result<bool> {
+        if !self.can_stage_or_discard() {
+            return Ok(false);
+        }
+        self.root_node.children[0]
+            .discard(&self.cursor, &self.unstaged_diff.diff)
+            .or_fail()?;
+        self.reload().or_fail()?;
+        Ok(true)
+    }
+
+    pub fn unstage(&mut self) -> orfail::Result<bool> {
+        if !self.can_unstage() {
+            return Ok(false);
+        }
+        self.root_node.children[1]
+            .unstage(&self.cursor, &self.staged_diff.diff)
+            .or_fail()?;
+        self.reload().or_fail()?;
+        Ok(true)
+    }
+
+    fn expand_if_possible(&mut self, terminal_size: TerminalSize) -> orfail::Result<()> {
+        if !self.cursor_right().or_fail()? {
+            return Ok(());
+        }
+
+        loop {
+            self.root_node.toggle(&self.cursor).or_fail()?;
+            if self.rows() > terminal_size.rows {
+                self.root_node.toggle(&self.cursor).or_fail()?;
+                break;
+            }
+            if !self.cursor_down().or_fail()? {
+                break;
+            }
+        }
+
+        self.cursor = Cursor::root();
+        Ok(())
+    }
+
+    fn expand_parent(&mut self) -> orfail::Result<()> {
+        if let Some(parent) = self.cursor.parent() {
+            self.root_node.get_node_mut(&parent).or_fail()?.expanded = true;
+        }
+        Ok(())
+    }
+
+    fn rows(&self) -> usize {
+        let root_node_offset = 1;
+        self.root_node.rows() - root_node_offset
     }
 
     // TODO: refactor
@@ -207,47 +233,14 @@ impl DiffTreeWidget {
         Ok(())
     }
 
-    pub fn stage(&mut self) -> orfail::Result<bool> {
-        if !self.can_stage_or_discard() {
-            return Ok(false);
-        }
-        self.root_node.children[0]
-            .stage(&self.cursor, &self.unstaged_diff.diff)
-            .or_fail()?;
-        self.reload().or_fail()?;
-        Ok(true)
-    }
-
-    pub fn discard(&mut self) -> orfail::Result<bool> {
-        if !self.can_stage_or_discard() {
-            return Ok(false);
-        }
-        self.root_node.children[0]
-            .discard(&self.cursor, &self.unstaged_diff.diff)
-            .or_fail()?;
-        self.reload().or_fail()?;
-        Ok(true)
-    }
-
-    pub fn unstage(&mut self) -> orfail::Result<bool> {
-        if !self.can_unstage() {
-            return Ok(false);
-        }
-        self.root_node.children[1]
-            .unstage(&self.cursor, &self.staged_diff.diff)
-            .or_fail()?;
-        self.reload().or_fail()?;
-        Ok(true)
-    }
-
-    pub fn children_and_diffs(&self) -> impl '_ + Iterator<Item = (&DiffTreeNode, &PhasedDiff)> {
+    fn children_and_diffs(&self) -> impl '_ + Iterator<Item = (&DiffTreeNode, &PhasedDiff)> {
         self.root_node
             .children
             .iter()
             .zip([&self.unstaged_diff, &self.staged_diff])
     }
 
-    pub fn children_and_diffs_mut(
+    fn children_and_diffs_mut(
         &mut self,
     ) -> impl '_ + Iterator<Item = (&mut DiffTreeNode, &mut PhasedDiff)> {
         self.root_node
@@ -258,14 +251,14 @@ impl DiffTreeWidget {
 }
 
 #[derive(Debug, Clone)]
-pub struct DiffTreeNode {
-    pub path: NodePath,
-    pub expanded: bool,
-    pub children: Vec<Self>,
+struct DiffTreeNode {
+    path: NodePath,
+    expanded: bool,
+    children: Vec<Self>,
 }
 
 impl DiffTreeNode {
-    pub fn new_root_node() -> Self {
+    fn new_root_node() -> Self {
         let root_path = NodePath::root();
         Self {
             path: root_path.clone(),
@@ -277,7 +270,7 @@ impl DiffTreeNode {
         }
     }
 
-    pub fn new_diff_node(path: NodePath) -> Self {
+    fn new_diff_node(path: NodePath) -> Self {
         Self {
             path,
             expanded: true,
@@ -285,7 +278,7 @@ impl DiffTreeNode {
         }
     }
 
-    pub fn new_file_diff_node(path: NodePath, diff: &FileDiff) -> Self {
+    fn new_file_diff_node(path: NodePath, diff: &FileDiff) -> Self {
         let children = diff
             .chunks()
             .enumerate()
@@ -298,7 +291,7 @@ impl DiffTreeNode {
         }
     }
 
-    pub fn new_chunk_diff_node(path: NodePath, diff: &ChunkDiff) -> Self {
+    fn new_chunk_diff_node(path: NodePath, diff: &ChunkDiff) -> Self {
         let children = (0..diff.lines.len())
             .map(|i| DiffTreeNode::new_line_diff_node(path.join(i)))
             .collect();
@@ -309,7 +302,7 @@ impl DiffTreeNode {
         }
     }
 
-    pub fn new_line_diff_node(path: NodePath) -> Self {
+    fn new_line_diff_node(path: NodePath) -> Self {
         Self {
             path,
             expanded: false,
@@ -317,7 +310,7 @@ impl DiffTreeNode {
         }
     }
 
-    pub fn render<T>(&self, canvas: &mut Canvas, cursor: &Cursor, content: &T)
+    fn render<T>(&self, canvas: &mut Canvas, cursor: &Cursor, content: &T)
     where
         T: DiffTreeNodeContent,
     {
@@ -339,7 +332,7 @@ impl DiffTreeNode {
         }
     }
 
-    pub fn render_if_need<T>(&self, canvas: &mut Canvas, cursor: &Cursor, content: &T) -> bool
+    fn render_if_need<T>(&self, canvas: &mut Canvas, cursor: &Cursor, content: &T) -> bool
     where
         T: DiffTreeNodeContent,
     {
@@ -363,7 +356,7 @@ impl DiffTreeNode {
         true
     }
 
-    pub fn rows(&self) -> usize {
+    fn rows(&self) -> usize {
         if self.expanded {
             1 + self.children.iter().map(|c| c.rows()).sum::<usize>()
         } else {
@@ -371,7 +364,7 @@ impl DiffTreeNode {
         }
     }
 
-    pub fn cursor_row(&self, cursor: &Cursor) -> usize {
+    fn cursor_row(&self, cursor: &Cursor) -> usize {
         match cursor.path.as_slice()[..self.path.len()].cmp(self.path.as_slice()) {
             Ordering::Less => 0,
             Ordering::Equal if cursor.path.len() == self.path.len() => 0,
@@ -396,7 +389,7 @@ impl DiffTreeNode {
         Ok(())
     }
 
-    pub fn can_alter<T>(&self, cursor: &Cursor, content: &T) -> orfail::Result<bool>
+    fn can_alter<T>(&self, cursor: &Cursor, content: &T) -> orfail::Result<bool>
     where
         T: DiffTreeNodeContent,
     {
@@ -413,24 +406,18 @@ impl DiffTreeNode {
         }
     }
 
-    pub fn get_children(&self, cursor: &Cursor) -> orfail::Result<&[Self]> {
-        self.get_node(cursor)
-            .map(|node| &node.children[..])
-            .or_fail()
-    }
-
-    pub fn is_valid_cursor(&self, cursor: &Cursor) -> bool {
+    fn is_valid_cursor(&self, cursor: &Cursor) -> bool {
         self.get_node(cursor).is_ok()
     }
 
-    pub fn toggle(&mut self, cursor: &Cursor) -> orfail::Result<()> {
+    fn toggle(&mut self, cursor: &Cursor) -> orfail::Result<()> {
         let node = self.get_node_mut(cursor).or_fail()?;
         node.expanded = !node.expanded;
         Ok(())
     }
 
     // TODO: refactor
-    pub fn restore_diff_node_state(&mut self, diff: &Diff, old: &[(&Self, &Diff)]) {
+    fn restore_diff_node_state(&mut self, diff: &Diff, old: &[(&Self, &Diff)]) {
         if old.is_empty() {
             return;
         }
@@ -449,32 +436,13 @@ impl DiffTreeNode {
     }
 
     // TODO: refactor
-    pub fn restore_file_node_state(&mut self, diff: &FileDiff, old: &[(&Self, &FileDiff)]) {
-        if old.is_empty() {
-            return;
-        }
-
-        self.expanded = old.iter().any(|w| w.0.expanded);
-
-        for (c, d) in self.children.iter_mut().zip(diff.chunks()) {
-            let old = old
-                .iter()
-                .flat_map(|w| w.0.children.iter().zip(w.1.chunks()))
-                .filter(|w| w.1.is_intersect(d))
-                .map(|w| w.0)
-                .collect::<Vec<_>>();
-            c.restore_chunk_node_state(&old);
-        }
-    }
-
-    // TODO: refactor
-    pub fn restore_chunk_node_state(&mut self, old: &[&Self]) {
+    fn restore_chunk_node_state(&mut self, old: &[&Self]) {
         if !old.is_empty() {
             self.expanded = old.iter().any(|n| n.expanded);
         }
     }
 
-    pub fn get_node(&self, cursor: &Cursor) -> orfail::Result<&Self> {
+    fn get_node(&self, cursor: &Cursor) -> orfail::Result<&Self> {
         if let Some((_, child)) = self.get_maybe_child(cursor).or_fail()? {
             child.get_node(cursor).or_fail()
         } else {
@@ -482,7 +450,7 @@ impl DiffTreeNode {
         }
     }
 
-    pub fn get_node_mut(&mut self, cursor: &Cursor) -> orfail::Result<&mut Self> {
+    fn get_node_mut(&mut self, cursor: &Cursor) -> orfail::Result<&mut Self> {
         cursor.path.starts_with(&self.path).or_fail()?;
 
         let level = self.path.len();
@@ -495,7 +463,7 @@ impl DiffTreeNode {
         }
     }
 
-    pub fn get_maybe_child(&self, cursor: &Cursor) -> orfail::Result<Option<(usize, &Self)>> {
+    fn get_maybe_child(&self, cursor: &Cursor) -> orfail::Result<Option<(usize, &Self)>> {
         cursor.path.starts_with(&self.path).or_fail()?;
 
         let level = self.path.len();
@@ -508,25 +476,25 @@ impl DiffTreeNode {
         }
     }
 
-    pub fn stage(&self, cursor: &Cursor, diff: &Diff) -> orfail::Result<()> {
+    fn stage(&self, cursor: &Cursor, diff: &Diff) -> orfail::Result<()> {
         let diff = self.get_diff(cursor, diff, true).or_fail()?;
         git::stage(&diff).or_fail()?;
         Ok(())
     }
 
-    pub fn discard(&self, cursor: &Cursor, diff: &Diff) -> orfail::Result<()> {
+    fn discard(&self, cursor: &Cursor, diff: &Diff) -> orfail::Result<()> {
         let diff = self.get_diff(cursor, diff, true).or_fail()?;
         git::discard(&diff).or_fail()?;
         Ok(())
     }
 
-    pub fn unstage(&self, cursor: &Cursor, diff: &Diff) -> orfail::Result<()> {
+    fn unstage(&self, cursor: &Cursor, diff: &Diff) -> orfail::Result<()> {
         let diff = self.get_diff(cursor, diff, false).or_fail()?;
         git::unstage(&diff).or_fail()?;
         Ok(())
     }
 
-    pub fn get_diff(&self, cursor: &Cursor, diff: &Diff, stage: bool) -> orfail::Result<Diff> {
+    fn get_diff(&self, cursor: &Cursor, diff: &Diff, stage: bool) -> orfail::Result<Diff> {
         let Some((i, node)) = self.get_maybe_child(cursor).or_fail()? else {
             return Ok(diff.clone());
         };
@@ -545,7 +513,7 @@ impl DiffTreeNode {
         Ok(chunk.get_line_chunk(i, stage).or_fail()?.to_diff(path))
     }
 
-    pub fn cursor_right(&self, cursor: &Cursor) -> Option<Cursor> {
+    fn cursor_right(&self, cursor: &Cursor) -> Option<Cursor> {
         let mut cursor = cursor.clone();
 
         while cursor.path.len() >= self.path.len() {
@@ -565,7 +533,7 @@ impl DiffTreeNode {
         None
     }
 
-    pub fn cursor_down(&self, cursor: &Cursor) -> Option<Cursor> {
+    fn cursor_down(&self, cursor: &Cursor) -> Option<Cursor> {
         let sibling_cursor = cursor.next_sibling();
         if self.is_valid_cursor(&sibling_cursor) {
             return Some(sibling_cursor);
@@ -586,7 +554,7 @@ impl DiffTreeNode {
         }
     }
 
-    pub fn cursor_up(&self, cursor: &Cursor) -> Option<Cursor> {
+    fn cursor_up(&self, cursor: &Cursor) -> Option<Cursor> {
         if let Some(sibling_cursor) = cursor.prev_sibling() {
             return Some(sibling_cursor);
         }
@@ -755,50 +723,46 @@ impl DiffTreeNodeContent for LineDiff {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct NodePath(Vec<usize>);
+struct NodePath(Vec<usize>);
 
 impl NodePath {
-    pub fn root() -> Self {
+    fn root() -> Self {
         Self(vec![0])
     }
 
-    pub fn join(&self, index: usize) -> Self {
+    fn join(&self, index: usize) -> Self {
         let mut child = self.clone();
         child.0.push(index);
         child
     }
 
-    pub fn starts_with(&self, other: &Self) -> bool {
+    fn starts_with(&self, other: &Self) -> bool {
         self.0.starts_with(&other.0)
     }
 
-    pub fn len(&self) -> usize {
+    fn len(&self) -> usize {
         self.0.len()
     }
 
-    pub fn is_empty(&self) -> bool {
-        self.0.is_empty()
-    }
-
     // TODO: remove
-    pub fn as_slice(&self) -> &[usize] {
+    fn as_slice(&self) -> &[usize] {
         &self.0
     }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Cursor {
+struct Cursor {
     pub path: NodePath,
 }
 
 impl Cursor {
-    pub fn root() -> Self {
+    fn root() -> Self {
         Self {
             path: NodePath::root().join(0),
         }
     }
 
-    pub fn parent(&self) -> Option<Self> {
+    fn parent(&self) -> Option<Self> {
         (self.path.len() > 2).then(|| {
             let mut path = self.path.clone();
             path.0.pop();
@@ -806,24 +770,24 @@ impl Cursor {
         })
     }
 
-    pub fn first_child(&self) -> Self {
+    fn first_child(&self) -> Self {
         let path = self.path.join(0);
         Self { path }
     }
 
-    pub fn join(&self, index: usize) -> Self {
+    fn join(&self, index: usize) -> Self {
         Self {
             path: self.path.join(index),
         }
     }
 
-    pub fn next_sibling(&self) -> Self {
+    fn next_sibling(&self) -> Self {
         let mut path = self.path.clone();
         *path.0.last_mut().expect("infallible") += 1;
         Self { path }
     }
 
-    pub fn prev_sibling(&self) -> Option<Self> {
+    fn prev_sibling(&self) -> Option<Self> {
         let mut path = self.path.clone();
         if path.0.last().copied() == Some(0) {
             return None;
@@ -832,7 +796,7 @@ impl Cursor {
         Some(Self { path })
     }
 
-    pub fn render(&self, canvas: &mut Canvas, path: &NodePath) {
+    fn render(&self, canvas: &mut Canvas, path: &NodePath) {
         let mut text = String::with_capacity(path.len() * 2);
         let selected = *path == self.path;
 
@@ -865,13 +829,13 @@ impl Cursor {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum DiffPhase {
+enum DiffPhase {
     Unstaged,
     Staged,
 }
 
 #[derive(Debug, Clone)]
-pub struct PhasedDiff {
-    pub phase: DiffPhase,
-    pub diff: Diff,
+struct PhasedDiff {
+    phase: DiffPhase,
+    diff: Diff,
 }

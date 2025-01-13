@@ -17,8 +17,8 @@ pub struct App {
 
 impl App {
     pub fn new() -> orfail::Result<Self> {
-        let tree = DiffTreeWidget::new().or_fail()?;
         let terminal = Terminal::new().or_fail()?;
+        let tree = DiffTreeWidget::new(terminal.size()).or_fail()?;
         Ok(Self {
             terminal,
             exit: false,
@@ -29,9 +29,6 @@ impl App {
     }
 
     pub fn run(mut self) -> orfail::Result<()> {
-        self.tree
-            .expand_if_possible(self.terminal.size())
-            .or_fail()?;
         self.render().or_fail()?;
 
         while !self.exit {
@@ -155,7 +152,7 @@ impl App {
                 }
             }
             KeyCode::Char('t') | KeyCode::Tab => {
-                self.tree.toggle_expansion().or_fail()?;
+                self.tree.toggle().or_fail()?;
                 self.render().or_fail()?;
             }
             KeyCode::Char('r') => {
