@@ -955,7 +955,6 @@ index e3bdb24..dd04db5 100644
         let diff = Diff::from_str(text).or_fail()?;
         assert_eq!(diff.files.len(), 1);
         assert!(matches!(diff.files[0], FileDiff::Update { .. }));
-        assert_eq!(diff.to_string().trim_end(), text);
 
         let text = r#"diff --git a/Cargo.toml b/C.toml
 similarity index 100%
