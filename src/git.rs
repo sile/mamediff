@@ -183,13 +183,9 @@ fn call_with_input(args: &[&str], input: &str) -> orfail::Result<String> {
     String::from_utf8(output.stdout).or_fail()
 }
 
-fn parse_maybe_escaped_path(s: &str) -> orfail::Result<PathBuf> {
-    if !s.starts_with('"') {
-        return Ok(PathBuf::from(s));
-    }
-
+pub fn parse_escaped_path(s: &str) -> orfail::Result<PathBuf> {
     let mut bytes = Vec::new();
-    let mut chars = s.trim_matches('"').chars();
+    let mut chars = s.chars();
     while let Some(c) = chars.next() {
         if c != '\\' {
             bytes.push(c as u8);
@@ -213,6 +209,14 @@ fn parse_maybe_escaped_path(s: &str) -> orfail::Result<PathBuf> {
     }
     let path = String::from_utf8(bytes).or_fail()?;
     Ok(PathBuf::from(&path))
+}
+
+fn parse_maybe_escaped_path(s: &str) -> orfail::Result<PathBuf> {
+    if !s.starts_with('"') {
+        return Ok(PathBuf::from(s));
+    }
+
+    parse_escaped_path(s.trim_matches('"')).or_fail()
 }
 
 #[cfg(test)]

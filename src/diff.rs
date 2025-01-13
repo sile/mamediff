@@ -384,8 +384,20 @@ impl FileDiff {
             return Ok(None);
         };
 
-        let path = line["diff --git a/".len()..].split(' ').next().or_fail()?;
-        let path = PathBuf::from(path);
+        let path = if line.starts_with("diff --git a/") {
+            let path = line["diff --git a/".len()..].split(' ').next().or_fail()?;
+            PathBuf::from(path)
+        } else if line.starts_with("diff --git \"a/") {
+            let path = line["diff --git \"a/".len()..]
+                .split("\" ")
+                .next()
+                .or_fail()?;
+            git::parse_escaped_path(path).or_fail()?
+        } else {
+            return Err(orfail::Failure::new(format!(
+                "unexpected git diff line: {line}"
+            )));
+        };
 
         let line = lines.next().or_fail()?;
         let this = if line.starts_with(IndexHeaderLine::PREFIX) {
