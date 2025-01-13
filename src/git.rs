@@ -49,7 +49,12 @@ pub fn unstaged_and_staged_diffs() -> orfail::Result<(Diff, Diff)> {
             let untracked_files_handle = s.spawn(|| {
                 call(&["ls-files", "--others", "--exclude-standard"], true)
                     .or_fail()
-                    .map(|output| output.lines().map(|s| s.to_owned()).collect::<Vec<_>>())
+                    .and_then(|output| {
+                        output
+                            .lines()
+                            .map(parse_maybe_escaped_path)
+                            .collect::<orfail::Result<Vec<_>>>()
+                    })
             });
 
             let unstaged_diff = unstaged_diff_handle
@@ -73,7 +78,8 @@ pub fn unstaged_and_staged_diffs() -> orfail::Result<(Diff, Diff)> {
         let mut handles = Vec::new();
         for path in &untracked_files {
             handles.push(s.spawn(move || {
-                let content = std::fs::read(path).or_fail()?;
+                let content = std::fs::read(path)
+                    .or_fail_with(|e| format!("failed to read file {:?}: {e}", path.display()))?;
                 if std::str::from_utf8(&content).is_ok() {
                     let diff = new_file_diff(path, false).or_fail()?;
                     FileDiff::from_str(&diff).or_fail()
@@ -177,6 +183,42 @@ fn call_with_input(args: &[&str], input: &str) -> orfail::Result<String> {
     String::from_utf8(output.stdout).or_fail()
 }
 
+pub fn parse_escaped_path(s: &str) -> orfail::Result<PathBuf> {
+    let mut bytes = Vec::new();
+    let mut chars = s.chars();
+    while let Some(c) = chars.next() {
+        if c != '\\' {
+            bytes.push(c as u8);
+            continue;
+        }
+
+        let c = chars.next().or_fail()?;
+        if !c.is_ascii_digit() {
+            bytes.push(c as u8);
+            continue;
+        }
+
+        let mut num = String::with_capacity(3);
+        num.push(c);
+        num.push(chars.next().or_fail()?);
+        num.push(chars.next().or_fail()?);
+
+        let b = u8::from_str_radix(&num, 8)
+            .or_fail_with(|e| format!("invalid number {num:?}: error={e}, input={s}"))?;
+        bytes.push(b);
+    }
+    let path = String::from_utf8(bytes).or_fail()?;
+    Ok(PathBuf::from(&path))
+}
+
+fn parse_maybe_escaped_path(s: &str) -> orfail::Result<PathBuf> {
+    if !s.starts_with('"') {
+        return Ok(PathBuf::from(s));
+    }
+
+    parse_escaped_path(s.trim_matches('"')).or_fail()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -195,6 +237,24 @@ mod tests {
         // Now, `dir` is a Git directory.
         assert!(is_available());
 
+        Ok(())
+    }
+
+    #[test]
+    fn parse_maybe_escaped_path_works() -> orfail::Result<()> {
+        assert_eq!(
+            parse_maybe_escaped_path("foo.txt").or_fail()?,
+            PathBuf::from("foo.txt")
+        );
+        assert_eq!(
+            parse_maybe_escaped_path(r#""\343\201\202\343\201\204\343\201\206.txt""#).or_fail()?,
+            PathBuf::from("あいう.txt")
+        );
+        assert_eq!(
+            parse_maybe_escaped_path(r#""\343\201\202\\t\343\201\204a\343\201\206.txt""#)
+                .or_fail()?,
+            PathBuf::from("あ\\tいaう.txt")
+        );
         Ok(())
     }
 }
