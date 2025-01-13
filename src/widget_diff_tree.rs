@@ -599,15 +599,23 @@ impl DiffTreeNodeContent for FileDiff {
     fn head_line_tokens(&self) -> impl Iterator<Item = Token> {
         let path = Token::with_style(self.path().display().to_string(), TokenStyle::Underlined);
         let tokens = match self {
-            FileDiff::Update { .. } => {
+            FileDiff::Update {
+                old_mode, new_mode, ..
+            } => {
+                let mode = if let Some(old_mode) = old_mode {
+                    format!(", {old_mode} -> {new_mode} mode")
+                } else {
+                    "".to_string()
+                };
                 vec![
                     Token::new("modified "),
                     path,
                     Token::new(format!(
-                        " ({} chunks, -{} +{} lines)",
+                        " ({} chunks, -{} +{} lines{})",
                         self.children().len(),
                         self.removed_lines(),
                         self.added_lines(),
+                        mode
                     )),
                 ]
             }

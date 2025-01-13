@@ -571,16 +571,16 @@ impl FileDiff {
             FileDiff::Update {
                 path,
                 old_mode,
+                new_mode,
                 content,
                 ..
             } => {
-                if old_mode.is_some() {
-                    // TODO
-                    todo!();
-                }
-
                 let path = path.display();
                 patch.push_str(&format!("diff --git a/{path} b/{path}\n"));
+                if let Some(old_mode) = old_mode {
+                    patch.push_str(&format!("old mode {old_mode}\n"));
+                    patch.push_str(&format!("new mode {new_mode}\n"));
+                }
                 patch.push_str(&format!("--- a/{path}\n"));
                 patch.push_str(&format!("+++ b/{path}\n"));
                 patch.push_str(&format!("{content}\n"));
