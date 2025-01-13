@@ -619,7 +619,14 @@ impl DiffTreeNodeContent for FileDiff {
                     )),
                 ]
             }
-            FileDiff::New { .. } | FileDiff::Added { .. } => {
+            FileDiff::New { .. } => {
+                vec![
+                    Token::new("added "),
+                    path,
+                    Token::new(format!(" (+{} lines)", self.added_lines())),
+                ]
+            }
+            FileDiff::Added { .. } => {
                 vec![Token::new("added "), path]
             }
             FileDiff::Rename { old_path, .. } => {
@@ -629,7 +636,11 @@ impl DiffTreeNodeContent for FileDiff {
                 vec![Token::new("renamed "), old_path, Token::new(" -> "), path]
             }
             FileDiff::Delete { .. } => {
-                vec![Token::new("deleted "), path]
+                vec![
+                    Token::new("deleted "),
+                    path,
+                    Token::new(format!(" (-{} lines)", self.removed_lines())),
+                ]
             }
             FileDiff::Chmod {
                 old_mode, new_mode, ..

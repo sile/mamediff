@@ -395,12 +395,10 @@ impl FileDiff {
 
     pub fn chunks(&self) -> &[ChunkDiff] {
         match self {
-            FileDiff::Update { content, .. } => content.chunks(),
-            FileDiff::Added { .. }
-            | FileDiff::Delete { .. }
-            | FileDiff::New { .. }
-            | FileDiff::Rename { .. }
-            | FileDiff::Chmod { .. } => &[],
+            FileDiff::Update { content, .. }
+            | FileDiff::New { content, .. }
+            | FileDiff::Delete { content, .. } => content.chunks(),
+            FileDiff::Added { .. } | FileDiff::Rename { .. } | FileDiff::Chmod { .. } => &[],
         }
     }
 
