@@ -104,6 +104,16 @@ pub fn unstaged_and_staged_diffs() -> orfail::Result<(Diff, Diff)> {
     Ok((unstaged_diff, staged_diff))
 }
 
+pub fn binary_file_diff<P: AsRef<Path>>(path: P) -> orfail::Result<String> {
+    let path = &path.as_ref().display().to_string();
+    let diff = call(&["diff", "--binary", path], true).or_fail()?;
+    if diff.is_empty() {
+        call(&["diff", "--binary", "--cached", path], true).or_fail()
+    } else {
+        Ok(diff)
+    }
+}
+
 pub fn new_file_diff<P: AsRef<Path>>(path: P, binary: bool) -> orfail::Result<String> {
     // This command exits with code 1 even upon success.
     // Therefore, specify `check_status=false` here.

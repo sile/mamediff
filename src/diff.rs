@@ -543,10 +543,15 @@ impl FileDiff {
                 content,
                 ..
             } => {
-                let path = path.display();
-                patch.push_str(&format!("diff --git a/{path} b/{path}\n"));
-                patch.push_str(&format!("deleted file mode {mode}\n"));
-                patch.push_str(&format!("{content}\n"));
+                if let ContentDiff::Binary = content {
+                    let diff = git::new_file_diff(path, true).or_fail()?;
+                    patch.push_str(&diff);
+                } else {
+                    let path = path.display();
+                    patch.push_str(&format!("diff --git a/{path} b/{path}\n"));
+                    patch.push_str(&format!("deleted file mode {mode}\n"));
+                    patch.push_str(&format!("{content}\n"));
+                }
             }
             FileDiff::Update {
                 path,
@@ -555,15 +560,20 @@ impl FileDiff {
                 content,
                 ..
             } => {
-                let path = path.display();
-                patch.push_str(&format!("diff --git a/{path} b/{path}\n"));
-                if let Some(old_mode) = old_mode {
-                    patch.push_str(&format!("old mode {old_mode}\n"));
-                    patch.push_str(&format!("new mode {new_mode}\n"));
+                if let ContentDiff::Binary = content {
+                    let diff = git::binary_file_diff(path).or_fail()?;
+                    patch.push_str(&diff);
+                } else {
+                    let path = path.display();
+                    patch.push_str(&format!("diff --git a/{path} b/{path}\n"));
+                    if let Some(old_mode) = old_mode {
+                        patch.push_str(&format!("old mode {old_mode}\n"));
+                        patch.push_str(&format!("new mode {new_mode}\n"));
+                    }
+                    patch.push_str(&format!("--- a/{path}\n"));
+                    patch.push_str(&format!("+++ b/{path}\n"));
+                    patch.push_str(&format!("{content}\n"));
                 }
-                patch.push_str(&format!("--- a/{path}\n"));
-                patch.push_str(&format!("+++ b/{path}\n"));
-                patch.push_str(&format!("{content}\n"));
             }
             FileDiff::Rename {
                 old_path, new_path, ..
