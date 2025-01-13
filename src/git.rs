@@ -52,7 +52,7 @@ pub fn unstaged_and_staged_diffs() -> orfail::Result<(Diff, Diff)> {
                     .and_then(|output| {
                         output
                             .lines()
-                            .map(|s| parse_maybe_escaped_path(s))
+                            .map(parse_maybe_escaped_path)
                             .collect::<orfail::Result<Vec<_>>>()
                     })
             });
