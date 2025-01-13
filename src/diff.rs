@@ -593,9 +593,7 @@ impl FromStr for FileDiff {
     type Err = orfail::Failure;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        Ok(Self::parse(&mut s.lines().peekable())
-            .or_fail()?
-            .or_fail()?)
+        Self::parse(&mut s.lines().peekable()).or_fail()?.or_fail()
     }
 }
 
