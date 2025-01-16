@@ -47,7 +47,7 @@ The available key bindings will be displayed in the top-right corner of the wind
 $ mamediff
 ->| Unstaged changes (1 files)                     | (q)uit [ESC,C-c]
   :   modified src/main.rs (1 chunks, -1 +1 lines) | (↓)        [C-n]
-  :     @@ -1,3 +1,3 @@                            | (→)        [C-b]
+  :     @@ -1,3 +1,3 @@                            | (→)        [C-f]
   :        fn main() {                             | (t)oggle   [TAB]
   :       -    println!("Hello, World!");          | (s)tage
   :       +    println!("Hello, mamediff!");       | (D)iscard
