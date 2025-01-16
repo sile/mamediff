@@ -21,39 +21,39 @@ impl LegendWidget {
         if self.hide {
             let col = canvas.frame_size().cols - Self::HIDE_COLS;
             canvas.set_col_offset(col);
-            canvas.drawl(Token::new("+- s(h)ow -"));
+            canvas.drawln(Token::new("+- s(h)ow -"));
         } else {
             let col = canvas.frame_size().cols - Self::SHOW_COLS;
             canvas.set_col_offset(col);
-            canvas.drawl(Token::new("| (q)uit [ESC,C-c]"));
+            canvas.drawln(Token::new("| (q)uit [ESC,C-c]"));
             if tree.cursor_row() != 0 {
-                canvas.drawl(Token::new("| (r)ecenter [C-l]"));
+                canvas.drawln(Token::new("| (r)ecenter [C-l]"));
             }
             if tree.can_cursor_up() {
-                canvas.drawl(Token::new("| (↑)        [C-p]"));
+                canvas.drawln(Token::new("| (↑)        [C-p]"));
             }
             if tree.can_cursor_down() {
-                canvas.drawl(Token::new("| (↓)        [C-n]"));
+                canvas.drawln(Token::new("| (↓)        [C-n]"));
             }
             if tree.can_cursor_left() {
-                canvas.drawl(Token::new("| (←)        [C-b]"));
+                canvas.drawln(Token::new("| (←)        [C-b]"));
             }
             if tree.can_cursor_right() {
-                canvas.drawl(Token::new("| (→)        [C-f]"));
+                canvas.drawln(Token::new("| (→)        [C-f]"));
             }
             if tree.can_toggle() {
-                canvas.drawl(Token::new("| (t)oggle   [TAB]"));
+                canvas.drawln(Token::new("| (t)oggle   [TAB]"));
             }
             if tree.can_stage_or_discard() {
-                canvas.drawl(Token::new("| (s)tage         "));
+                canvas.drawln(Token::new("| (s)tage         "));
             }
             if tree.can_stage_or_discard() {
-                canvas.drawl(Token::new("| (D)iscard       "));
+                canvas.drawln(Token::new("| (D)iscard       "));
             }
             if tree.can_unstage() {
-                canvas.drawl(Token::new("| (u)nstage       "));
+                canvas.drawln(Token::new("| (u)nstage       "));
             }
-            canvas.drawl(Token::new("+---- (h)ide -----"));
+            canvas.drawln(Token::new("+---- (h)ide -----"));
         }
     }
 
