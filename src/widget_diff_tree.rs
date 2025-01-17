@@ -462,7 +462,7 @@ impl DiffTreeNode {
     }
 
     fn stage(&self, cursor: &Cursor, diff: &Diff) -> orfail::Result<()> {
-        let diff = self.get_diff(cursor, diff, true).or_fail()?;
+        let diff = self.get_diff(cursor, diff, false).or_fail()?;
         git::stage(&diff).or_fail()?;
         Ok(())
     }
@@ -474,12 +474,12 @@ impl DiffTreeNode {
     }
 
     fn unstage(&self, cursor: &Cursor, diff: &Diff) -> orfail::Result<()> {
-        let diff = self.get_diff(cursor, diff, false).or_fail()?;
+        let diff = self.get_diff(cursor, diff, true).or_fail()?;
         git::unstage(&diff).or_fail()?;
         Ok(())
     }
 
-    fn get_diff(&self, cursor: &Cursor, diff: &Diff, stage: bool) -> orfail::Result<Diff> {
+    fn get_diff(&self, cursor: &Cursor, diff: &Diff, reverse: bool) -> orfail::Result<Diff> {
         let Some((i, node)) = self.get_maybe_child(cursor).or_fail()? else {
             return Ok(diff.clone());
         };
@@ -495,7 +495,7 @@ impl DiffTreeNode {
             return Ok(chunk.to_diff(path));
         };
 
-        Ok(chunk.get_line_chunk(i, stage).or_fail()?.to_diff(path))
+        Ok(chunk.get_line_chunk(i, reverse).or_fail()?.to_diff(path))
     }
 
     fn cursor_right(&self, cursor: &Cursor) -> Option<Cursor> {
