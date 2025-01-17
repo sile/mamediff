@@ -90,7 +90,7 @@ impl ChunkDiff {
             .count()
     }
 
-    pub fn get_line_chunk(&self, index: usize, stage: bool) -> Option<Self> {
+    pub fn get_line_chunk(&self, index: usize, reverse: bool) -> Option<Self> {
         if index >= self.lines.len() {
             return None;
         }
@@ -103,10 +103,10 @@ impl ChunkDiff {
             }
 
             match line {
-                LineDiff::Old(s) if stage => {
+                LineDiff::Old(s) if !reverse => {
                     lines.push(LineDiff::Both(s.clone()));
                 }
-                LineDiff::New(s) if !stage => {
+                LineDiff::New(s) if reverse => {
                     lines.push(LineDiff::Both(s.clone()));
                 }
                 LineDiff::Both(_) => {
@@ -116,7 +116,7 @@ impl ChunkDiff {
             }
         }
 
-        let start = if stage {
+        let start = if !reverse {
             self.old_start_line_number
         } else {
             self.new_start_line_number
