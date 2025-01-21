@@ -630,11 +630,30 @@ impl DiffTreeNodeContent for FileDiff {
                     },
                 ]
             }
-            FileDiff::Rename { old_path, .. } => {
+            FileDiff::Rename {
+                old_path, content, ..
+            } => {
                 let old_path =
                     Token::with_style(old_path.display().to_string(), TokenStyle::Underlined);
 
-                vec![Token::new("renamed "), old_path, Token::new(" -> "), path]
+                let summary = if content.is_some() {
+                    Token::new(format!(
+                        " ({} chunks, -{} +{} lines)",
+                        self.children().len(),
+                        self.removed_lines(),
+                        self.added_lines(),
+                    ))
+                } else {
+                    Token::new("")
+                };
+
+                vec![
+                    Token::new("renamed "),
+                    old_path,
+                    Token::new(" -> "),
+                    path,
+                    summary,
+                ]
             }
             FileDiff::Delete { content, .. } => {
                 vec![
