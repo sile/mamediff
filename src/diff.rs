@@ -337,6 +337,7 @@ pub enum FileDiff {
         old_path: PathBuf,
         new_path: PathBuf,
         similarity_index: SimilarityIndexHeaderLine,
+        // TODO: Add content
     },
     Chmod {
         path: PathBuf,
@@ -1047,6 +1048,26 @@ index 0000000..684e22a
         let diff = Diff::from_str(text).or_fail()?;
         assert_eq!(diff.files.len(), 1);
         assert!(matches!(diff.files[0], FileDiff::New { .. }));
+
+        let text = r#"diff --git a/src/foo_file.rs b/src/foo.rs
+similarity index 96%
+rename from src/foo_file.rs
+rename to src/foo.rs
+index d33f81c..fce276a 100644
+--- a/src/foo_file.rs
++++ b/src/foo.rs
+@@ -9,7 +9,7 @@ use serde::Deserialize;
+ use crate;
+
+ #[derive(Debug, Clone, Deserialize)]
+-pub struct Foo {
++pub struct FooMetadata {
+     #[serde(default)]
+     pub bar: bool,
+     pub baz: bool,"#;
+        let diff = Diff::from_str(text).or_fail()?;
+        assert_eq!(diff.files.len(), 1);
+        assert!(matches!(diff.files[0], FileDiff::Rename { .. }));
 
         Ok(())
     }
