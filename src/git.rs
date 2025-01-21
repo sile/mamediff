@@ -78,9 +78,8 @@ pub fn unstaged_and_staged_diffs() -> orfail::Result<(Diff, Diff)> {
         let mut handles = Vec::new();
         for path in &untracked_files {
             handles.push(s.spawn(move || {
-                let content = std::fs::read(path)
-                    .or_fail_with(|e| format!("failed to read file {:?}: {e}", path.display()))?;
-                if std::str::from_utf8(&content).is_ok() {
+                let content = std::fs::read(path).ok();
+                if content.is_some_and(|c| std::str::from_utf8(&c).is_ok()) {
                     let diff = new_file_diff(path, false).or_fail()?;
                     FileDiff::from_str(&diff).or_fail()
                 } else {
