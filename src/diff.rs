@@ -185,7 +185,8 @@ impl ChunkDiff {
         }
         let line = lines.next().expect("infallible");
 
-        line.starts_with("@@ -").or_fail()?;
+        line.starts_with("@@ -")
+            .or_fail_with(|()| format!("unexpected diff line: {line}"))?;
 
         let (range_end, start_line) = if line.ends_with(" @@") {
             (line.len() - 3, None)
@@ -337,6 +338,7 @@ pub enum FileDiff {
         old_path: PathBuf,
         new_path: PathBuf,
         similarity_index: SimilarityIndexHeaderLine,
+        content: Option<ContentDiff>,
     },
     Chmod {
         path: PathBuf,
@@ -374,7 +376,11 @@ impl FileDiff {
         match self {
             FileDiff::Update { content, .. }
             | FileDiff::New { content, .. }
-            | FileDiff::Delete { content, .. } => content.chunks(),
+            | FileDiff::Delete { content, .. }
+            | FileDiff::Rename {
+                content: Some(content),
+                ..
+            } => content.chunks(),
             FileDiff::Rename { .. } | FileDiff::Chmod { .. } => &[],
         }
     }
@@ -422,7 +428,7 @@ impl FileDiff {
 
     fn parse_with_similarity_index(
         lines: &mut Peekable<Lines>,
-        _path: PathBuf,
+        path: PathBuf,
         similarity_index: SimilarityIndexHeaderLine,
     ) -> orfail::Result<Self> {
         let line = lines.next().or_fail()?;
@@ -431,10 +437,27 @@ impl FileDiff {
         let line = lines.next().or_fail()?;
         let rename_to = RenameToHeaderLine::from_str(line).or_fail()?;
 
+        let content = if lines
+            .peek()
+            .is_some_and(|l| l.starts_with(IndexHeaderLine::PREFIX))
+        {
+            let line = lines.next().or_fail()?;
+            let index = IndexHeaderLine::from_str(line).or_fail()?;
+            let Self::Update { content, .. } =
+                Self::parse_with_index(lines, path, index, None).or_fail()?
+            else {
+                return Err(orfail::Failure::new("unexpected diff line"));
+            };
+            Some(content)
+        } else {
+            None
+        };
+
         Ok(Self::Rename {
             old_path: rename_from.path,
             new_path: rename_to.path,
             similarity_index,
+            content,
         })
     }
 
@@ -1047,6 +1070,25 @@ index 0000000..684e22a
         let diff = Diff::from_str(text).or_fail()?;
         assert_eq!(diff.files.len(), 1);
         assert!(matches!(diff.files[0], FileDiff::New { .. }));
+
+        let text = r#"diff --git a/src/foo_file.rs b/src/foo.rs
+similarity index 96%
+rename from src/foo_file.rs
+rename to src/foo.rs
+index d33f81c..fce276a 100644
+--- a/src/foo_file.rs
++++ b/src/foo.rs
+@@ -9,6 +9,6 @@ use serde::Deserialize;
+ use crate;
+ #[derive(Debug, Clone, Deserialize)]
+-pub struct Foo {
++pub struct FooMetadata {
+     #[serde(default)]
+     pub bar: bool,
+     pub baz: bool,"#;
+        let diff = Diff::from_str(text).or_fail()?;
+        assert_eq!(diff.files.len(), 1);
+        assert!(matches!(diff.files[0], FileDiff::Rename { .. }));
 
         Ok(())
     }
