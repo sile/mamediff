@@ -22,7 +22,7 @@ Pre-built binaries for Linux and MacOS are available in [the releases page](http
 
 ```console
 // An example to download the binary for Linux.
-$ VERSION=...  # Set the target mamediff version such as "0.1.1"
+$ VERSION=...  # Set the target mamediff version such as "0.1.2"
 $ curl -L https://github.com/sile/mamediff/releases/download/${VERSION}/mamediff-${VERSION}.x86_64-unknown-linux-musl -o mamediff
 $ chmod +x mamediff
 $ ./mamediff -h
