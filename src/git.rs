@@ -111,9 +111,9 @@ pub fn unstaged_and_staged_diffs() -> orfail::Result<(Diff, Diff)> {
 
 pub fn binary_file_diff<P: AsRef<Path>>(path: P) -> orfail::Result<String> {
     let path = &path.as_ref().display().to_string();
-    let diff = call(&["diff", "--binary", path], true).or_fail()?;
+    let diff = call(&["diff", "--binary", "--", path], true).or_fail()?;
     if diff.is_empty() {
-        call(&["diff", "--binary", "--cached", path], true).or_fail()
+        call(&["diff", "--binary", "--cached", "--", path], true).or_fail()
     } else {
         Ok(diff)
     }
