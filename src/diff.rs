@@ -576,7 +576,7 @@ impl FileDiff {
                 ..
             } => {
                 if let ContentDiff::Binary = content {
-                    let diff = git::new_file_diff(path, true).or_fail()?;
+                    let diff = git::binary_file_diff(path).or_fail()?;
                     patch.push_str(&diff);
                 } else {
                     let path = path.display();
