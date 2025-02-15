@@ -11,10 +11,10 @@ use crate::diff::{ContentDiff, Diff, FileDiff, Mode};
 
 pub fn is_available() -> bool {
     // Check if `git` is accessible and we are within a Git directory.
-    call(&["rev-parse", "--is-inside-work-tree"], true)
-        .ok()
-        .filter(|s| s.trim() == "true")
-        .is_some()
+    let Ok(root_dir) = call(&["rev-parse", "--show-toplevel"], true) else {
+        return false;
+    };
+    std::env::set_current_dir(root_dir.trim()).is_ok()
 }
 
 pub fn stage(diff: &Diff) -> orfail::Result<()> {
