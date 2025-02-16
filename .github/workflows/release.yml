@@ -21,7 +21,7 @@ jobs:
         uses: softprops/action-gh-release@v1
         with:
           tag_name: ${{ steps.get_version.outputs.VERSION }}
-          name: v${{ steps.get_version.outputs.VERSION }}
+          name: ${{ steps.get_version.outputs.VERSION }}
           draft: true
 
   linux-binary:
@@ -45,7 +45,7 @@ jobs:
         with:
           upload_url: ${{ needs.github-release-draft.outputs.upload-url }}
           asset_path: target/x86_64-unknown-linux-musl/release/mamediff
-          asset_name: mamediff-${{ needs.github-release-draft.outputs.version }}.x86_64-unknown-linux-musl
+          asset_name: mamediff-${{ needs.github-release-draft.outputs.version[1:] }}.x86_64-unknown-linux-musl
           asset_content_type: application/octet-stream
 
   macos-binary:
@@ -69,5 +69,5 @@ jobs:
         with:
           upload_url: ${{ needs.github-release-draft.outputs.upload-url }}
           asset_path: target/${{ matrix.target }}/release/mamediff
-          asset_name: mamediff-${{ needs.github-release-draft.outputs.version }}.${{ matrix.target }}
+          asset_name: mamediff-${{ needs.github-release-draft.outputs.version[1:] }}.${{ matrix.target }}
           asset_content_type: application/octet-stream
