@@ -54,3 +54,8 @@ $ mamediff
   :        }                                       +---- (h)ide -----
   | Staged changes (0 files)
 ```
+
+You Might Also Be Interested In
+-------------------------------
+
+- [mamegrep](https://github.com/sile/mamegrep): A TUI tool for `$ git grep`
