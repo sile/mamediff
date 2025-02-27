@@ -74,92 +74,61 @@ impl App {
         }
 
         let ctrl = event.modifiers.contains(KeyModifiers::CONTROL);
-        match event.code {
-            KeyCode::Char('q') | KeyCode::Esc => {
+        match (ctrl, event.code) {
+            (false, KeyCode::Char('q') | KeyCode::Esc) | (true, KeyCode::Char('c')) => {
                 self.exit = true;
             }
-            KeyCode::Char('c') if ctrl => {
-                self.exit = true;
-            }
-            KeyCode::Char('u') => {
+            (false, KeyCode::Char('u')) => {
                 if self.tree.unstage().or_fail()? {
                     self.scroll_if_need();
                     self.render().or_fail()?;
                 }
             }
-            KeyCode::Char('s') => {
+            (false, KeyCode::Char('s')) => {
                 if self.tree.stage().or_fail()? {
                     self.scroll_if_need();
                     self.render().or_fail()?;
                 }
             }
-            KeyCode::Char('D') => {
+            (false, KeyCode::Char('D')) => {
                 if self.tree.discard().or_fail()? {
                     self.scroll_if_need();
                     self.render().or_fail()?;
                 }
             }
-            KeyCode::Char('h') => {
+            (false, KeyCode::Char('H')) => {
                 self.legend.toggle_hide();
                 self.render().or_fail()?;
             }
-            KeyCode::Char('p') if ctrl => {
+            (true, KeyCode::Char('p')) | (false, KeyCode::Up | KeyCode::Char('k')) => {
                 if self.tree.cursor_up().or_fail()? {
                     self.scroll_if_need();
                     self.render().or_fail()?;
                 }
             }
-            KeyCode::Up => {
-                if self.tree.cursor_up().or_fail()? {
-                    self.scroll_if_need();
-                    self.render().or_fail()?;
-                }
-            }
-            KeyCode::Char('n') if ctrl => {
+            (true, KeyCode::Char('n')) | (false, KeyCode::Down | KeyCode::Char('j')) => {
                 if self.tree.cursor_down().or_fail()? {
                     self.scroll_if_need();
                     self.render().or_fail()?;
                 }
             }
-            KeyCode::Down => {
-                if self.tree.cursor_down().or_fail()? {
-                    self.scroll_if_need();
-                    self.render().or_fail()?;
-                }
-            }
-            KeyCode::Char('f') if ctrl => {
+            (true, KeyCode::Char('f')) | (false, KeyCode::Right | KeyCode::Char('l')) => {
                 if self.tree.cursor_right().or_fail()? {
                     self.scroll_if_need();
                     self.render().or_fail()?;
                 }
             }
-            KeyCode::Right => {
-                if self.tree.cursor_right().or_fail()? {
-                    self.scroll_if_need();
-                    self.render().or_fail()?;
-                }
-            }
-            KeyCode::Char('b') if ctrl => {
+            (true, KeyCode::Char('b')) | (false, KeyCode::Left | KeyCode::Char('h')) => {
                 if self.tree.cursor_left() {
                     self.scroll_if_need();
                     self.render().or_fail()?;
                 }
             }
-            KeyCode::Left => {
-                if self.tree.cursor_left() {
-                    self.scroll_if_need();
-                    self.render().or_fail()?;
-                }
-            }
-            KeyCode::Char('t') | KeyCode::Tab => {
+            (false, KeyCode::Char('t') | KeyCode::Tab) => {
                 self.tree.toggle().or_fail()?;
                 self.render().or_fail()?;
             }
-            KeyCode::Char('r') => {
-                self.recenter();
-                self.render().or_fail()?;
-            }
-            KeyCode::Char('l') if ctrl => {
+            (false, KeyCode::Char('r')) | (true, KeyCode::Char('l')) => {
                 self.recenter();
                 self.render().or_fail()?;
             }
