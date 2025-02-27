@@ -109,7 +109,7 @@ impl App {
                     self.render().or_fail()?;
                 }
             }
-            KeyCode::Up => {
+            KeyCode::Up | KeyCode::Char('k') => {
                 if self.tree.cursor_up().or_fail()? {
                     self.scroll_if_need();
                     self.render().or_fail()?;
@@ -121,7 +121,7 @@ impl App {
                     self.render().or_fail()?;
                 }
             }
-            KeyCode::Down => {
+            KeyCode::Down | KeyCode::Char('j') => {
                 if self.tree.cursor_down().or_fail()? {
                     self.scroll_if_need();
                     self.render().or_fail()?;
@@ -133,7 +133,7 @@ impl App {
                     self.render().or_fail()?;
                 }
             }
-            KeyCode::Right => {
+            KeyCode::Right | KeyCode::Char('l') => {
                 if self.tree.cursor_right().or_fail()? {
                     self.scroll_if_need();
                     self.render().or_fail()?;
@@ -145,7 +145,7 @@ impl App {
                     self.render().or_fail()?;
                 }
             }
-            KeyCode::Left => {
+            KeyCode::Left | KeyCode::Char('h') => {
                 if self.tree.cursor_left() {
                     self.scroll_if_need();
                     self.render().or_fail()?;
