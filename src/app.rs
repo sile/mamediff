@@ -99,7 +99,7 @@ impl App {
                     self.render().or_fail()?;
                 }
             }
-            KeyCode::Char('h') => {
+            KeyCode::Char('H') => {
                 self.legend.toggle_hide();
                 self.render().or_fail()?;
             }

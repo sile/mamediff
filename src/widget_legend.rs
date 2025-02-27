@@ -21,7 +21,7 @@ impl LegendWidget {
         if self.hide {
             let col = canvas.frame_size().cols - Self::HIDE_COLS;
             canvas.set_col_offset(col);
-            canvas.drawln(Token::new("+- s(h)ow -"));
+            canvas.drawln(Token::new("+- s(H)ow -"));
         } else {
             let col = canvas.frame_size().cols - Self::SHOW_COLS;
             canvas.set_col_offset(col);
@@ -53,7 +53,7 @@ impl LegendWidget {
             if tree.can_unstage() {
                 canvas.drawln(Token::new("| (u)nstage       "));
             }
-            canvas.drawln(Token::new("+---- (h)ide -----"));
+            canvas.drawln(Token::new("+---- (H)ide -----"));
         }
     }
 
