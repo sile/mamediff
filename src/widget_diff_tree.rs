@@ -712,6 +712,7 @@ impl DiffTreeNodeContent for LineDiff {
             LineDiff::Old(_) => TokenStyle::Dim,
             LineDiff::New(_) => TokenStyle::Bold,
             LineDiff::Both(_) => TokenStyle::Plain,
+            LineDiff::NoNewlineAtEndOfFile => TokenStyle::Plain,
         };
         std::iter::once(Token::with_style(self.to_string(), style))
     }

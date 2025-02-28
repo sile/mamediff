@@ -41,6 +41,7 @@ pub enum LineDiff {
     Old(String),
     New(String),
     Both(String),
+    NoNewlineAtEndOfFile,
 }
 
 impl FromStr for LineDiff {
@@ -51,6 +52,7 @@ impl FromStr for LineDiff {
             Some('-') => Ok(Self::Old(s[1..].to_owned())),
             Some('+') => Ok(Self::New(s[1..].to_owned())),
             Some(' ') => Ok(Self::Both(s[1..].to_owned())),
+            _ if s == "\\ No newline at end of file" => Ok(Self::NoNewlineAtEndOfFile),
             _ => Err(orfail::Failure::new(format!("Unexpected diff line: {s}"))),
         }
     }
@@ -62,6 +64,7 @@ impl std::fmt::Display for LineDiff {
             LineDiff::Old(s) => write!(f, "-{s}"),
             LineDiff::New(s) => write!(f, "+{s}"),
             LineDiff::Both(s) => write!(f, " {s}"),
+            LineDiff::NoNewlineAtEndOfFile => write!(f, "\\ No newline at end of file"),
         }
     }
 }
@@ -72,7 +75,6 @@ pub struct ChunkDiff {
     pub new_start_line_number: usize,
     pub start_line: Option<String>,
     pub lines: Vec<LineDiff>,
-    pub no_eof_newline: bool,
 }
 
 impl ChunkDiff {
@@ -126,7 +128,6 @@ impl ChunkDiff {
             new_start_line_number: start,
             start_line: self.start_line.clone(),
             lines,
-            no_eof_newline: false,
         })
     }
 
@@ -205,29 +206,18 @@ impl ChunkDiff {
         while lines
             .peek()
             .and_then(|line| line.chars().next())
-            .is_some_and(|c| matches!(c, ' ' | '-' | '+'))
+            .is_some_and(|c| matches!(c, ' ' | '-' | '+' | '\\'))
         {
             let line = lines.next().or_fail()?;
             let diff = LineDiff::from_str(line).or_fail()?;
             line_diffs.push(diff);
         }
 
-        let no_eof_newline = if lines
-            .peek()
-            .is_some_and(|l| *l == "\\ No newline at end of file")
-        {
-            let _ = lines.next();
-            true
-        } else {
-            false
-        };
-
         Ok(Some(Self {
             old_start_line_number: old_range.start,
             new_start_line_number: new_range.start,
             start_line,
             lines: line_diffs,
-            no_eof_newline,
         }))
     }
 }
@@ -249,10 +239,6 @@ impl std::fmt::Display for ChunkDiff {
 
         for line in &self.lines {
             writeln!(f, "{line}")?;
-        }
-
-        if self.no_eof_newline {
-            writeln!(f, "\\ No newline at end of file")?;
         }
 
         Ok(())
@@ -1089,6 +1075,27 @@ index d33f81c..fce276a 100644
         let diff = Diff::from_str(text).or_fail()?;
         assert_eq!(diff.files.len(), 1);
         assert!(matches!(diff.files[0], FileDiff::Rename { .. }));
+
+        let text = r#"diff --git a/ci.yml b/ci.yml
+index 315f0d6..04f0902 100644
+--- a/ci.yml
++++ b/ci.yml
+@@ -10,9 +10,9 @@ jobs:
+   check:
+     strategy:
+       matrix:
+-        toolchain: [stable, beta, nightly]
++        toolchain: stable
+     runs-on: ubuntu
+     steps:
+       - uses: actions/checkout@v4
+       - run: rustup install ${{ matrix.toolchain }}
+-      - run: cargo check --all
+\ No newline at end of file
++      - run: cargo check --all"#;
+        let diff = Diff::from_str(text).or_fail()?;
+        assert_eq!(diff.files.len(), 1);
+        assert!(matches!(diff.files[0], FileDiff::Update { .. }));
 
         Ok(())
     }
