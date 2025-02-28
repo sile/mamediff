@@ -41,6 +41,7 @@ pub enum LineDiff {
     Old(String),
     New(String),
     Both(String),
+    NoNewlineAtEndOfFile,
 }
 
 impl FromStr for LineDiff {
@@ -51,6 +52,7 @@ impl FromStr for LineDiff {
             Some('-') => Ok(Self::Old(s[1..].to_owned())),
             Some('+') => Ok(Self::New(s[1..].to_owned())),
             Some(' ') => Ok(Self::Both(s[1..].to_owned())),
+            _ if s == "\\ No newline at end of file" => Ok(Self::NoNewlineAtEndOfFile),
             _ => Err(orfail::Failure::new(format!("Unexpected diff line: {s}"))),
         }
     }
@@ -62,6 +64,7 @@ impl std::fmt::Display for LineDiff {
             LineDiff::Old(s) => write!(f, "-{s}"),
             LineDiff::New(s) => write!(f, "+{s}"),
             LineDiff::Both(s) => write!(f, " {s}"),
+            LineDiff::NoNewlineAtEndOfFile => write!(f, "\\ No newline at end of file"),
         }
     }
 }
@@ -72,8 +75,6 @@ pub struct ChunkDiff {
     pub new_start_line_number: usize,
     pub start_line: Option<String>,
     pub lines: Vec<LineDiff>,
-    pub old_no_eof_newline: bool,
-    pub new_no_eof_newline: bool,
 }
 
 impl ChunkDiff {
@@ -127,8 +128,6 @@ impl ChunkDiff {
             new_start_line_number: start,
             start_line: self.start_line.clone(),
             lines,
-            old_no_eof_newline: false,
-            new_no_eof_newline: false,
         })
     }
 
@@ -203,9 +202,6 @@ impl ChunkDiff {
         let old_range = LineRange::from_str(tokens.next().or_fail()?).or_fail()?;
         let new_range = LineRange::from_str(tokens.next().or_fail()?).or_fail()?;
 
-        let mut old_no_eof_newline = false;
-        let mut new_no_eof_newline = false;
-        let mut is_prev_old = false;
         let mut line_diffs = Vec::new();
         while lines
             .peek()
@@ -213,17 +209,8 @@ impl ChunkDiff {
             .is_some_and(|c| matches!(c, ' ' | '-' | '+' | '\\'))
         {
             let line = lines.next().or_fail()?;
-            if line == "\\ No newline at end of file" {
-                if is_prev_old {
-                    old_no_eof_newline = true;
-                } else {
-                    new_no_eof_newline = true;
-                }
-                continue;
-            }
             let diff = LineDiff::from_str(line).or_fail()?;
             line_diffs.push(diff);
-            is_prev_old = line.starts_with('-');
         }
 
         Ok(Some(Self {
@@ -231,8 +218,6 @@ impl ChunkDiff {
             new_start_line_number: new_range.start,
             start_line,
             lines: line_diffs,
-            old_no_eof_newline,
-            new_no_eof_newline,
         }))
     }
 }
@@ -254,10 +239,6 @@ impl std::fmt::Display for ChunkDiff {
 
         for line in &self.lines {
             writeln!(f, "{line}")?;
-        }
-
-        if self.new_no_eof_newline {
-            writeln!(f, "\\ No newline at end of file")?;
         }
 
         Ok(())
