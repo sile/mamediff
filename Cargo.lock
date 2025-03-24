@@ -132,9 +132,9 @@ dependencies = [
 
 [[package]]
 name = "noargs"
-version = "0.0.1"
+version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "31e899a7b9f482738484a8d321bf183d50c4aca1150ed1814a872c4b66ed64da"
+checksum = "971e14b3f082b1c129148b3e293065efa86c2140e4ec3777686389446e6ba264"
 
 [[package]]
 name = "once_cell"
