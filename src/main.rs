@@ -2,7 +2,7 @@ use mamediff::{app::App, git};
 use orfail::OrFail;
 
 fn main() -> noargs::Result<()> {
-    let mut args = noargs::args();
+    let mut args = noargs::raw_args();
     args.metadata_mut().app_name = env!("CARGO_PKG_NAME");
     args.metadata_mut().app_description = env!("CARGO_PKG_DESCRIPTION");
 
