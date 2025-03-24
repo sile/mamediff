@@ -8,6 +8,7 @@ description = "A TUI editor for managing unstaged and staged Git diffs"
 homepage = "https://github.com/sile/mamediff"
 repository = "https://github.com/sile/mamediff"
 readme = "README.md"
+categories = ["command-line-utilities"]
 
 [dependencies]
 crossterm = "0.28.1"
