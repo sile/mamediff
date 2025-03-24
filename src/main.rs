@@ -15,7 +15,7 @@ fn main() -> noargs::Result<()> {
     }
 
     if let Some(help) = args.finish()? {
-        println!("{help}");
+        print!("{help}");
         return Ok(());
     }
 
