@@ -112,6 +112,7 @@ name = "mamediff"
 version = "0.2.1"
 dependencies = [
  "crossterm",
+ "noargs",
  "orfail",
  "tempfile",
  "unicode-width",
@@ -128,6 +129,12 @@ dependencies = [
  "wasi 0.11.0+wasi-snapshot-preview1",
  "windows-sys 0.52.0",
 ]
+
+[[package]]
+name = "noargs"
+version = "0.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "31e899a7b9f482738484a8d321bf183d50c4aca1150ed1814a872c4b66ed64da"
 
 [[package]]
 name = "once_cell"
