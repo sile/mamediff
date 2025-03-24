@@ -1,11 +1,23 @@
-use std::io::Write;
-
-use crossterm::style::{Attribute, Attributes, ContentStyle, PrintStyledContent, StyledContent};
 use mamediff::{app::App, git};
 use orfail::OrFail;
 
-fn main() -> orfail::Result<()> {
-    check_args().or_fail()?;
+fn main() -> noargs::Result<()> {
+    let mut args = noargs::raw_args();
+    args.metadata_mut().app_name = env!("CARGO_PKG_NAME");
+    args.metadata_mut().app_description = env!("CARGO_PKG_DESCRIPTION");
+
+    if noargs::VERSION_FLAG.take(&mut args).is_present() {
+        println!("{} {}", env!("CARGO_PKG_NAME"), env!("CARGO_PKG_VERSION"));
+        return Ok(());
+    }
+    if noargs::HELP_FLAG.take(&mut args).is_present() {
+        args.metadata_mut().help_mode = true;
+    }
+
+    if let Some(help) = args.finish()? {
+        print!("{help}");
+        return Ok(());
+    }
 
     if !git::is_available() {
         eprintln!("error: no `git` command found, or not a Git directory");
@@ -14,77 +26,4 @@ fn main() -> orfail::Result<()> {
     let app = App::new().or_fail()?;
     app.run().or_fail()?;
     Ok(())
-}
-
-fn check_args() -> orfail::Result<()> {
-    let Some(arg) = std::env::args().nth(1) else {
-        return Ok(());
-    };
-
-    match arg.as_str() {
-        "-h" | "--help" => {
-            println!("Git diff editor");
-            println!();
-            println!(
-                "{} {} [OPTIONS]",
-                bold_underline("Usage:"),
-                bold("mamediff"),
-            );
-            println!();
-            println!("{}", bold_underline("Options:"));
-            println!(" {}  Print help", bold(" -h, --help"));
-            println!(" {}   Print version", bold(" --version"));
-
-            std::process::exit(0);
-        }
-        "--version" => {
-            println!("mamediff {}", env!("CARGO_PKG_VERSION"));
-            std::process::exit(0);
-        }
-        _ => {
-            let mut stderr = std::io::stderr();
-            writeln!(
-                stderr,
-                "{} unexpected argment '{arg}' found",
-                bold("error:"),
-            )
-            .or_fail()?;
-            writeln!(stderr).or_fail()?;
-            writeln!(
-                stderr,
-                "{} {} [OPTIONS]",
-                bold_underline("Usage:"),
-                bold("mamediff"),
-            )
-            .or_fail()?;
-            writeln!(stderr).or_fail()?;
-            writeln!(stderr, "For more information, try '--help'.").or_fail()?;
-
-            std::process::exit(1);
-        }
-    }
-}
-
-fn bold(s: &str) -> PrintStyledContent<&str> {
-    let content = StyledContent::new(
-        ContentStyle {
-            attributes: Attributes::default().with(Attribute::Bold),
-            ..Default::default()
-        },
-        s,
-    );
-    PrintStyledContent(content)
-}
-
-fn bold_underline(s: &str) -> PrintStyledContent<&str> {
-    let content = StyledContent::new(
-        ContentStyle {
-            attributes: Attributes::default()
-                .with(Attribute::Bold)
-                .with(Attribute::Underlined),
-            ..Default::default()
-        },
-        s,
-    );
-    PrintStyledContent(content)
 }
