@@ -11,9 +11,9 @@ readme = "README.md"
 categories = ["command-line-utilities"]
 
 [dependencies]
-crossterm = "0.28.1"
 noargs = "0.3.2"
 orfail = "1.1.0"
+tuinix = "0.1.2"
 unicode-width = "0.2.0"
 
 [dev-dependencies]
