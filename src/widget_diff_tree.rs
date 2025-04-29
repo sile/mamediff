@@ -1,10 +1,10 @@
 use std::cmp::Ordering;
 
 use orfail::OrFail;
-use tuinix::TerminalSize;
+use tuinix::{TerminalSize, TerminalStyle};
 
 use crate::{
-    canvas::{Canvas, Token, TokenStyle},
+    canvas::{Canvas, Token},
     diff::{ChunkDiff, ContentDiff, Diff, FileDiff, LineDiff},
     git,
 };
@@ -580,7 +580,7 @@ impl DiffTreeNodeContent for PhasedDiff {
     fn head_line_tokens(&self) -> impl Iterator<Item = Token> {
         std::iter::once(Token::with_style(
             format!("{:?} changes ({} files)", self.phase, self.diff.files.len()),
-            TokenStyle::Bold,
+            TerminalStyle::new().bold(),
         ))
     }
 
@@ -597,7 +597,10 @@ impl DiffTreeNodeContent for FileDiff {
     type Child = ChunkDiff;
 
     fn head_line_tokens(&self) -> impl Iterator<Item = Token> {
-        let path = Token::with_style(self.path().display().to_string(), TokenStyle::Underlined);
+        let path = Token::with_style(
+            self.path().display().to_string(),
+            TerminalStyle::new().underline(),
+        );
         let tokens = match self {
             FileDiff::Update {
                 old_mode, new_mode, ..
@@ -633,8 +636,10 @@ impl DiffTreeNodeContent for FileDiff {
             FileDiff::Rename {
                 old_path, content, ..
             } => {
-                let old_path =
-                    Token::with_style(old_path.display().to_string(), TokenStyle::Underlined);
+                let old_path = Token::with_style(
+                    old_path.display().to_string(),
+                    TerminalStyle::new().underline(),
+                );
 
                 let summary = if content.is_some() {
                     Token::new(format!(
@@ -708,11 +713,12 @@ impl DiffTreeNodeContent for LineDiff {
     type Child = Self;
 
     fn head_line_tokens(&self) -> impl Iterator<Item = Token> {
+        let style = TerminalStyle::new();
         let style = match self {
-            LineDiff::Old(_) => TokenStyle::Dim,
-            LineDiff::New(_) => TokenStyle::Bold,
-            LineDiff::Both(_) => TokenStyle::Plain,
-            LineDiff::NoNewlineAtEndOfFile => TokenStyle::Plain,
+            LineDiff::Old(_) => style.dim(),
+            LineDiff::New(_) => style.bold(),
+            LineDiff::Both(_) => style,
+            LineDiff::NoNewlineAtEndOfFile => style,
         };
         std::iter::once(Token::with_style(self.to_string(), style))
     }

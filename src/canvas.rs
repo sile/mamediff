@@ -1,6 +1,6 @@
 use std::{num::NonZeroUsize, ops::Range};
 
-use tuinix::{TerminalFrame, TerminalPosition, TerminalSize};
+use tuinix::{TerminalFrame, TerminalPosition, TerminalSize, TerminalStyle};
 use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
 
 #[derive(Debug)]
@@ -170,34 +170,26 @@ impl FrameLine {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum TokenStyle {
-    Plain,
-    Bold,
-    Dim,
-    Underlined,
-}
-
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Token {
     text: String,
-    style: TokenStyle,
+    style: TerminalStyle,
 }
 
 impl Token {
     pub fn new(text: impl Into<String>) -> Self {
-        Self::with_style(text, TokenStyle::Plain)
+        Self::with_style(text, TerminalStyle::new())
     }
 
     pub fn text(&self) -> &str {
         &self.text
     }
 
-    pub fn style(&self) -> TokenStyle {
+    pub fn style(&self) -> TerminalStyle {
         self.style
     }
 
-    pub fn with_style(text: impl Into<String>, style: TokenStyle) -> Self {
+    pub fn with_style(text: impl Into<String>, style: TerminalStyle) -> Self {
         let mut text = text.into();
         if text.chars().any(|c| c.is_control()) {
             let mut escaped_text = String::new();
