@@ -3,7 +3,7 @@ use crate::{
     widget_diff_tree::DiffTreeWidget,
 };
 
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct LegendWidget {
     pub hide: bool,
 }

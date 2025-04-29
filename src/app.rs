@@ -16,7 +16,7 @@ pub struct App {
 }
 
 impl App {
-    pub fn new() -> orfail::Result<Self> {
+    pub fn new(hide_legend: bool) -> orfail::Result<Self> {
         let terminal = Terminal::new().or_fail()?;
         let tree = DiffTreeWidget::new(terminal.size()).or_fail()?;
         Ok(Self {
@@ -24,7 +24,7 @@ impl App {
             exit: false,
             frame_row_start: 0,
             tree,
-            legend: LegendWidget::default(),
+            legend: LegendWidget { hide: hide_legend },
         })
     }
 
