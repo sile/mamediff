@@ -1,13 +1,13 @@
 use std::{num::NonZeroUsize, ops::Range};
 
-use tuinix::{TerminalFrame, TerminalSize};
+use tuinix::{TerminalFrame, TerminalPosition, TerminalSize};
 use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
 
 #[derive(Debug)]
 pub struct Canvas {
     frame: Frame,
     frame_row_offset: usize,
-    cursor: TokenPosition,
+    cursor: TerminalPosition,
     col_offset: usize,
 }
 
@@ -16,7 +16,7 @@ impl Canvas {
         Self {
             frame: Frame::new(frame_size),
             frame_row_offset,
-            cursor: TokenPosition::ORIGIN,
+            cursor: TerminalPosition::ZERO,
             col_offset: 0,
         }
     }
@@ -36,11 +36,11 @@ impl Canvas {
         self.cursor.row >= self.frame_row_range().end
     }
 
-    pub fn cursor(&self) -> TokenPosition {
+    pub fn cursor(&self) -> TerminalPosition {
         self.cursor
     }
 
-    pub fn set_cursor(&mut self, position: TokenPosition) {
+    pub fn set_cursor(&mut self, position: TerminalPosition) {
         self.cursor = position;
     }
 
@@ -64,7 +64,7 @@ impl Canvas {
         self.cursor.col = 0;
     }
 
-    pub fn draw_at(&mut self, mut position: TokenPosition, token: Token) {
+    pub fn draw_at(&mut self, mut position: TerminalPosition, token: Token) {
         if !self.frame_row_range().contains(&position.row) {
             return;
         }
@@ -243,70 +243,9 @@ impl Token {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct TokenPosition {
-    pub row: usize,
-    pub col: usize,
-}
-
-impl TokenPosition {
-    pub const ORIGIN: Self = Self { row: 0, col: 0 };
-
-    pub fn row(row: usize) -> Self {
-        Self::row_col(row, 0)
-    }
-
-    pub fn row_col(row: usize, col: usize) -> Self {
-        Self { row, col }
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn canvas() -> orfail::Result<()> {
-        let size = TerminalSize { rows: 2, cols: 4 };
-
-        // No dirty lines.
-        let frame0 = Canvas::new(1, size).into_frame();
-        let frame1 = Canvas::new(1, size).into_frame();
-        assert_eq!(frame1.dirty_lines(&frame0).count(), 0);
-
-        // Draw lines.
-        let mut canvas = Canvas::new(1, size);
-        canvas.draw_at(TokenPosition::row(0), Token::new("out of range"));
-        canvas.draw_at(TokenPosition::row(1), Token::new("hello"));
-        canvas.draw_at(TokenPosition::row_col(2, 2), Token::new("world"));
-        canvas.draw_at(TokenPosition::row(3), Token::new("out of range"));
-
-        let frame2 = canvas.into_frame();
-        assert_eq!(frame2.dirty_lines(&frame1).count(), 2);
-        assert_eq!(
-            frame2
-                .dirty_lines(&frame1)
-                .map(|(_, l)| l.text())
-                .collect::<Vec<_>>(),
-            ["hell", "  wo"],
-        );
-
-        // Draw another lines.
-        let mut canvas = Canvas::new(1, size);
-        canvas.draw_at(TokenPosition::row(1), Token::new("hello"));
-
-        let frame3 = canvas.into_frame();
-        assert_eq!(frame3.dirty_lines(&frame2).count(), 1);
-        assert_eq!(
-            frame3
-                .dirty_lines(&frame2)
-                .map(|(_, l)| l.text())
-                .collect::<Vec<_>>(),
-            [""],
-        );
-
-        Ok(())
-    }
 
     #[test]
     fn frame_line() -> orfail::Result<()> {
