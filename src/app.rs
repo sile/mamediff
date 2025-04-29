@@ -1,5 +1,5 @@
 use orfail::OrFail;
-use tuinix::{KeyInput, Terminal, TerminalEvent, TerminalInput};
+use tuinix::{KeyCode, KeyInput, Terminal, TerminalEvent, TerminalInput};
 
 use crate::{canvas::Canvas, widget_diff_tree::DiffTreeWidget, widget_legend::LegendWidget};
 
@@ -65,72 +65,67 @@ impl App {
         }
     }
 
-    fn handle_key_input(&mut self, event: KeyInput) -> orfail::Result<()> {
-        // if event.kind != KeyEventKind::Press {
-        //     return Ok(());
-        // }
-
-        // let ctrl = event.modifiers.contains(KeyModifiers::CONTROL);
-        // match (ctrl, event.code) {
-        //     (false, KeyCode::Char('q') | KeyCode::Esc) | (true, KeyCode::Char('c')) => {
-        //         self.exit = true;
-        //     }
-        //     (false, KeyCode::Char('u')) => {
-        //         if self.tree.unstage().or_fail()? {
-        //             self.scroll_if_need();
-        //             self.render().or_fail()?;
-        //         }
-        //     }
-        //     (false, KeyCode::Char('s')) => {
-        //         if self.tree.stage().or_fail()? {
-        //             self.scroll_if_need();
-        //             self.render().or_fail()?;
-        //         }
-        //     }
-        //     (false, KeyCode::Char('D')) => {
-        //         if self.tree.discard().or_fail()? {
-        //             self.scroll_if_need();
-        //             self.render().or_fail()?;
-        //         }
-        //     }
-        //     (false, KeyCode::Char('H')) => {
-        //         self.legend.toggle_hide();
-        //         self.render().or_fail()?;
-        //     }
-        //     (true, KeyCode::Char('p')) | (false, KeyCode::Up | KeyCode::Char('k')) => {
-        //         if self.tree.cursor_up().or_fail()? {
-        //             self.scroll_if_need();
-        //             self.render().or_fail()?;
-        //         }
-        //     }
-        //     (true, KeyCode::Char('n')) | (false, KeyCode::Down | KeyCode::Char('j')) => {
-        //         if self.tree.cursor_down().or_fail()? {
-        //             self.scroll_if_need();
-        //             self.render().or_fail()?;
-        //         }
-        //     }
-        //     (true, KeyCode::Char('f')) | (false, KeyCode::Right | KeyCode::Char('l')) => {
-        //         if self.tree.cursor_right().or_fail()? {
-        //             self.scroll_if_need();
-        //             self.render().or_fail()?;
-        //         }
-        //     }
-        //     (true, KeyCode::Char('b')) | (false, KeyCode::Left | KeyCode::Char('h')) => {
-        //         if self.tree.cursor_left() {
-        //             self.scroll_if_need();
-        //             self.render().or_fail()?;
-        //         }
-        //     }
-        //     (false, KeyCode::Char('t') | KeyCode::Tab) => {
-        //         self.tree.toggle().or_fail()?;
-        //         self.render().or_fail()?;
-        //     }
-        //     (false, KeyCode::Char('r')) | (true, KeyCode::Char('l')) => {
-        //         self.recenter();
-        //         self.render().or_fail()?;
-        //     }
-        //     _ => {}
-        // }
+    fn handle_key_input(&mut self, input: KeyInput) -> orfail::Result<()> {
+        match (input.ctrl, input.code) {
+            (false, KeyCode::Char('q') | KeyCode::Escape) | (true, KeyCode::Char('c')) => {
+                self.exit = true;
+            }
+            (false, KeyCode::Char('u')) => {
+                if self.tree.unstage().or_fail()? {
+                    self.scroll_if_need();
+                    self.render().or_fail()?;
+                }
+            }
+            (false, KeyCode::Char('s')) => {
+                if self.tree.stage().or_fail()? {
+                    self.scroll_if_need();
+                    self.render().or_fail()?;
+                }
+            }
+            (false, KeyCode::Char('D')) => {
+                if self.tree.discard().or_fail()? {
+                    self.scroll_if_need();
+                    self.render().or_fail()?;
+                }
+            }
+            (false, KeyCode::Char('H')) => {
+                self.legend.toggle_hide();
+                self.render().or_fail()?;
+            }
+            (true, KeyCode::Char('p')) | (false, KeyCode::Up | KeyCode::Char('k')) => {
+                if self.tree.cursor_up().or_fail()? {
+                    self.scroll_if_need();
+                    self.render().or_fail()?;
+                }
+            }
+            (true, KeyCode::Char('n')) | (false, KeyCode::Down | KeyCode::Char('j')) => {
+                if self.tree.cursor_down().or_fail()? {
+                    self.scroll_if_need();
+                    self.render().or_fail()?;
+                }
+            }
+            (true, KeyCode::Char('f')) | (false, KeyCode::Right | KeyCode::Char('l')) => {
+                if self.tree.cursor_right().or_fail()? {
+                    self.scroll_if_need();
+                    self.render().or_fail()?;
+                }
+            }
+            (true, KeyCode::Char('b')) | (false, KeyCode::Left | KeyCode::Char('h')) => {
+                if self.tree.cursor_left() {
+                    self.scroll_if_need();
+                    self.render().or_fail()?;
+                }
+            }
+            (false, KeyCode::Char('t') | KeyCode::Tab) => {
+                self.tree.toggle().or_fail()?;
+                self.render().or_fail()?;
+            }
+            (false, KeyCode::Char('r')) | (true, KeyCode::Char('l')) => {
+                self.recenter();
+                self.render().or_fail()?;
+            }
+            _ => {}
+        }
         Ok(())
     }
 
