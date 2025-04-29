@@ -1,7 +1,16 @@
-use std::{num::NonZeroUsize, ops::Range};
+use std::{fmt::Write, num::NonZeroUsize, ops::Range};
 
-use tuinix::{TerminalFrame, TerminalPosition, TerminalSize, TerminalStyle};
+use tuinix::{EstimateCharWidth, TerminalFrame, TerminalPosition, TerminalSize, TerminalStyle};
 use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
+
+#[derive(Debug, Default)]
+pub struct UnicodeCharWidthEstimator;
+
+impl EstimateCharWidth for UnicodeCharWidthEstimator {
+    fn estimate_char_width(&self, c: char) -> usize {
+        c.width().unwrap_or_default()
+    }
+}
 
 #[derive(Debug)]
 pub struct Canvas {
@@ -77,9 +86,16 @@ impl Canvas {
         line.split_off(self.frame.size.cols);
     }
 
-    pub fn into_frame(self) -> TerminalFrame {
-        //self.frame
-        todo!()
+    pub fn into_frame(self) -> TerminalFrame<UnicodeCharWidthEstimator> {
+        let mut frame =
+            TerminalFrame::with_char_width_estimator(self.frame_size(), UnicodeCharWidthEstimator);
+        for line in self.frame.lines {
+            for token in line.tokens {
+                let _ = write!(frame, "{}{}", token.style, token.text);
+            }
+            let _ = writeln!(frame, "{}", TerminalStyle::RESET);
+        }
+        frame
     }
 }
 
@@ -95,18 +111,6 @@ impl Frame {
             size,
             lines: vec![FrameLine::new(); size.rows],
         }
-    }
-
-    pub fn dirty_lines<'a>(
-        &'a self,
-        prev: &'a Self,
-    ) -> impl 'a + Iterator<Item = (usize, &'a FrameLine)> {
-        self.lines
-            .iter()
-            .zip(prev.lines.iter())
-            .enumerate()
-            .filter_map(|(i, (l0, l1))| (l0 != l1).then_some((i, l0)))
-            .chain(self.lines.iter().enumerate().skip(prev.lines.len()))
     }
 }
 
