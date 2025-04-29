@@ -623,7 +623,7 @@ impl DiffTreeNodeContent for FileDiff {
                 vec![
                     Token::new("added "),
                     path,
-                    if matches!(content, ContentDiff::Binary { .. }) {
+                    if matches!(content, ContentDiff::Binary) {
                         Token::new(" (binary)")
                     } else {
                         Token::new(format!(" (+{} lines)", self.added_lines()))
@@ -659,7 +659,7 @@ impl DiffTreeNodeContent for FileDiff {
                 vec![
                     Token::new("deleted "),
                     path,
-                    if matches!(content, ContentDiff::Binary { .. }) {
+                    if matches!(content, ContentDiff::Binary) {
                         Token::new(" (binary)")
                     } else {
                         Token::new(format!(" (-{} lines)", self.removed_lines()))
