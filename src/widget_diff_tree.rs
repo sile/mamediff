@@ -1,12 +1,12 @@
 use std::cmp::Ordering;
 
 use orfail::OrFail;
+use tuinix::TerminalSize;
 
 use crate::{
     canvas::{Canvas, Token, TokenStyle},
     diff::{ChunkDiff, ContentDiff, Diff, FileDiff, LineDiff},
     git,
-    terminal::TerminalSize,
 };
 
 #[derive(Debug, Clone)]

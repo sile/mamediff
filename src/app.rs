@@ -1,12 +1,7 @@
 use orfail::OrFail;
+use tuinix::{KeyInput, Terminal, TerminalEvent, TerminalInput};
 
-use crate::{
-    canvas::Canvas, terminal::Terminal, widget_diff_tree::DiffTreeWidget,
-    widget_legend::LegendWidget,
-};
-
-pub struct Event;
-pub struct KeyEvent;
+use crate::{canvas::Canvas, widget_diff_tree::DiffTreeWidget, widget_legend::LegendWidget};
 
 #[derive(Debug)]
 pub struct App {
@@ -34,7 +29,9 @@ impl App {
         self.render().or_fail()?;
 
         while !self.exit {
-            let event = self.terminal.next_event().or_fail()?;
+            let Some(event) = self.terminal.poll_event(None).or_fail()? else {
+                continue;
+            };
             self.handle_event(event).or_fail()?;
         }
 
@@ -49,29 +46,26 @@ impl App {
         let mut canvas = Canvas::new(self.frame_row_start, self.terminal.size());
         self.tree.render(&mut canvas);
         self.legend.render(&mut canvas, &self.tree);
-        self.terminal.draw_frame(canvas.into_frame()).or_fail()?;
+        self.terminal.draw(canvas.into_frame()).or_fail()?;
 
         Ok(())
     }
 
-    fn handle_event(&mut self, event: Event) -> orfail::Result<()> {
-        // match event {
-        //     Event::FocusGained => Ok(()),
-        //     Event::FocusLost => Ok(()),
-        //     Event::Key(event) => self.handle_key_event(event).or_fail(),
-        //     Event::Mouse(_) => Ok(()),
-        //     Event::Paste(_) => Ok(()),
-        //     Event::Resize(_, _) => {
-        //         let cursor_row = self.tree.cursor_row();
-        //         let rows = self.terminal.size().rows;
-        //         self.frame_row_start = cursor_row.saturating_sub(rows / 2);
-        //         self.render().or_fail()
-        //     }
-        // }
-        todo!()
+    fn handle_event(&mut self, event: TerminalEvent) -> orfail::Result<()> {
+        match event {
+            TerminalEvent::Resize(size) => {
+                let cursor_row = self.tree.cursor_row();
+                let rows = size.rows;
+                self.frame_row_start = cursor_row.saturating_sub(rows / 2);
+                self.render().or_fail()
+            }
+            TerminalEvent::Input(TerminalInput::Key(input)) => {
+                self.handle_key_input(input).or_fail()
+            }
+        }
     }
 
-    fn handle_key_event(&mut self, event: KeyEvent) -> orfail::Result<()> {
+    fn handle_key_input(&mut self, event: KeyInput) -> orfail::Result<()> {
         // if event.kind != KeyEventKind::Press {
         //     return Ok(());
         // }

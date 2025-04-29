@@ -1,8 +1,7 @@
 use std::{num::NonZeroUsize, ops::Range};
 
+use tuinix::{TerminalFrame, TerminalSize};
 use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
-
-use crate::terminal::TerminalSize;
 
 #[derive(Debug)]
 pub struct Canvas {
@@ -78,8 +77,9 @@ impl Canvas {
         line.split_off(self.frame.size.cols);
     }
 
-    pub fn into_frame(self) -> Frame {
-        self.frame
+    pub fn into_frame(self) -> TerminalFrame {
+        //self.frame
+        todo!()
     }
 }
 
