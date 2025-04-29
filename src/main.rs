@@ -12,6 +12,12 @@ fn main() -> noargs::Result<()> {
     }
     noargs::HELP_FLAG.take_help(&mut args);
 
+    let hide_legend = noargs::flag("hide-legend")
+        .doc("Hide the legend by default")
+        .env("MAMEDIFF_HIDE_LEGEND")
+        .take(&mut args)
+        .is_present();
+
     if let Some(help) = args.finish()? {
         print!("{help}");
         return Ok(());
@@ -21,7 +27,7 @@ fn main() -> noargs::Result<()> {
         eprintln!("error: no `git` command found, or not a Git directory");
         std::process::exit(1);
     };
-    let app = App::new().or_fail()?;
+    let app = App::new(hide_legend).or_fail()?;
     app.run().or_fail()?;
     Ok(())
 }
