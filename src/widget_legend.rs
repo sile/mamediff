@@ -1,5 +1,7 @@
+use tuinix::TerminalPosition;
+
 use crate::{
-    canvas::{Canvas, Token, TokenPosition},
+    canvas::{Canvas, Token},
     widget_diff_tree::DiffTreeWidget,
 };
 
@@ -17,7 +19,7 @@ impl LegendWidget {
             return;
         }
 
-        canvas.set_cursor(TokenPosition::row(canvas.frame_row_range().start));
+        canvas.set_cursor(TerminalPosition::row(canvas.frame_row_range().start));
         if self.hide {
             let col = canvas.frame_size().cols - Self::HIDE_COLS;
             canvas.set_col_offset(col);
