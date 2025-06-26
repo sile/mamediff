@@ -39,11 +39,11 @@ pub fn unstaged_and_staged_diffs() -> orfail::Result<(Diff, Diff)> {
     let (mut unstaged_diff, staged_diff, untracked_files) =
         std::thread::scope(|s| -> orfail::Result<_> {
             let unstaged_diff_handle = s.spawn(|| {
-                let output = call(&["diff"], true).or_fail()?;
+                let output = call(&["diff", "--default-prefix"], true).or_fail()?;
                 Diff::from_str(&output).or_fail()
             });
             let staged_diff_handle = s.spawn(|| {
-                let output = call(&["diff", "--cached"], true).or_fail()?;
+                let output = call(&["diff", "--cached", "--default-prefix"], true).or_fail()?;
                 Diff::from_str(&output).or_fail()
             });
             let untracked_files_handle = s.spawn(|| {
@@ -111,9 +111,20 @@ pub fn unstaged_and_staged_diffs() -> orfail::Result<(Diff, Diff)> {
 
 pub fn binary_file_diff<P: AsRef<Path>>(path: P) -> orfail::Result<String> {
     let path = &path.as_ref().display().to_string();
-    let diff = call(&["diff", "--binary", "--", path], true).or_fail()?;
+    let diff = call(&["diff", "--binary", "--default-prefix", "--", path], true).or_fail()?;
     if diff.is_empty() {
-        call(&["diff", "--binary", "--cached", "--", path], true).or_fail()
+        call(
+            &[
+                "diff",
+                "--binary",
+                "--cached",
+                "--default-prefix",
+                "--",
+                path,
+            ],
+            true,
+        )
+        .or_fail()
     } else {
         Ok(diff)
     }
@@ -125,12 +136,23 @@ pub fn new_file_diff<P: AsRef<Path>>(path: P, binary: bool) -> orfail::Result<St
     let path = &path.as_ref().display().to_string();
     if binary {
         call(
-            &["diff", "--no-index", "--binary", "/dev/null", path],
+            &[
+                "diff",
+                "--no-index",
+                "--binary",
+                "--default-prefix",
+                "/dev/null",
+                path,
+            ],
             false,
         )
         .or_fail()
     } else {
-        call(&["diff", "--no-index", "/dev/null", path], false).or_fail()
+        call(
+            &["diff", "--no-index", "--default-prefix", "/dev/null", path],
+            false,
+        )
+        .or_fail()
     }
 }
 
