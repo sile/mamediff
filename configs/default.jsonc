@@ -1,0 +1,74 @@
+{
+  "variables": {
+    "MAMEDIFF_HIDE_LEGEND": {
+      "type": "env",
+      "default": false,
+    },
+  },
+  "setup": {
+    "context": "@main",
+    "action": {
+      "type": "init-legend",
+      "hide": {"ref": "MAMEDIFF_HIDE_LEGEND"},
+      "labels": {"show": "s(H)ow", "hide": "(H)ide"},
+    },
+  },
+  "keybindings": {
+    "@main": [
+      {
+        "label": "(q)uit [ESC,C-c]",
+        "keys": ["q", "<ESCAPE>", "C-c"],
+        "action": {"type": "quit"},
+      },
+      {
+        "label": "(r)ecenter [C-l]",
+        "keys": ["r", "C-l"],
+        "action": {"type": "recenter"},
+      },
+      {
+        "label": "(↑)      [k,C-p]",
+        "keys": ["k", "C-p", "<UP>"],
+        "action": {"type": "cursor-up"},
+      },
+      {
+        "label": "(↓)      [j,C-n]",
+        "keys": ["j", "C-n", "<DOWN>"],
+        "action": {"type": "cursor-down"},
+      },
+      {
+        "label": "(←)      [h,C-b]",
+        "keys": ["h", "C-b", "<LEFT>"],
+        "action": {"type": "cursor-left"},
+      },
+      {
+        "label": "(→)      [l,C-f]",
+        "keys": ["l", "C-f", "<RIGHT>"],
+        "action": {"type": "cursor-right"},
+      },
+      {
+        "label": "(t)oggle   [TAB]",
+        "keys": ["t", "<TAB>"],
+        "action": {"type": "toggle"},
+      },
+      {
+        "label": "(s)tage         ",
+        "keys": ["s"],
+        "action": {"type": "stage"},
+      },
+      {
+        "label": "(D)iscard       ",
+        "keys": ["D"],
+        "action": {"type": "discard"},
+      },
+      {
+        "label": "(u)nstage       ",
+        "keys": ["u"],
+        "action": {"type": "unstage"},
+      },
+      {
+        "keys": ["H"],
+        "action": {"type": "toggle-legend"},
+      },
+    ],
+  },
+}
