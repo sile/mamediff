@@ -1,16 +1,6 @@
 use std::{fmt::Write, num::NonZeroUsize, ops::Range};
 
-use tuinix::{EstimateCharWidth, TerminalFrame, TerminalPosition, TerminalSize, TerminalStyle};
-use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
-
-#[derive(Debug, Default)]
-pub struct UnicodeCharWidthEstimator;
-
-impl EstimateCharWidth for UnicodeCharWidthEstimator {
-    fn estimate_char_width(&self, c: char) -> usize {
-        c.width().unwrap_or_default()
-    }
-}
+use tuinix::{TerminalPosition, TerminalSize, TerminalStyle};
 
 #[derive(Debug)]
 pub struct Canvas {
@@ -86,9 +76,8 @@ impl Canvas {
         line.split_off(self.frame.size.cols);
     }
 
-    pub fn into_frame(self) -> TerminalFrame<UnicodeCharWidthEstimator> {
-        let mut frame =
-            TerminalFrame::with_char_width_estimator(self.frame_size(), UnicodeCharWidthEstimator);
+    pub fn into_frame(self) -> mame::terminal::UnicodeTerminalFrame {
+        let mut frame = mame::terminal::UnicodeTerminalFrame::new(self.frame_size());
         for line in self.frame.lines {
             for token in line.tokens {
                 let _ = write!(frame, "{}{}", token.style, token.text);
@@ -217,7 +206,7 @@ impl Token {
                 return std::mem::replace(self, Self::with_style(suffix, self.style));
             }
 
-            let next_acc_cols = acc_cols + c.width().expect("infallible");
+            let next_acc_cols = acc_cols + mame::terminal::char_cols(c);
             if next_acc_cols > col {
                 // Not a char boundary.
                 let suffix = self.text.split_off(i + c.len_utf8());
@@ -235,7 +224,7 @@ impl Token {
     }
 
     pub fn cols(&self) -> usize {
-        self.text.width()
+        mame::terminal::str_cols(&self.text)
     }
 }
 
