@@ -45,8 +45,11 @@ impl App {
 
         let mut canvas = Canvas::new(self.frame_row_start, self.terminal.size());
         self.tree.render(&mut canvas);
-        self.legend.render(&mut canvas, &self.tree);
-        self.terminal.draw(canvas.into_frame()).or_fail()?;
+
+        let mut frame = canvas.into_frame();
+        self.legend.render(&mut frame, &self.tree).or_fail()?;
+
+        self.terminal.draw(frame).or_fail()?;
 
         Ok(())
     }
