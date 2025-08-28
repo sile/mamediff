@@ -29,7 +29,7 @@ impl App {
         self.render().or_fail()?;
 
         while !self.exit {
-            let Some(event) = self.terminal.poll_event(None).or_fail()? else {
+            let Some(event) = self.terminal.poll_event(&[], &[], None).or_fail()? else {
                 continue;
             };
             self.handle_event(event).or_fail()?;
@@ -62,6 +62,7 @@ impl App {
             TerminalEvent::Input(TerminalInput::Key(input)) => {
                 self.handle_key_input(input).or_fail()
             }
+            _ => Err(orfail::Failure::new(format!("unexpected event: {event:?}"))),
         }
     }
 
