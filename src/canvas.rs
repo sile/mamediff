@@ -7,7 +7,6 @@ pub struct Canvas {
     frame: Frame,
     frame_row_offset: usize,
     cursor: TerminalPosition,
-    col_offset: usize,
 }
 
 impl Canvas {
@@ -16,7 +15,6 @@ impl Canvas {
             frame: Frame::new(frame_size),
             frame_row_offset,
             cursor: TerminalPosition::ZERO,
-            col_offset: 0,
         }
     }
 
@@ -43,10 +41,6 @@ impl Canvas {
         self.cursor = position;
     }
 
-    pub fn set_col_offset(&mut self, offset: usize) {
-        self.col_offset = offset;
-    }
-
     pub fn draw(&mut self, token: Token) {
         let cols = token.cols();
         self.draw_at(self.cursor, token);
@@ -63,12 +57,10 @@ impl Canvas {
         self.cursor.col = 0;
     }
 
-    pub fn draw_at(&mut self, mut position: TerminalPosition, token: Token) {
+    pub fn draw_at(&mut self, position: TerminalPosition, token: Token) {
         if !self.frame_row_range().contains(&position.row) {
             return;
         }
-
-        position.col += self.col_offset;
 
         let i = position.row - self.frame_row_offset;
         let line = &mut self.frame.lines[i];
