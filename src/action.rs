@@ -1,5 +1,7 @@
 use crate::widget_diff_tree::DiffTreeWidget;
 
+pub type Config = mame::action::ActionConfig<Action>;
+
 #[derive(Debug, Clone)]
 pub enum Action {
     Quit,
