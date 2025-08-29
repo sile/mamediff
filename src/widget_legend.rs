@@ -1,36 +1,40 @@
+use crate::action::Config;
 use crate::widget_diff_tree::DiffTreeWidget;
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct LegendWidget {
-    pub hide: bool,
+    label_show: String,
+    label_hide: String,
+    hide: bool,
 }
 
 impl LegendWidget {
     pub fn render(
         &self,
         frame: &mut mame::terminal::UnicodeTerminalFrame,
+        config: &Config,
         tree: &DiffTreeWidget,
     ) -> std::fmt::Result {
-        let title = if self.hide { "s(H)ow" } else { "(H)ide" };
-        let items = if self.hide {
-            &[][..]
+        let legend = if self.hide {
+            mame::legend::Legend::new(&self.label_show, std::iter::empty::<String>())
         } else {
-            &[
-                Some("(q)uit [ESC,C-c]"),
-                (tree.cursor_row() != 0).then_some("(r)ecenter [C-l]"),
-                tree.can_cursor_up().then_some("(↑)      [k,C-p]"),
-                tree.can_cursor_down().then_some("(↓)      [j,C-n]"),
-                tree.can_cursor_left().then_some("(←)      [h,C-b]"),
-                tree.can_cursor_right().then_some("(→)      [l,C-f]"),
-                tree.can_toggle().then_some("(t)oggle   [TAB]"),
-                tree.can_stage_or_discard().then_some("(s)tage         "),
-                tree.can_stage_or_discard().then_some("(D)iscard       "),
-                tree.can_unstage().then_some("(u)nstage       "),
-            ][..]
+            mame::legend::Legend::new(
+                &self.label_hide,
+                config
+                    .current_keymap()
+                    .bindings()
+                    .filter(|b| b.action.as_ref().is_some_and(|a| a.is_applicable(tree)))
+                    .filter_map(|b| b.label.as_ref()),
+            )
         };
-        let legend = mame::legend::Legend::new(title, items.iter().filter_map(|x| *x));
         legend.render(frame)?;
         Ok(())
+    }
+
+    pub fn init(&mut self, label_show: String, label_hide: String, hide: bool) {
+        self.label_show = label_show;
+        self.label_hide = label_hide;
+        self.hide = hide;
     }
 
     pub fn toggle_hide(&mut self) {

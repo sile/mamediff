@@ -1,11 +1,17 @@
 use orfail::OrFail;
-use tuinix::{KeyCode, KeyInput, Terminal, TerminalEvent, TerminalInput};
+use tuinix::{Terminal, TerminalEvent};
 
-use crate::{canvas::Canvas, widget_diff_tree::DiffTreeWidget, widget_legend::LegendWidget};
+use crate::{
+    action::{Action, Config},
+    canvas::Canvas,
+    widget_diff_tree::DiffTreeWidget,
+    widget_legend::LegendWidget,
+};
 
 #[derive(Debug)]
 pub struct App {
     terminal: Terminal,
+    config: Config,
     exit: bool,
     frame_row_start: usize,
     tree: DiffTreeWidget,
@@ -13,19 +19,23 @@ pub struct App {
 }
 
 impl App {
-    pub fn new(hide_legend: bool) -> orfail::Result<Self> {
+    pub fn new(config: Config) -> orfail::Result<Self> {
         let terminal = Terminal::new().or_fail()?;
         let tree = DiffTreeWidget::new(terminal.size()).or_fail()?;
         Ok(Self {
             terminal,
+            config,
             exit: false,
             frame_row_start: 0,
             tree,
-            legend: LegendWidget { hide: hide_legend },
+            legend: LegendWidget::default(),
         })
     }
 
     pub fn run(mut self) -> orfail::Result<()> {
+        if let Some(action) = self.config.setup_action().cloned() {
+            self.handle_action(action).or_fail()?;
+        }
         self.render().or_fail()?;
 
         while !self.exit {
@@ -47,7 +57,9 @@ impl App {
         self.tree.render(&mut canvas);
 
         let mut frame = canvas.into_frame();
-        self.legend.render(&mut frame, &self.tree).or_fail()?;
+        self.legend
+            .render(&mut frame, &self.config, &self.tree)
+            .or_fail()?;
 
         self.terminal.draw(frame).or_fail()?;
 
@@ -62,74 +74,77 @@ impl App {
                 self.frame_row_start = cursor_row.saturating_sub(rows / 2);
                 self.render().or_fail()
             }
-            TerminalEvent::Input(TerminalInput::Key(input)) => {
-                self.handle_key_input(input).or_fail()
+            TerminalEvent::Input(input) => {
+                if let Some(binding) = self.config.handle_input(input) {
+                    if let Some(action) = binding.action.clone() {
+                        self.handle_action(action).or_fail()?;
+                    }
+                    self.render().or_fail()?;
+                }
+                Ok(())
             }
             _ => Err(orfail::Failure::new(format!("unexpected event: {event:?}"))),
         }
     }
 
-    fn handle_key_input(&mut self, input: KeyInput) -> orfail::Result<()> {
-        match (input.ctrl, input.code) {
-            (false, KeyCode::Char('q') | KeyCode::Escape) | (true, KeyCode::Char('c')) => {
+    fn handle_action(&mut self, action: Action) -> orfail::Result<()> {
+        match action {
+            Action::Quit => {
                 self.exit = true;
             }
-            (false, KeyCode::Char('u')) => {
-                if self.tree.unstage().or_fail()? {
-                    self.scroll_if_need();
-                    self.render().or_fail()?;
-                }
+            Action::Recenter => {
+                self.recenter();
             }
-            (false, KeyCode::Char('s')) => {
-                if self.tree.stage().or_fail()? {
-                    self.scroll_if_need();
-                    self.render().or_fail()?;
-                }
-            }
-            (false, KeyCode::Char('D')) => {
-                if self.tree.discard().or_fail()? {
-                    self.scroll_if_need();
-                    self.render().or_fail()?;
-                }
-            }
-            (false, KeyCode::Char('H')) => {
-                self.legend.toggle_hide();
-                self.render().or_fail()?;
-            }
-            (true, KeyCode::Char('p')) | (false, KeyCode::Up | KeyCode::Char('k')) => {
+            Action::MoveUp => {
                 if self.tree.cursor_up().or_fail()? {
                     self.scroll_if_need();
-                    self.render().or_fail()?;
                 }
             }
-            (true, KeyCode::Char('n')) | (false, KeyCode::Down | KeyCode::Char('j')) => {
+            Action::MoveDown => {
                 if self.tree.cursor_down().or_fail()? {
                     self.scroll_if_need();
-                    self.render().or_fail()?;
                 }
             }
-            (true, KeyCode::Char('f')) | (false, KeyCode::Right | KeyCode::Char('l')) => {
-                if self.tree.cursor_right().or_fail()? {
-                    self.scroll_if_need();
-                    self.render().or_fail()?;
-                }
-            }
-            (true, KeyCode::Char('b')) | (false, KeyCode::Left | KeyCode::Char('h')) => {
+            Action::MoveLeft => {
                 if self.tree.cursor_left() {
                     self.scroll_if_need();
-                    self.render().or_fail()?;
                 }
             }
-            (false, KeyCode::Char('t') | KeyCode::Tab) => {
+            Action::MoveRight => {
+                if self.tree.cursor_right().or_fail()? {
+                    self.scroll_if_need();
+                }
+            }
+            Action::ToggleExpand => {
                 self.tree.toggle().or_fail()?;
-                self.render().or_fail()?;
             }
-            (false, KeyCode::Char('r')) | (true, KeyCode::Char('l')) => {
-                self.recenter();
-                self.render().or_fail()?;
+            Action::Stage => {
+                if self.tree.stage().or_fail()? {
+                    self.scroll_if_need();
+                }
             }
-            _ => {}
+            Action::Discard => {
+                if self.tree.discard().or_fail()? {
+                    self.scroll_if_need();
+                }
+            }
+            Action::Unstage => {
+                if self.tree.unstage().or_fail()? {
+                    self.scroll_if_need();
+                }
+            }
+            Action::ToggleLegend => {
+                self.legend.toggle_hide();
+            }
+            Action::InitLegend {
+                hide,
+                label_show,
+                label_hide,
+            } => {
+                self.legend.init(label_show, label_hide, hide);
+            }
         }
+
         Ok(())
     }
 
