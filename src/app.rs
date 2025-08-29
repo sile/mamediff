@@ -57,7 +57,9 @@ impl App {
         self.tree.render(&mut canvas);
 
         let mut frame = canvas.into_frame();
-        self.legend.render(&mut frame, &self.tree).or_fail()?;
+        self.legend
+            .render(&mut frame, &self.config, &self.tree)
+            .or_fail()?;
 
         self.terminal.draw(frame).or_fail()?;
 
