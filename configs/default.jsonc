@@ -48,7 +48,7 @@
       {
         "label": "(t)oggle   [TAB]",
         "keys": ["t", "<TAB>"],
-        "action": {"type": "toggle"},
+        "action": {"type": "toggle-expand"},
       },
       {
         "label": "(s)tage         ",
