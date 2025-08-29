@@ -126,13 +126,11 @@ impl App {
             Action::Discard => {
                 if self.tree.discard().or_fail()? {
                     self.scroll_if_need();
-                    self.render().or_fail()?;
                 }
             }
             Action::Unstage => {
                 if self.tree.unstage().or_fail()? {
                     self.scroll_if_need();
-                    self.render().or_fail()?;
                 }
             }
             Action::ToggleLegend => {
