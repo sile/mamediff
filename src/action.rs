@@ -33,7 +33,7 @@ impl<'text, 'raw> TryFrom<nojson::RawJsonValue<'text, 'raw>> for Action {
             "move-down" => Ok(Self::MoveDown),
             "move-left" => Ok(Self::MoveLeft),
             "move-right" => Ok(Self::MoveRight),
-            "toggle" => Ok(Self::ToggleExpand),
+            "toggle-expand" => Ok(Self::ToggleExpand),
             "stage" => Ok(Self::Stage),
             "discard" => Ok(Self::Discard),
             "unstage" => Ok(Self::Unstage),
