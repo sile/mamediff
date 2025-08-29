@@ -14,11 +14,6 @@ fn main() -> noargs::Result<()> {
     }
     noargs::HELP_FLAG.take_help(&mut args);
 
-    let hide_legend = noargs::flag("hide-legend")
-        .doc("Hide the legend by default")
-        .env("MAMEDIFF_HIDE_LEGEND")
-        .take(&mut args)
-        .is_present();
     let config_path: Option<PathBuf> = noargs::opt("config")
         .doc("Path to configuration file")
         .env("MAMEDIFF_CONFIG_FILE")
@@ -41,7 +36,7 @@ fn main() -> noargs::Result<()> {
         Config::load_from_str("<DEFAULT>", include_str!("../configs/default.jsonc"))?
     };
 
-    let app = App::new(config, hide_legend).or_fail()?;
+    let app = App::new(config).or_fail()?;
     app.run().or_fail()?;
     Ok(())
 }
