@@ -1,0 +1,74 @@
+{
+  "variables": {
+    "MAME_HIDE_LEGEND": {
+      "type": "env",
+      "default": false,
+    },
+  },
+  "setup": {
+    "context": "@main",
+    "action": {
+      "type": "init-legend",
+      "hide": {"ref": "MAME_HIDE_LEGEND"},
+      "labels": {"show": "s(h)ow", "hide": "(h)ide"},
+    },
+  },
+  "keybindings": {
+    "@main": [
+      {
+        "label": "(q)uit",
+        "keys": ["q", "C-c"],
+        "action": {"type": "quit"},
+      },
+      {
+        "label": "(r)ecenter",
+        "keys": ["r", "C-l"],
+        "action": {"type": "recenter"},
+      },
+      {
+        "label": "(↑)",
+        "keys": ["C-p", "<UP>"],
+        "action": {"type": "move-up"},
+      },
+      {
+        "label": "(↓)",
+        "keys": ["C-n", "<DOWN>"],
+        "action": {"type": "move-down"},
+      },
+      {
+        "label": "(←)",
+        "keys": ["C-b", "<LEFT>"],
+        "action": {"type": "move-left"},
+      },
+      {
+        "label": "(→)",
+        "keys": ["C-f", "<RIGHT>"],
+        "action": {"type": "move-right"},
+      },
+      {
+        "label": "(t)oggle",
+        "keys": ["t", "<TAB>"],
+        "action": {"type": "toggle-expand"},
+      },
+      {
+        "label": "(s)tage",
+        "keys": ["s"],
+        "action": {"type": "stage"},
+      },
+      {
+        "label": "(D)iscard",
+        "keys": ["D"],
+        "action": {"type": "discard"},
+      },
+      {
+        "label": "(u)nstage",
+        "keys": ["u"],
+        "action": {"type": "unstage"},
+      },
+      {
+        "keys": ["h"],
+        "action": {"type": "toggle-legend"},
+      },
+    ],
+  },
+}
