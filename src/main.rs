@@ -15,7 +15,10 @@ fn main() -> noargs::Result<()> {
     noargs::HELP_FLAG.take_help(&mut args);
 
     let config_path: Option<PathBuf> = noargs::opt("config")
+        .short('c')
+        .ty("PATH")
         .doc("Path to configuration file")
+        .example("/path/to/config.jsonc")
         .env("MAMEDIFF_CONFIG_FILE")
         .take(&mut args)
         .present_and_then(|a| a.value().parse())?;
