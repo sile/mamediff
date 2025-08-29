@@ -1,8 +1,10 @@
 use crate::widget_diff_tree::DiffTreeWidget;
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct LegendWidget {
-    pub hide: bool,
+    label_show: String,
+    label_hide: String,
+    hide: bool,
 }
 
 impl LegendWidget {
@@ -11,7 +13,11 @@ impl LegendWidget {
         frame: &mut mame::terminal::UnicodeTerminalFrame,
         tree: &DiffTreeWidget,
     ) -> std::fmt::Result {
-        let title = if self.hide { "s(H)ow" } else { "(H)ide" };
+        let title = if self.hide {
+            &self.label_show
+        } else {
+            &self.label_hide
+        };
         let items = if self.hide {
             &[][..]
         } else {
@@ -31,6 +37,12 @@ impl LegendWidget {
         let legend = mame::legend::Legend::new(title, items.iter().filter_map(|x| *x));
         legend.render(frame)?;
         Ok(())
+    }
+
+    pub fn init(&mut self, label_show: String, label_hide: String, hide: bool) {
+        self.label_show = label_show;
+        self.label_hide = label_hide;
+        self.hide = hide;
     }
 
     pub fn toggle_hide(&mut self) {
