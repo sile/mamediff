@@ -143,6 +143,7 @@ impl App {
             } => {
                 self.legend.init(label_show, label_hide, hide);
             }
+            Action::ExecuteCommand(_) | Action::ExecuteShell(_) => todo!(),
         }
 
         Ok(())
