@@ -1,3 +1,5 @@
+use crate::widget_diff_tree::DiffTreeWidget;
+
 #[derive(Debug, Clone)]
 pub enum Action {
     Quit,
@@ -16,6 +18,25 @@ pub enum Action {
         label_show: String,
         label_hide: String,
     },
+}
+
+impl Action {
+    pub fn is_applicable(&self, tree: &DiffTreeWidget) -> bool {
+        match self {
+            Self::Quit => true,
+            Self::Recenter => tree.cursor_row() != 0,
+            Self::MoveUp => tree.can_cursor_up(),
+            Self::MoveDown => tree.can_cursor_down(),
+            Self::MoveLeft => tree.can_cursor_left(),
+            Self::MoveRight => tree.can_cursor_right(),
+            Self::ToggleExpand => tree.can_toggle(),
+            Self::Stage => tree.can_stage_or_discard(),
+            Self::Discard => tree.can_stage_or_discard(),
+            Self::Unstage => tree.can_unstage(),
+            Self::ToggleLegend => true,
+            Self::InitLegend { .. } => true,
+        }
+    }
 }
 
 impl mame::action::Action for Action {}
