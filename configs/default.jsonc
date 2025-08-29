@@ -28,22 +28,22 @@
       {
         "label": "(↑)      [k,C-p]",
         "keys": ["k", "C-p", "<UP>"],
-        "action": {"type": "cursor-up"},
+        "action": {"type": "move-up"},
       },
       {
         "label": "(↓)      [j,C-n]",
         "keys": ["j", "C-n", "<DOWN>"],
-        "action": {"type": "cursor-down"},
+        "action": {"type": "move-down"},
       },
       {
         "label": "(←)      [h,C-b]",
         "keys": ["h", "C-b", "<LEFT>"],
-        "action": {"type": "cursor-left"},
+        "action": {"type": "move-left"},
       },
       {
         "label": "(→)      [l,C-f]",
         "keys": ["l", "C-f", "<RIGHT>"],
-        "action": {"type": "cursor-right"},
+        "action": {"type": "move-right"},
       },
       {
         "label": "(t)oggle   [TAB]",
