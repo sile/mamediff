@@ -1,11 +1,14 @@
 use orfail::OrFail;
 use tuinix::{KeyCode, KeyInput, Terminal, TerminalEvent, TerminalInput};
 
-use crate::{canvas::Canvas, widget_diff_tree::DiffTreeWidget, widget_legend::LegendWidget};
+use crate::{
+    action::Config, canvas::Canvas, widget_diff_tree::DiffTreeWidget, widget_legend::LegendWidget,
+};
 
 #[derive(Debug)]
 pub struct App {
     terminal: Terminal,
+    config: Config,
     exit: bool,
     frame_row_start: usize,
     tree: DiffTreeWidget,
@@ -13,11 +16,12 @@ pub struct App {
 }
 
 impl App {
-    pub fn new(hide_legend: bool) -> orfail::Result<Self> {
+    pub fn new(config: Config, hide_legend: bool) -> orfail::Result<Self> {
         let terminal = Terminal::new().or_fail()?;
         let tree = DiffTreeWidget::new(terminal.size()).or_fail()?;
         Ok(Self {
             terminal,
+            config,
             exit: false,
             frame_row_start: 0,
             tree,
