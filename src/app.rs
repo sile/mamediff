@@ -163,19 +163,19 @@ impl App {
     }
 
     fn execute_command(&mut self, command: &mame::command::ExternalCommand) -> orfail::Result<()> {
-        let left = mame::preview::TextPreviewPane::new(
+        let executing_pane = mame::preview::TextPreviewPane::new(
             "executing",
             &format!("$ {}", command.command_line()),
         );
-        self.preview = Some(mame::preview::TextPreview::new(Some(left), None));
+        self.preview = Some(mame::preview::TextPreview::new(Some(executing_pane), None));
         self.render().or_fail()?;
 
         let output = command.execute().or_fail()?;
-        let left =
+        let stdout_pane =
             mame::preview::TextPreviewPane::new("stdout", &String::from_utf8_lossy(&output.stdout));
-        let right =
+        let stderr_pane =
             mame::preview::TextPreviewPane::new("stderr", &String::from_utf8_lossy(&output.stderr));
-        self.preview = Some(mame::preview::TextPreview::new(Some(left), Some(right)));
+        self.preview = Some(mame::preview::TextPreview::new(Some(stdout_pane), Some(stderr_pane)));
         Ok(())
     }
 
