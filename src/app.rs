@@ -171,6 +171,11 @@ impl App {
         self.render().or_fail()?;
 
         let output = command.execute().or_fail()?;
+
+        if output.status.success() {
+            self.tree.reload().or_fail()?;
+        }
+
         let stdout_pane =
             mame::preview::TextPreviewPane::new("stdout", &String::from_utf8_lossy(&output.stdout));
         let stderr_pane =

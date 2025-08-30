@@ -194,7 +194,7 @@ impl DiffTreeWidget {
         self.root_node.rows() - root_node_offset
     }
 
-    fn reload(&mut self) -> orfail::Result<()> {
+    pub fn reload(&mut self) -> orfail::Result<()> {
         let old = self.clone();
         let (unstaged_diff, staged_diff) = git::unstaged_and_staged_diffs().or_fail()?;
 
