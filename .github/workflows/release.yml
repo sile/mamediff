@@ -6,28 +6,33 @@ on:
       - '*'
 
 jobs:
-  github-release-draft:
-    name: 'Create GitHub Release Draft'
+  github-release:
+    name: 'Create GitHub Release'
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     outputs:
       version: ${{ steps.get_version.outputs.VERSION }}
-      upload-url: ${{ steps.create-release.outputs.upload_url }}
     steps:
+      - name: Checkout sources
+        uses: actions/checkout@v5
+
       - name: Get the version
         id: get_version
-        run: echo ::set-output name=VERSION::$(echo ${GITHUB_REF/refs\/tags\//} | grep -o '[0-9\.]*')
+        run: echo "VERSION=${GITHUB_REF/refs\/tags\//}" >> $GITHUB_OUTPUT
 
-      - id: create-release
-        uses: softprops/action-gh-release@v1
-        with:
-          tag_name: v${{ steps.get_version.outputs.VERSION }}
-          name: v${{ steps.get_version.outputs.VERSION }}
-          draft: true
+      - name: Create Release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create ${{ steps.get_version.outputs.VERSION }} \
+            --title "${{ steps.get_version.outputs.VERSION }}" \
+            --generate-notes
 
   linux-binary:
-    name: 'Uplaod Binary for Linux'
+    name: 'Upload Binary for Linux'
     runs-on: ubuntu-latest
-    needs: github-release-draft
+    needs: github-release
     steps:
       - name: Checkout sources
         uses: actions/checkout@v5
@@ -39,19 +44,18 @@ jobs:
       - run: rustup target add x86_64-unknown-linux-musl
       - run: cargo build --release --target=x86_64-unknown-linux-musl
 
-      - uses: actions/upload-release-asset@v1
+      - name: Upload Release Asset
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ needs.github-release-draft.outputs.upload-url }}
-          asset_path: target/x86_64-unknown-linux-musl/release/mamediff
-          asset_name: mamediff-${{ needs.github-release-draft.outputs.version }}.x86_64-unknown-linux-musl
-          asset_content_type: application/octet-stream
+        run: |
+          mv target/x86_64-unknown-linux-musl/release/mamediff mamediff-${{ needs.github-release.outputs.version }}.x86_64-unknown-linux-musl
+          gh release upload ${{ needs.github-release.outputs.version }} \
+            mamediff-${{ needs.github-release.outputs.version }}.x86_64-unknown-linux-musl
 
   macos-binary:
-    name: 'Uplaod Binary for MacOS'
+    name: 'Upload Binary for MacOS'
     runs-on: macos-latest
-    needs: github-release-draft
+    needs: github-release
     strategy:
       matrix:
         target: ["x86_64-apple-darwin", "aarch64-apple-darwin"]
@@ -63,11 +67,31 @@ jobs:
       - run: rustup target add ${{ matrix.target }}
       - run: cargo build --release --target=${{ matrix.target }}
 
-      - uses: actions/upload-release-asset@v1
+      - name: Upload Release Asset
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ needs.github-release-draft.outputs.upload-url }}
-          asset_path: target/${{ matrix.target }}/release/mamediff
-          asset_name: mamediff-${{ needs.github-release-draft.outputs.version }}.${{ matrix.target }}
-          asset_content_type: application/octet-stream
+        run: |
+          mv target/${{ matrix.target }}/release/mamediff mamediff-${{ needs.github-release.outputs.version }}.${{ matrix.target }}
+          gh release upload ${{ needs.github-release.outputs.version }} \
+            mamediff-${{ needs.github-release.outputs.version }}.${{ matrix.target }}
+
+  publish-crates:
+    name: 'Publish to crates.io'
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@v5
+
+      - run: rustup update stable
+
+      - name: Authenticate with crates.io
+        uses: rust-lang/crates-io-auth-action@v1
+        id: auth
+
+      - name: Publish to crates.io
+        run: cargo publish
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ steps.auth.outputs.token }}
+
