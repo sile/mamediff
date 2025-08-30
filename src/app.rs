@@ -175,7 +175,10 @@ impl App {
             mame::preview::TextPreviewPane::new("stdout", &String::from_utf8_lossy(&output.stdout));
         let stderr_pane =
             mame::preview::TextPreviewPane::new("stderr", &String::from_utf8_lossy(&output.stderr));
-        self.preview = Some(mame::preview::TextPreview::new(Some(stdout_pane), Some(stderr_pane)));
+        self.preview = Some(mame::preview::TextPreview::new(
+            Some(stdout_pane),
+            Some(stderr_pane),
+        ));
         Ok(())
     }
 
