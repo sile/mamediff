@@ -16,6 +16,7 @@ pub struct App {
     frame_row_start: usize,
     tree: DiffTreeWidget,
     legend: LegendWidget,
+    preview: Option<mame::preview::TextPreview>,
 }
 
 impl App {
@@ -29,6 +30,7 @@ impl App {
             frame_row_start: 0,
             tree,
             legend: LegendWidget::default(),
+            preview: None,
         })
     }
 
@@ -57,6 +59,9 @@ impl App {
         self.tree.render(&mut canvas);
 
         let mut frame = canvas.into_frame();
+        if let Some(preview) = &mut self.preview {
+            preview.render(&mut frame).or_fail()?;
+        }
         self.legend
             .render(&mut frame, &self.config, &self.tree)
             .or_fail()?;
@@ -75,10 +80,14 @@ impl App {
                 self.render().or_fail()
             }
             TerminalEvent::Input(input) => {
+                let mut needs_render = self.preview.take().is_some();
                 if let Some(binding) = self.config.handle_input(input) {
                     if let Some(action) = binding.action.clone() {
                         self.handle_action(action).or_fail()?;
                     }
+                    needs_render = true;
+                }
+                if needs_render {
                     self.render().or_fail()?;
                 }
                 Ok(())
@@ -143,8 +152,33 @@ impl App {
             } => {
                 self.legend.init(label_show, label_hide, hide);
             }
+            Action::ExecuteCommand(a) => {
+                self.execute_command(&a).or_fail()?;
+            }
+            Action::ExecuteShell(a) => {
+                self.execute_command(a.get()).or_fail()?;
+            }
         }
+        Ok(())
+    }
 
+    fn execute_command(&mut self, command: &mame::command::ExternalCommand) -> orfail::Result<()> {
+        let executing_pane = mame::preview::TextPreviewPane::new(
+            "executing",
+            &format!("$ {}", command.command_line()),
+        );
+        self.preview = Some(mame::preview::TextPreview::new(Some(executing_pane), None));
+        self.render().or_fail()?;
+
+        let output = command.execute().or_fail()?;
+        let stdout_pane =
+            mame::preview::TextPreviewPane::new("stdout", &String::from_utf8_lossy(&output.stdout));
+        let stderr_pane =
+            mame::preview::TextPreviewPane::new("stderr", &String::from_utf8_lossy(&output.stderr));
+        self.preview = Some(mame::preview::TextPreview::new(
+            Some(stdout_pane),
+            Some(stderr_pane),
+        ));
         Ok(())
     }
 

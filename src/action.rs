@@ -20,6 +20,8 @@ pub enum Action {
         label_show: String,
         label_hide: String,
     },
+    ExecuteCommand(mame::command::ExternalCommand),
+    ExecuteShell(mame::command::ShellCommand),
 }
 
 impl Action {
@@ -37,6 +39,8 @@ impl Action {
             Self::Unstage => tree.can_unstage(),
             Self::ToggleLegend => true,
             Self::InitLegend { .. } => true,
+            Self::ExecuteCommand(_) => true,
+            Self::ExecuteShell(_) => true,
         }
     }
 }
@@ -69,13 +73,14 @@ impl<'text, 'raw> TryFrom<nojson::RawJsonValue<'text, 'raw>> for Action {
                 let labels = value.to_member("labels")?.required()?;
                 let label_show = labels.to_member("show")?.required()?.try_into()?;
                 let label_hide = labels.to_member("hide")?.required()?.try_into()?;
-
                 Ok(Self::InitLegend {
                     hide,
                     label_show,
                     label_hide,
                 })
             }
+            "execute-command" => Ok(Self::ExecuteCommand(value.try_into()?)),
+            "execute-shell" => Ok(Self::ExecuteShell(value.try_into()?)),
             ty => Err(value.invalid(format!("unknown action type: {ty:?}"))),
         }
     }
