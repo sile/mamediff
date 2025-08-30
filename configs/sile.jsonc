@@ -81,6 +81,15 @@
         },
       },
       {
+        "label": "(P)ush",
+        "keys": ["P"],
+        "action": {
+          "type": "execute-shell",
+          "stderr": {"type": "file", "path": ".stderr", "skip_if_empty": true},
+          "script": ["git push origin (git branch --show-current)"],
+        },
+      },
+      {
         "keys": ["h"],
         "action": {"type": "toggle-legend"},
       },
