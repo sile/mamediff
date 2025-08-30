@@ -22,7 +22,7 @@ Pre-built binaries for Linux and MacOS are available in [the releases page](http
 
 ```console
 // An example to download the binary for Linux.
-$ VERSION=0.3.0
+$ VERSION=0.4.0
 $ curl -L https://github.com/sile/mamediff/releases/download/v${VERSION}/mamediff-${VERSION}.x86_64-unknown-linux-musl -o mamediff
 $ chmod +x mamediff
 $ ./mamediff -h
@@ -51,7 +51,7 @@ $ mamediff
   :        fn main() {                             | (t)oggle   [TAB]
   :       -    println!("Hello, World!");          | (s)tage
   :       +    println!("Hello, mamediff!");       | (D)iscard
-  :        }                                       +---- (h)ide -----
+  :        }                                       +---- (H)ide -----
   | Staged changes (0 files)
 ```
 
