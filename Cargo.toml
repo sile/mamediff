@@ -11,7 +11,7 @@ readme = "README.md"
 categories = ["command-line-utilities"]
 
 [dependencies]
-mame = "0.1.3"
+mame = "0.1.4"
 noargs = "0.4.1"
 nojson = "0.3.4"
 orfail = "1.1.0"

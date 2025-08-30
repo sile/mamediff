@@ -71,7 +71,7 @@
         "action": {
           "type": "execute-shell",
           "shell": "fish",
-          "stderr": {"type": "file", "path": ".stderr", "skip_if_empty": true},
+          "stderr": {"type": "file", "path": ".stderr", "skip-if-success": true},
           "script": [
             "git diff --cached",
             "| daberu",
@@ -87,7 +87,7 @@
         "action": {
           "type": "execute-shell",
           "shell": "fish",
-          "stderr": {"type": "file", "path": ".stderr", "skip_if_empty": true},
+          "stderr": {"type": "file", "path": ".stderr", "skip-if-success": true},
           "script": ["git push origin (git branch --show-current)"],
         },
       },
