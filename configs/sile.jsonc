@@ -75,10 +75,15 @@
           "script": [
             "git diff --cached",
             "| daberu",
-            "  -s 'Generate one-line commit message from the git diff result'",
+            "  -s 'Analyze the git diff and generate a concise, conventional commit message. ",
+            "Use the format: <type>: <description>. ",
+            "Types: feat, fix, docs, style, refactor, test, chore. ",
+            "Match the language and style of recent commits. ",
+            "Keep under 50 characters.'",
             "  -e 'git log --oneline -10'",
             "| git commit -F -",
           ],
+          "envs": {"DABERU_LOG_PATH": ""},
         },
       },
       {
