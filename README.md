@@ -55,6 +55,16 @@ $ mamediff
   | Staged changes (0 files)
 ```
 
+### Configuration
+
+You can customize key bindings and behavior using a configuration file:
+
+```console
+$ mamediff --config /path/to/config.jsonc
+```
+
+Or set the `MAMEDIFF_CONFIG_FILE` environment variable to specify the default configuration file path.
+
 You Might Also Be Interested In
 -------------------------------
 
