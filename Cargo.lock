@@ -57,8 +57,6 @@ checksum = "cd945864f07fe9f5371a27ad7b52a172b4b499999f1d97574c9fa68373937e12"
 [[package]]
 name = "mame"
 version = "0.1.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e1af4097519d8ab88e871ceda75728ef569540ae5f11382723f7c488790bd729"
 dependencies = [
  "nojson",
  "tuinix",

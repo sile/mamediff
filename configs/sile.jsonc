@@ -66,6 +66,21 @@
         "action": {"type": "unstage"},
       },
       {
+        "label": "(C)ommit",
+        "keys": ["C"],
+        "action": {
+          "type": "execute-shell",
+          "stderr": {"type": "file", "path": ".stderr", "skip_if_empty": true},
+          "script": [
+            "git diff --cached",
+            "| daberu",
+            "  -s 'Generate one-line commit message from the git diff result'",
+            "  -e 'git log --oneline -10'",
+            "| git commit -F -",
+          ],
+        },
+      },
+      {
         "keys": ["h"],
         "action": {"type": "toggle-legend"},
       },
