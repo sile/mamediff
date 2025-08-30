@@ -17,7 +17,11 @@ fn main() -> noargs::Result<()> {
     let config_path: Option<PathBuf> = noargs::opt("config")
         .short('c')
         .ty("PATH")
-        .doc("Path to configuration file")
+        .doc(concat!(
+            "Path to configuration file\n",
+            "\n",
+            "Default: https://github.com/sile/mamediff/blob/main/configs/default.jsonc"
+        ))
         .example("/path/to/config.jsonc")
         .env("MAMEDIFF_CONFIG_FILE")
         .take(&mut args)

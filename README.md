@@ -63,7 +63,9 @@ You can customize key bindings and behavior using a configuration file:
 $ mamediff --config /path/to/config.jsonc
 ```
 
-Or set the `MAMEDIFF_CONFIG_FILE` environment variable to specify the default configuration file path.
+Or set the `MAMEDIFF_CONFIG_FILE` environment variable to specify the configuration file path.
+
+For reference, see the [default configuration file](./configs/default.jsonc).
 
 You Might Also Be Interested In
 -------------------------------
