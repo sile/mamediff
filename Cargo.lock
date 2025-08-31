@@ -56,9 +56,9 @@ checksum = "cd945864f07fe9f5371a27ad7b52a172b4b499999f1d97574c9fa68373937e12"
 
 [[package]]
 name = "mame"
-version = "0.1.4"
+version = "0.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "530ca5341c3a0bca1fc5e74681195a35e4a397a2ae482bcee495719b68af9deb"
+checksum = "dccae4bbdd79bd736e5526f10280be3be1da34e61176579a40d05653a9ab1a84"
 dependencies = [
  "nojson",
  "tuinix",
@@ -85,9 +85,9 @@ checksum = "fe77e710319d3ff009f93efc433d879e80e6336f5b87ace6d6db7ca5951085c3"
 
 [[package]]
 name = "nojson"
-version = "0.3.4"
+version = "0.3.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "611eb3424ca13c91e1972a145aca47e07e71fcf0a0953168e8e364b33d0ab04e"
+checksum = "a847c0a03d7915f0e8c1e4ecf3ab97f8523fd703eadb79582bfb464bb224bab2"
 
 [[package]]
 name = "once_cell"
