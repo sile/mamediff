@@ -16,7 +16,7 @@ impl LegendWidget {
         tree: &DiffTreeWidget,
     ) -> std::fmt::Result {
         let legend = if self.hide {
-            mame::legend::Legend::new(&self.label_show, std::iter::empty::<String>())
+            mame::legend::Legend::new(&self.label_show, std::iter::empty())
         } else {
             mame::legend::Legend::new(
                 &self.label_hide,
@@ -24,7 +24,8 @@ impl LegendWidget {
                     .current_keymap()
                     .bindings()
                     .filter(|b| b.action.as_ref().is_some_and(|a| a.is_applicable(tree)))
-                    .filter_map(|b| b.label.as_ref()),
+                    .filter_map(|b| b.label.as_ref())
+                    .map(|s| format!(" {s}")),
             )
         };
         legend.render(frame)?;

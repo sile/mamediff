@@ -1,8 +1,18 @@
 {
   "variables": {
+    "HOME": {
+      "type": "env",
+    },
     "MAME_HIDE_LEGEND": {
       "type": "env",
       "default": false,
+    },
+    "STDERR_FILE": {
+      "type": "const",
+      "value": {
+        "type": "file",
+        "path": [{"ref": "HOME"}, ".stderr"],
+      },
     },
   },
   "setup": {
@@ -69,21 +79,24 @@
         "label": "(C)ommit",
         "keys": ["C"],
         "action": {
-          "type": "execute-shell",
-          "shell": "fish",
-          "stderr": {"type": "file", "path": ".stderr", "skip-if-success": true},
-          "script": [
-            "git diff --cached",
-            "| daberu",
-            "  -s 'Generate only a conventional commit message from the git diff. ",
-            "Output format: <type>: <description>. ",
-            "Types: feat, fix, docs, style, refactor, test, chore. ",
-            "Match recent commit style. ",
-            "Under 80 characters. ",
-            "No explanations or commentary.'",
-            "  -e 'git log --oneline -10'",
-            "| git commit -F -",
+          "type": "execute-command",
+          "command": "fish",
+          "args": [
+            "-c",
+            [
+              "git diff --cached",
+              "| daberu",
+              "  -s 'Generate only a conventional commit message from the git diff. ",
+              "Output format: <type>: <description>. ",
+              "Types: feat, fix, docs, style, refactor, test, chore. ",
+              "Match recent commit style. ",
+              "Under 80 characters. ",
+              "No explanations or commentary.'",
+              "  -e 'git log --oneline -10'",
+              "| git commit -F -",
+            ],
           ],
+          "stderr": {"ref": "STDERR_FILE"},
           "envs": {"DABERU_LOG_PATH": ""},
         },
       },
@@ -91,10 +104,10 @@
         "label": "(P)ush",
         "keys": ["P"],
         "action": {
-          "type": "execute-shell",
-          "shell": "fish",
-          "stderr": {"type": "file", "path": ".stderr", "skip-if-success": true},
-          "script": ["git push origin (git branch --show-current)"],
+          "type": "execute-command",
+          "command": "fish",
+          "args": ["-c", "git push origin (git branch --show-current)"],
+          "stderr": {"ref": "STDERR_FILE"},
         },
       },
       {

@@ -21,7 +21,6 @@ pub enum Action {
         label_hide: String,
     },
     ExecuteCommand(mame::command::ExternalCommand),
-    ExecuteShell(mame::command::ShellCommand),
 }
 
 impl Action {
@@ -40,7 +39,6 @@ impl Action {
             Self::ToggleLegend => true,
             Self::InitLegend { .. } => true,
             Self::ExecuteCommand(_) => true,
-            Self::ExecuteShell(_) => true,
         }
     }
 }
@@ -80,8 +78,7 @@ impl<'text, 'raw> TryFrom<nojson::RawJsonValue<'text, 'raw>> for Action {
                 })
             }
             "execute-command" => Ok(Self::ExecuteCommand(value.try_into()?)),
-            "execute-shell" => Ok(Self::ExecuteShell(value.try_into()?)),
-            ty => Err(value.invalid(format!("unknown action type: {ty:?}"))),
+            type_name => Err(ty.invalid(format!("unknown action type: {type_name:?}"))),
         }
     }
 }

@@ -155,9 +155,6 @@ impl App {
             Action::ExecuteCommand(a) => {
                 self.execute_command(&a).or_fail()?;
             }
-            Action::ExecuteShell(a) => {
-                self.execute_command(a.get()).or_fail()?;
-            }
         }
         Ok(())
     }
