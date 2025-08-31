@@ -11,7 +11,7 @@
       "type": "const",
       "value": {
         "type": "file",
-        "path": [{"ref": "HOME"}, ".stderr"],
+        "path": [{"ref": "HOME"}, "/.stderr"],
       },
     },
   },
