@@ -89,7 +89,7 @@
               "  -s 'Generate only a conventional commit message from the git diff. ",
               "Output format: <type>: <description>. ",
               "Types: feat, fix, docs, style, refactor, test, chore. ",
-              "Match recent commit style. ",
+              "Match recent commit style and language (use Japanese if recent commits used that). ",
               "Under 80 characters. ",
               "No explanations or commentary.'",
               "  -e 'git log --oneline -10'",
