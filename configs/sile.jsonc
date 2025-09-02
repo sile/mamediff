@@ -3,7 +3,7 @@
     "HOME": {
       "type": "env",
     },
-    "MAME_HIDE_LEGEND": {
+    "MAMEDIFF_HIDE_LEGEND": {
       "type": "env",
       "default": false,
     },
@@ -19,7 +19,7 @@
     "context": "@main",
     "action": {
       "type": "init-legend",
-      "hide": {"ref": "MAME_HIDE_LEGEND"},
+      "hide": {"ref": "MAMEDIFF_HIDE_LEGEND"},
       "labels": {"show": "s(h)ow", "hide": "(h)ide"},
     },
   },
