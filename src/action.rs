@@ -1,6 +1,7 @@
 use crate::widget_diff_tree::DiffTreeWidget;
 
-pub type Config = mame::action::ActionConfig<Action>;
+// TOD: rename
+pub type Config = mame::action::ActionBindingSystem<Action>;
 
 #[derive(Debug, Clone)]
 pub enum Action {

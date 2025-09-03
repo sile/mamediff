@@ -21,8 +21,8 @@ impl LegendWidget {
             mame::legend::Legend::new(
                 &self.label_hide,
                 config
-                    .current_keymap()
-                    .bindings()
+                    .current_bindings()
+                    .iter()
                     .filter(|b| b.action.as_ref().is_some_and(|a| a.is_applicable(tree)))
                     .filter_map(|b| b.label.as_ref())
                     .map(|s| format!(" {s}")),
