@@ -18,7 +18,7 @@ fn main() -> noargs::Result<()> {
         .short('c')
         .ty("PATH")
         .doc(concat!(
-            "Path to configuration file\n",
+            "Path to key bindings configuration file (JSONC format)\n",
             "\n",
             "Default: https://github.com/sile/mamediff/blob/main/configs/default.jsonc"
         ))
@@ -37,13 +37,13 @@ fn main() -> noargs::Result<()> {
         std::process::exit(1);
     };
 
-    let config = if let Some(path) = config_path {
+    let bindings = if let Some(path) = config_path {
         ActionBindingSystem::load_from_file(path)?
     } else {
         ActionBindingSystem::load_from_str("<DEFAULT>", include_str!("../configs/default.jsonc"))?
     };
 
-    let app = App::new(config).or_fail()?;
+    let app = App::new(bindings).or_fail()?;
     app.run().or_fail()?;
     Ok(())
 }
