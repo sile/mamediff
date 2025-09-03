@@ -6,6 +6,7 @@ pub struct LegendWidget {
     label_show: String,
     label_hide: String,
     hide: bool,
+    pub ongoing_binding_id: Option<mame::action::InputBindingId>,
 }
 
 impl LegendWidget {
@@ -24,8 +25,16 @@ impl LegendWidget {
                     .current_bindings()
                     .iter()
                     .filter(|b| b.action.as_ref().is_some_and(|a| a.is_applicable(tree)))
-                    .filter_map(|b| b.label.as_ref())
-                    .map(|s| format!(" {s}")),
+                    .filter_map(|b| {
+                        let label = b.label.as_ref()?;
+                        Some(if self.ongoing_binding_id == Some(b.id) {
+                            let bold = tuinix::TerminalStyle::new().bold();
+                            let reset = tuinix::TerminalStyle::RESET;
+                            format!(" {bold}{label}{reset}")
+                        } else {
+                            format!(" {label}")
+                        })
+                    }),
             )
         };
         legend.render(frame)?;
