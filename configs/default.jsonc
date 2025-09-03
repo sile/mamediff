@@ -13,60 +13,60 @@
       "labels": {"show": "s(H)ow", "hide": "(H)ide"},
     },
   },
-  "keybindings": {
+  "bindings": {
     "@main": [
       {
         "label": "(q)uit [ESC,C-c]",
-        "keys": ["q", "<ESCAPE>", "C-c"],
+        "triggers": ["q", "<ESCAPE>", "C-c"],
         "action": {"type": "quit"},
       },
       {
         "label": "(r)ecenter [C-l]",
-        "keys": ["r", "C-l"],
+        "triggers": ["r", "C-l"],
         "action": {"type": "recenter"},
       },
       {
         "label": "(↑)      [k,C-p]",
-        "keys": ["k", "C-p", "<UP>"],
+        "triggers": ["k", "C-p", "<UP>"],
         "action": {"type": "move-up"},
       },
       {
         "label": "(↓)      [j,C-n]",
-        "keys": ["j", "C-n", "<DOWN>"],
+        "triggers": ["j", "C-n", "<DOWN>"],
         "action": {"type": "move-down"},
       },
       {
         "label": "(←)      [h,C-b]",
-        "keys": ["h", "C-b", "<LEFT>"],
+        "triggers": ["h", "C-b", "<LEFT>"],
         "action": {"type": "move-left"},
       },
       {
         "label": "(→)      [l,C-f]",
-        "keys": ["l", "C-f", "<RIGHT>"],
+        "triggers": ["l", "C-f", "<RIGHT>"],
         "action": {"type": "move-right"},
       },
       {
         "label": "(t)oggle   [TAB]",
-        "keys": ["t", "<TAB>"],
+        "triggers": ["t", "<TAB>"],
         "action": {"type": "toggle-expand"},
       },
       {
         "label": "(s)tage         ",
-        "keys": ["s"],
+        "triggers": ["s"],
         "action": {"type": "stage"},
       },
       {
         "label": "(D)iscard       ",
-        "keys": ["D"],
+        "triggers": ["D"],
         "action": {"type": "discard"},
       },
       {
         "label": "(u)nstage       ",
-        "keys": ["u"],
+        "triggers": ["u"],
         "action": {"type": "unstage"},
       },
       {
-        "keys": ["H"],
+        "triggers": ["H"],
         "action": {"type": "toggle-legend"},
       },
     ],

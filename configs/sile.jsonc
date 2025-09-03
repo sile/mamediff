@@ -23,61 +23,61 @@
       "labels": {"show": "s(h)ow", "hide": "(h)ide"},
     },
   },
-  "keybindings": {
+  "bindings": {
     "@main": [
       {
         "label": "(q)uit",
-        "keys": ["q", "C-c"],
+        "triggers": ["q", "C-c"],
         "action": {"type": "quit"},
       },
       {
         "label": "(r)ecenter",
-        "keys": ["r", "C-l"],
+        "triggers": ["r", "C-l"],
         "action": {"type": "recenter"},
       },
       {
         "label": "(↑)",
-        "keys": ["C-p", "<UP>"],
+        "triggers": ["C-p", "<UP>"],
         "action": {"type": "move-up"},
       },
       {
         "label": "(↓)",
-        "keys": ["C-n", "<DOWN>"],
+        "triggers": ["C-n", "<DOWN>"],
         "action": {"type": "move-down"},
       },
       {
         "label": "(←)",
-        "keys": ["C-b", "<LEFT>"],
+        "triggers": ["C-b", "<LEFT>"],
         "action": {"type": "move-left"},
       },
       {
         "label": "(→)",
-        "keys": ["C-f", "<RIGHT>"],
+        "triggers": ["C-f", "<RIGHT>"],
         "action": {"type": "move-right"},
       },
       {
         "label": "(t)oggle",
-        "keys": ["t", "<TAB>"],
+        "triggers": ["t", "<TAB>"],
         "action": {"type": "toggle-expand"},
       },
       {
         "label": "(s)tage",
-        "keys": ["s"],
+        "triggers": ["s"],
         "action": {"type": "stage"},
       },
       {
         "label": "(D)iscard",
-        "keys": ["D"],
+        "triggers": ["D"],
         "action": {"type": "discard"},
       },
       {
         "label": "(u)nstage",
-        "keys": ["u"],
+        "triggers": ["u"],
         "action": {"type": "unstage"},
       },
       {
         "label": "(C)ommit",
-        "keys": ["C"],
+        "triggers": ["C"],
         "action": {
           "type": "execute-command",
           "command": "fish",
@@ -102,7 +102,7 @@
       },
       {
         "label": "(P)ush",
-        "keys": ["P"],
+        "triggers": ["P"],
         "action": {
           "type": "execute-command",
           "command": "fish",
@@ -111,7 +111,7 @@
         },
       },
       {
-        "keys": ["h"],
+        "triggers": ["h"],
         "action": {"type": "toggle-legend"},
       },
     ],

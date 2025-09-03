@@ -1,4 +1,4 @@
-use crate::action::Config;
+use crate::action::ActionBindingSystem;
 use crate::widget_diff_tree::DiffTreeWidget;
 
 #[derive(Debug, Default)]
@@ -12,7 +12,7 @@ impl LegendWidget {
     pub fn render(
         &self,
         frame: &mut mame::terminal::UnicodeTerminalFrame,
-        config: &Config,
+        bindings: &ActionBindingSystem,
         tree: &DiffTreeWidget,
     ) -> std::fmt::Result {
         let legend = if self.hide {
@@ -20,9 +20,9 @@ impl LegendWidget {
         } else {
             mame::legend::Legend::new(
                 &self.label_hide,
-                config
-                    .current_keymap()
-                    .bindings()
+                bindings
+                    .current_bindings()
+                    .iter()
                     .filter(|b| b.action.as_ref().is_some_and(|a| a.is_applicable(tree)))
                     .filter_map(|b| b.label.as_ref())
                     .map(|s| format!(" {s}")),
