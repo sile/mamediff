@@ -2,7 +2,7 @@ use orfail::OrFail;
 use tuinix::{Terminal, TerminalEvent};
 
 use crate::{
-    action::{Action, Config},
+    action::{Action, ActionBindingSystem},
     canvas::Canvas,
     widget_diff_tree::DiffTreeWidget,
     widget_legend::LegendWidget,
@@ -11,7 +11,7 @@ use crate::{
 #[derive(Debug)]
 pub struct App {
     terminal: Terminal,
-    config: Config,
+    bindings: ActionBindingSystem,
     exit: bool,
     frame_row_start: usize,
     tree: DiffTreeWidget,
@@ -20,12 +20,12 @@ pub struct App {
 }
 
 impl App {
-    pub fn new(config: Config) -> orfail::Result<Self> {
+    pub fn new(bindings: ActionBindingSystem) -> orfail::Result<Self> {
         let terminal = Terminal::new().or_fail()?;
         let tree = DiffTreeWidget::new(terminal.size()).or_fail()?;
         Ok(Self {
             terminal,
-            config,
+            bindings,
             exit: false,
             frame_row_start: 0,
             tree,
@@ -35,7 +35,7 @@ impl App {
     }
 
     pub fn run(mut self) -> orfail::Result<()> {
-        if let Some(action) = self.config.setup_action().cloned() {
+        if let Some(action) = self.bindings.setup_action().cloned() {
             self.handle_action(action).or_fail()?;
         }
         self.render().or_fail()?;
@@ -63,7 +63,7 @@ impl App {
             preview.render(&mut frame).or_fail()?;
         }
         self.legend
-            .render(&mut frame, &self.config, &self.tree)
+            .render(&mut frame, &self.bindings, &self.tree)
             .or_fail()?;
 
         self.terminal.draw(frame).or_fail()?;
@@ -81,7 +81,7 @@ impl App {
             }
             TerminalEvent::Input(input) => {
                 let mut needs_render = self.preview.take().is_some();
-                if let Some(binding) = self.config.handle_input(input) {
+                if let Some(binding) = self.bindings.handle_input(input) {
                     if let Some(action) = binding.action.clone() {
                         self.handle_action(action).or_fail()?;
                     }
