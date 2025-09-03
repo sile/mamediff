@@ -152,7 +152,9 @@ impl App {
                 label_show,
                 label_hide,
             } => {
-                self.legend.init(label_show, label_hide, hide);
+                self.legend.label_show = label_show;
+                self.legend.label_hide = label_hide;
+                self.legend.hide = hide;
             }
             Action::ExecuteCommand(a) => {
                 self.execute_command(&a).or_fail()?;

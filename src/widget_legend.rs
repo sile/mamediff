@@ -3,9 +3,9 @@ use crate::widget_diff_tree::DiffTreeWidget;
 
 #[derive(Debug, Default)]
 pub struct LegendWidget {
-    label_show: String,
-    label_hide: String,
-    hide: bool,
+    pub label_show: String,
+    pub label_hide: String,
+    pub hide: bool,
     pub ongoing_binding_id: Option<mame::action::BindingId>,
 }
 
@@ -39,12 +39,6 @@ impl LegendWidget {
         };
         legend.render(frame)?;
         Ok(())
-    }
-
-    pub fn init(&mut self, label_show: String, label_hide: String, hide: bool) {
-        self.label_show = label_show;
-        self.label_hide = label_hide;
-        self.hide = hide;
     }
 
     pub fn toggle_hide(&mut self) {
