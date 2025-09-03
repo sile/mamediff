@@ -6,7 +6,7 @@ pub struct LegendWidget {
     label_show: String,
     label_hide: String,
     hide: bool,
-    pub ongoing_binding_id: Option<mame::action::InputBindingId>,
+    pub ongoing_binding_id: Option<mame::action::BindingId>,
 }
 
 impl LegendWidget {
