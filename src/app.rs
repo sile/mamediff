@@ -151,10 +151,12 @@ impl App {
                 hide,
                 label_show,
                 label_hide,
+                highlight_active,
             } => {
                 self.legend.label_show = label_show;
                 self.legend.label_hide = label_hide;
                 self.legend.hide = hide;
+                self.legend.highlight_active = highlight_active;
             }
             Action::ExecuteCommand(a) => {
                 self.execute_command(&a).or_fail()?;

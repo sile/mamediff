@@ -7,6 +7,7 @@ pub struct LegendWidget {
     pub label_hide: String,
     pub hide: bool,
     pub ongoing_binding_id: Option<mame::action::BindingId>,
+    pub highlight_active: bool,
 }
 
 impl LegendWidget {
@@ -27,7 +28,9 @@ impl LegendWidget {
                     .filter(|b| b.action.as_ref().is_some_and(|a| a.is_applicable(tree)))
                     .filter_map(|b| {
                         let label = b.label.as_ref()?;
-                        Some(if self.ongoing_binding_id == Some(b.id) {
+                        let highlight =
+                            self.highlight_active && self.ongoing_binding_id == Some(b.id);
+                        Some(if highlight {
                             let bold = tuinix::TerminalStyle::new().bold();
                             let reset = tuinix::TerminalStyle::RESET;
                             format!(" {bold}{label}{reset}")
