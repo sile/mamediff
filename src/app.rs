@@ -80,14 +80,12 @@ impl App {
                 self.render().or_fail()
             }
             TerminalEvent::Input(input) => {
-                let mut needs_render = self.preview.take().is_some();
-                if let Some(binding) = self.bindings.handle_input(input) {
-                    if let Some(action) = binding.action.clone() {
-                        self.handle_action(action).or_fail()?;
-                    }
-                    needs_render = true;
+                if let Some(binding) = self.bindings.handle_input(input)
+                    && let Some(action) = binding.action.clone()
+                {
+                    self.handle_action(action).or_fail()?;
                 }
-                if needs_render {
+                if self.bindings.last_binding_id().is_some() {
                     self.render().or_fail()?;
                 }
                 Ok(())
