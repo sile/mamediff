@@ -1,18 +1,22 @@
-use crate::action::ActionBindingSystem;
+use mame::action::Binding;
+
+use crate::action::Action;
 use crate::widget_diff_tree::DiffTreeWidget;
 
 #[derive(Debug, Default)]
 pub struct LegendWidget {
-    label_show: String,
-    label_hide: String,
-    hide: bool,
+    pub label_show: String,
+    pub label_hide: String,
+    pub hide: bool,
+    pub highlight_active_binding: bool,
 }
 
 impl LegendWidget {
     pub fn render(
         &self,
         frame: &mut mame::terminal::UnicodeTerminalFrame,
-        bindings: &ActionBindingSystem,
+        bindings: &[Binding<Action>],
+        current_binding_index: Option<usize>,
         tree: &DiffTreeWidget,
     ) -> std::fmt::Result {
         let legend = if self.hide {
@@ -21,21 +25,25 @@ impl LegendWidget {
             mame::legend::Legend::new(
                 &self.label_hide,
                 bindings
-                    .current_bindings()
                     .iter()
-                    .filter(|b| b.action.as_ref().is_some_and(|a| a.is_applicable(tree)))
-                    .filter_map(|b| b.label.as_ref())
-                    .map(|s| format!(" {s}")),
+                    .enumerate()
+                    .filter(|(_, b)| b.action.as_ref().is_some_and(|a| a.is_applicable(tree)))
+                    .filter_map(|(i, b)| {
+                        let label = b.label.as_ref()?;
+                        let highlight =
+                            self.highlight_active_binding && Some(i) == current_binding_index;
+                        Some(if highlight {
+                            let bold = tuinix::TerminalStyle::new().bold();
+                            let reset = tuinix::TerminalStyle::RESET;
+                            format!(" {bold}{label}{reset}")
+                        } else {
+                            format!(" {label}")
+                        })
+                    }),
             )
         };
         legend.render(frame)?;
         Ok(())
-    }
-
-    pub fn init(&mut self, label_show: String, label_hide: String, hide: bool) {
-        self.label_show = label_show;
-        self.label_hide = label_hide;
-        self.hide = hide;
     }
 
     pub fn toggle_hide(&mut self) {

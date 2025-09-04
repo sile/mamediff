@@ -1,7 +1,5 @@
 use crate::widget_diff_tree::DiffTreeWidget;
 
-pub type ActionBindingSystem = mame::action::ActionBindingSystem<Action>;
-
 #[derive(Debug, Clone)]
 pub enum Action {
     Quit,
@@ -19,6 +17,7 @@ pub enum Action {
         hide: bool,
         label_show: String,
         label_hide: String,
+        highlight_active_binding: bool,
     },
     ExecuteCommand(mame::command::ExternalCommand),
 }
@@ -68,6 +67,10 @@ impl<'text, 'raw> TryFrom<nojson::RawJsonValue<'text, 'raw>> for Action {
                     .to_member("hide")?
                     .map(bool::try_from)?
                     .unwrap_or_default();
+                let highlight_active_binding = value
+                    .to_member("highlight_active_binding")?
+                    .map(bool::try_from)?
+                    .unwrap_or_default();
                 let labels = value.to_member("labels")?.required()?;
                 let label_show = labels.to_member("show")?.required()?.try_into()?;
                 let label_hide = labels.to_member("hide")?.required()?.try_into()?;
@@ -75,6 +78,7 @@ impl<'text, 'raw> TryFrom<nojson::RawJsonValue<'text, 'raw>> for Action {
                     hide,
                     label_show,
                     label_hide,
+                    highlight_active_binding,
                 })
             }
             "execute-command" => Ok(Self::ExecuteCommand(value.try_into()?)),

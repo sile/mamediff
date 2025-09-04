@@ -1,17 +1,17 @@
+use mame::action::{BindingConfig, BindingContextName};
 use orfail::OrFail;
 use tuinix::{Terminal, TerminalEvent};
 
 use crate::{
-    action::{Action, ActionBindingSystem},
-    canvas::Canvas,
-    widget_diff_tree::DiffTreeWidget,
-    widget_legend::LegendWidget,
+    action::Action, canvas::Canvas, widget_diff_tree::DiffTreeWidget, widget_legend::LegendWidget,
 };
 
 #[derive(Debug)]
 pub struct App {
     terminal: Terminal,
-    bindings: ActionBindingSystem,
+    config: BindingConfig<Action>,
+    context: BindingContextName,
+    current_binding_index: Option<usize>,
     exit: bool,
     frame_row_start: usize,
     tree: DiffTreeWidget,
@@ -20,12 +20,14 @@ pub struct App {
 }
 
 impl App {
-    pub fn new(bindings: ActionBindingSystem) -> orfail::Result<Self> {
+    pub fn new(config: BindingConfig<Action>) -> orfail::Result<Self> {
         let terminal = Terminal::new().or_fail()?;
         let tree = DiffTreeWidget::new(terminal.size()).or_fail()?;
         Ok(Self {
             terminal,
-            bindings,
+            context: config.initial_context().clone(),
+            config,
+            current_binding_index: None,
             exit: false,
             frame_row_start: 0,
             tree,
@@ -35,7 +37,7 @@ impl App {
     }
 
     pub fn run(mut self) -> orfail::Result<()> {
-        if let Some(action) = self.bindings.setup_action().cloned() {
+        if let Some(action) = self.config.setup_action().cloned() {
             self.handle_action(action).or_fail()?;
         }
         self.render().or_fail()?;
@@ -62,9 +64,11 @@ impl App {
         if let Some(preview) = &mut self.preview {
             preview.render(&mut frame).or_fail()?;
         }
-        self.legend
-            .render(&mut frame, &self.bindings, &self.tree)
-            .or_fail()?;
+        if let Some(bindings) = self.config.get_bindings(&self.context) {
+            self.legend
+                .render(&mut frame, bindings, self.current_binding_index, &self.tree)
+                .or_fail()?;
+        }
 
         self.terminal.draw(frame).or_fail()?;
 
@@ -80,12 +84,25 @@ impl App {
                 self.render().or_fail()
             }
             TerminalEvent::Input(input) => {
-                if let Some(binding) = self.bindings.handle_input(input)
-                    && let Some(action) = binding.action.clone()
+                let bindings = self.config.get_bindings(&self.context).or_fail()?;
+                if let Some((index, binding)) =
+                    bindings.iter().enumerate().find(|(_, b)| b.matches(input))
                 {
-                    self.handle_action(action).or_fail()?;
-                }
-                if self.bindings.last_binding_id().is_some() {
+                    let next_context = binding.context.clone();
+                    let action = binding.action.clone();
+
+                    if let Some(action) = action {
+                        if self.legend.highlight_active_binding {
+                            self.current_binding_index = Some(index);
+                            self.render().or_fail()?;
+                            self.current_binding_index = None;
+                        }
+                        self.handle_action(action).or_fail()?;
+                    }
+
+                    if let Some(context) = next_context {
+                        self.context = context;
+                    }
                     self.render().or_fail()?;
                 }
                 Ok(())
@@ -147,8 +164,12 @@ impl App {
                 hide,
                 label_show,
                 label_hide,
+                highlight_active_binding,
             } => {
-                self.legend.init(label_show, label_hide, hide);
+                self.legend.label_show = label_show;
+                self.legend.label_hide = label_hide;
+                self.legend.hide = hide;
+                self.legend.highlight_active_binding = highlight_active_binding;
             }
             Action::ExecuteCommand(a) => {
                 self.execute_command(&a).or_fail()?;
