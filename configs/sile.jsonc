@@ -21,6 +21,7 @@
       "type": "init-legend",
       "hide": {"ref": "MAMEDIFF_HIDE_LEGEND"},
       "labels": {"show": "s(h)ow", "hide": "(h)ide"},
+      "highlight_active": true,
     },
   },
   "bindings": {

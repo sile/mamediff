@@ -83,8 +83,10 @@ impl App {
                 if let Some(binding) = self.bindings.handle_input(input)
                     && let Some(action) = binding.action.clone()
                 {
-                    self.legend.ongoing_binding_id = Some(binding.id);
-                    self.render().or_fail()?;
+                    if self.legend.highlight_active {
+                        self.legend.ongoing_binding_id = Some(binding.id);
+                        self.render().or_fail()?;
+                    }
 
                     self.handle_action(action).or_fail()?;
                     self.legend.ongoing_binding_id = None;
