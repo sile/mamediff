@@ -38,7 +38,7 @@ impl App {
 
     pub fn run(mut self) -> orfail::Result<()> {
         if let Some(action) = self.config.setup_action().cloned() {
-            self.handle_action(&action).or_fail()?;
+            self.handle_action(action).or_fail()?;
         }
         self.render().or_fail()?;
 
@@ -96,7 +96,7 @@ impl App {
                         if self.legend.highlight_active {
                             self.render().or_fail()?;
                         }
-                        self.handle_action(&action).or_fail()?;
+                        self.handle_action(action).or_fail()?;
                     }
                     self.current_binding_index = None;
 
@@ -111,7 +111,7 @@ impl App {
         }
     }
 
-    fn handle_action(&mut self, action: &Action) -> orfail::Result<()> {
+    fn handle_action(&mut self, action: Action) -> orfail::Result<()> {
         match action {
             Action::Quit => {
                 self.exit = true;
@@ -166,10 +166,10 @@ impl App {
                 label_hide,
                 highlight_active,
             } => {
-                self.legend.label_show = label_show.clone();
-                self.legend.label_hide = label_hide.clone();
-                self.legend.hide = *hide;
-                self.legend.highlight_active = *highlight_active;
+                self.legend.label_show = label_show;
+                self.legend.label_hide = label_hide;
+                self.legend.hide = hide;
+                self.legend.highlight_active = highlight_active;
             }
             Action::ExecuteCommand(a) => {
                 self.execute_command(&a).or_fail()?;
