@@ -1,6 +1,7 @@
 use std::path::PathBuf;
 
-use mamediff::{action::ActionBindingSystem, app::App, git};
+use mame::action::BindingConfig;
+use mamediff::{app::App, git};
 use orfail::OrFail;
 
 fn main() -> noargs::Result<()> {
@@ -37,13 +38,13 @@ fn main() -> noargs::Result<()> {
         std::process::exit(1);
     };
 
-    let bindings = if let Some(path) = config_path {
-        ActionBindingSystem::load_from_file(path)?
+    let config = if let Some(path) = config_path {
+        BindingConfig::load_from_file(path)?
     } else {
-        ActionBindingSystem::load_from_str("<DEFAULT>", include_str!("../configs/default.jsonc"))?
+        BindingConfig::load_from_str("<DEFAULT>", include_str!("../configs/default.jsonc"))?
     };
 
-    let app = App::new(bindings).or_fail()?;
+    let app = App::new(config).or_fail()?;
     app.run().or_fail()?;
     Ok(())
 }
