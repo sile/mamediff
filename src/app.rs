@@ -91,14 +91,14 @@ impl App {
                     let next_context = binding.context.clone();
                     let action = binding.action.clone();
 
-                    self.current_binding_index = Some(index);
                     if let Some(action) = action {
                         if self.legend.highlight_active {
+                            self.current_binding_index = Some(index);
                             self.render().or_fail()?;
+                            self.current_binding_index = None;
                         }
                         self.handle_action(action).or_fail()?;
                     }
-                    self.current_binding_index = None;
 
                     if let Some(context) = next_context {
                         self.context = context;
