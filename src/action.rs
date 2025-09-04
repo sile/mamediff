@@ -67,8 +67,8 @@ impl<'text, 'raw> TryFrom<nojson::RawJsonValue<'text, 'raw>> for Action {
                     .to_member("hide")?
                     .map(bool::try_from)?
                     .unwrap_or_default();
-                let highlight_active = value
-                    .to_member("highlight_active")?
+                let highlight_active_binding = value
+                    .to_member("highlight_active_binding")?
                     .map(bool::try_from)?
                     .unwrap_or_default();
                 let labels = value.to_member("labels")?.required()?;
@@ -78,7 +78,7 @@ impl<'text, 'raw> TryFrom<nojson::RawJsonValue<'text, 'raw>> for Action {
                     hide,
                     label_show,
                     label_hide,
-                    highlight_active,
+                    highlight_active_binding,
                 })
             }
             "execute-command" => Ok(Self::ExecuteCommand(value.try_into()?)),

@@ -8,7 +8,7 @@ pub struct LegendWidget {
     pub label_show: String,
     pub label_hide: String,
     pub hide: bool,
-    pub highlight_active: bool,
+    pub highlight_active_binding: bool,
 }
 
 impl LegendWidget {
@@ -30,7 +30,8 @@ impl LegendWidget {
                     .filter(|(_, b)| b.action.as_ref().is_some_and(|a| a.is_applicable(tree)))
                     .filter_map(|(i, b)| {
                         let label = b.label.as_ref()?;
-                        let highlight = self.highlight_active && Some(i) == current_binding_index;
+                        let highlight =
+                            self.highlight_active_binding && Some(i) == current_binding_index;
                         Some(if highlight {
                             let bold = tuinix::TerminalStyle::new().bold();
                             let reset = tuinix::TerminalStyle::RESET;

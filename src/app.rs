@@ -92,7 +92,7 @@ impl App {
                     let action = binding.action.clone();
 
                     if let Some(action) = action {
-                        if self.legend.highlight_active {
+                        if self.legend.highlight_active_binding {
                             self.current_binding_index = Some(index);
                             self.render().or_fail()?;
                             self.current_binding_index = None;
@@ -164,12 +164,12 @@ impl App {
                 hide,
                 label_show,
                 label_hide,
-                highlight_active,
+                highlight_active_binding,
             } => {
                 self.legend.label_show = label_show;
                 self.legend.label_hide = label_hide;
                 self.legend.hide = hide;
-                self.legend.highlight_active = highlight_active;
+                self.legend.highlight_active_binding = highlight_active_binding;
             }
             Action::ExecuteCommand(a) => {
                 self.execute_command(&a).or_fail()?;
