@@ -12,9 +12,9 @@ readme = "README.md"
 categories = ["command-line-utilities"]
 
 [dependencies]
-mame = "0.2.1"
+mame = "0.2.2"
 noargs = "0.4.1"
-nojson = "0.3.4"
+nojson = "0.3.6"
 orfail = "1.1.0"
 tuinix = "0.3.2"
 
