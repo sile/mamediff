@@ -36,7 +36,7 @@ impl App {
 
     pub fn run(mut self) -> orfail::Result<()> {
         if let Some(action) = self.bindings.setup_action().cloned() {
-            self.handle_action(action).or_fail()?;
+            self.handle_action(&action).or_fail()?;
         }
         self.render().or_fail()?;
 
@@ -80,17 +80,20 @@ impl App {
                 self.render().or_fail()
             }
             TerminalEvent::Input(input) => {
-                if let Some(binding) = self.bindings.handle_input(input)
-                    && let Some(action) = binding.action.clone()
-                {
-                    if self.legend.highlight_active {
-                        self.render().or_fail()?;
-                    }
+                if let Some(binding) = self.bindings.handle_input(input) {
+                    self.legend.current_binding = Some(binding.clone());
+                    if let Some(action) = &binding.action {
+                        if self.legend.highlight_active {
+                            self.render().or_fail()?;
+                        }
 
-                    self.handle_action(action).or_fail()?;
+                        self.handle_action(action).or_fail()?;
+                    }
                 }
-                if self.bindings.last_binding().is_some() {
-                    self.bindings.apply_last_context_switch();
+                if let Some(binding) = self.legend.current_binding.take() {
+                    if let Some(context) = &binding.context {
+                        self.bindings.set_current_context(context);
+                    }
                     self.render().or_fail()?;
                 }
                 Ok(())
@@ -99,7 +102,7 @@ impl App {
         }
     }
 
-    fn handle_action(&mut self, action: Action) -> orfail::Result<()> {
+    fn handle_action(&mut self, action: &Action) -> orfail::Result<()> {
         match action {
             Action::Quit => {
                 self.exit = true;
@@ -154,10 +157,10 @@ impl App {
                 label_hide,
                 highlight_active,
             } => {
-                self.legend.label_show = label_show;
-                self.legend.label_hide = label_hide;
-                self.legend.hide = hide;
-                self.legend.highlight_active = highlight_active;
+                self.legend.label_show = label_show.clone();
+                self.legend.label_hide = label_hide.clone();
+                self.legend.hide = *hide;
+                self.legend.highlight_active = *highlight_active;
             }
             Action::ExecuteCommand(a) => {
                 self.execute_command(&a).or_fail()?;

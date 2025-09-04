@@ -1,4 +1,8 @@
-use crate::action::ActionBindingSystem;
+use std::sync::Arc;
+
+use mame::action::Binding;
+
+use crate::action::{Action, ActionBindingSystem};
 use crate::widget_diff_tree::DiffTreeWidget;
 
 #[derive(Debug, Default)]
@@ -7,6 +11,7 @@ pub struct LegendWidget {
     pub label_hide: String,
     pub hide: bool,
     pub highlight_active: bool,
+    pub current_binding: Option<Arc<Binding<Action>>>,
 }
 
 impl LegendWidget {
@@ -27,7 +32,11 @@ impl LegendWidget {
                     .filter(|b| b.action.as_ref().is_some_and(|a| a.is_applicable(tree)))
                     .filter_map(|b| {
                         let label = b.label.as_ref()?;
-                        let highlight = self.highlight_active && bindings.is_last_binding(b);
+                        let highlight = self.highlight_active
+                            && self
+                                .current_binding
+                                .as_ref()
+                                .is_some_and(|binding| Arc::ptr_eq(binding, b));
                         Some(if highlight {
                             let bold = tuinix::TerminalStyle::new().bold();
                             let reset = tuinix::TerminalStyle::RESET;
