@@ -84,14 +84,13 @@ impl App {
                     && let Some(action) = binding.action.clone()
                 {
                     if self.legend.highlight_active {
-                        self.legend.ongoing_binding_id = Some(binding.id);
                         self.render().or_fail()?;
                     }
 
                     self.handle_action(action).or_fail()?;
-                    self.legend.ongoing_binding_id = None;
                 }
-                if self.bindings.last_binding_id().is_some() {
+                if self.bindings.last_binding().is_some() {
+                    self.bindings.apply_last_context_switch();
                     self.render().or_fail()?;
                 }
                 Ok(())
