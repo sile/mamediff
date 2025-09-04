@@ -84,9 +84,9 @@ impl App {
                 self.render().or_fail()
             }
             TerminalEvent::Input(input) => {
-                if let Some(bindings) = self.config.get_bindings(&self.context)
-                    && let Some((index, binding)) =
-                        bindings.iter().enumerate().find(|(_, b)| b.matches(input))
+                let bindings = self.config.get_bindings(&self.context).or_fail()?;
+                if let Some((index, binding)) =
+                    bindings.iter().enumerate().find(|(_, b)| b.matches(input))
                 {
                     let next_context = binding.context.clone();
                     let action = binding.action.clone();
