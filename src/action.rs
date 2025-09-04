@@ -17,7 +17,7 @@ pub enum Action {
         hide: bool,
         label_show: String,
         label_hide: String,
-        highlight_active: bool,
+        highlight_active_binding: bool,
     },
     ExecuteCommand(mame::command::ExternalCommand),
 }
