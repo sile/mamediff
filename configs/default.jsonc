@@ -1,3 +1,4 @@
+// [NOTE] The configuration file format is experimental and may change in future versions.
 {
   "variables": {
     "MAMEDIFF_HIDE_LEGEND": {
