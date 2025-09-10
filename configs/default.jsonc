@@ -1,16 +1,10 @@
 // [NOTE] The configuration file format is experimental and may change in future versions.
 {
-  "variables": {
-    "MAMEDIFF_HIDE_LEGEND": {
-      "type": "env",
-      "default": false,
-    },
-  },
   "setup": {
     "context": "@main",
     "action": {
       "type": "init-legend",
-      "hide": {"ref": "MAMEDIFF_HIDE_LEGEND"},
+      "hide": {"env!": "MAMEDIFF_HIDE_LEGEND", "default": false},
       "labels": {"show": "s(H)ow", "hide": "(H)ide"},
     },
   },
