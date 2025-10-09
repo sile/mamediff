@@ -3,7 +3,7 @@ name: Release
 on:
   push:
     tags:
-      - '*'
+      - 'v*'
 
 jobs:
   github-release:
@@ -19,19 +19,26 @@ jobs:
 
       - name: Get the version
         id: get_version
-        run: echo "VERSION=${GITHUB_REF/refs\/tags\//}" >> $GITHUB_OUTPUT
+        run: echo "VERSION=${GITHUB_REF/refs\/tags\/v/}" >> $GITHUB_OUTPUT
 
       - name: Create Release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           gh release create ${{ steps.get_version.outputs.VERSION }} \
-            --title "${{ steps.get_version.outputs.VERSION }}" \
+            --title "v${{ steps.get_version.outputs.VERSION }}" \
             --generate-notes
 
   linux-binary:
     name: 'Upload Binary for Linux'
-    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        platform:
+          - target: x86_64-unknown-linux-musl
+            runs-on: ubuntu-latest
+          - target: aarch64-unknown-linux-musl
+            runs-on: ubuntu-latest-arm
+    runs-on: ${{ matrix.platform.runs-on }}
     needs: github-release
     steps:
       - name: Checkout sources
@@ -41,16 +48,17 @@ jobs:
         run: sudo apt install -y musl-tools
 
       - run: rustup update stable
-      - run: rustup target add x86_64-unknown-linux-musl
-      - run: cargo build --release --target=x86_64-unknown-linux-musl
+      - run: rustup default stable
+      - run: rustup target add ${{ matrix.platform.target }}
+      - run: cargo build --release --target=${{ matrix.platform.target }}
 
       - name: Upload Release Asset
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          mv target/x86_64-unknown-linux-musl/release/mamediff mamediff-${{ needs.github-release.outputs.version }}.x86_64-unknown-linux-musl
+          mv target/${{ matrix.platform.target }}/release/mamediff mamediff-${{ needs.github-release.outputs.version }}.${{ matrix.platform.target }}
           gh release upload ${{ needs.github-release.outputs.version }} \
-            mamediff-${{ needs.github-release.outputs.version }}.x86_64-unknown-linux-musl
+            mamediff-${{ needs.github-release.outputs.version }}.${{ matrix.platform.target }}
 
   macos-binary:
     name: 'Upload Binary for MacOS'
@@ -58,12 +66,13 @@ jobs:
     needs: github-release
     strategy:
       matrix:
-        target: ["x86_64-apple-darwin", "aarch64-apple-darwin"]
+        target: ["aarch64-apple-darwin"]
     steps:
       - name: Checkout sources
         uses: actions/checkout@v5
 
       - run: rustup update stable
+      - run: rustup default stable
       - run: rustup target add ${{ matrix.target }}
       - run: cargo build --release --target=${{ matrix.target }}
 
@@ -78,6 +87,10 @@ jobs:
   publish-crates:
     name: 'Publish to crates.io'
     runs-on: ubuntu-latest
+    needs:
+      - github-release
+      - linux-binary
+      - macos-binary
     permissions:
       id-token: write
     steps:
@@ -85,6 +98,7 @@ jobs:
         uses: actions/checkout@v5
 
       - run: rustup update stable
+      - run: rustup default stable
 
       - name: Authenticate with crates.io
         uses: rust-lang/crates-io-auth-action@v1
