@@ -57,7 +57,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           mv target/${{ matrix.platform.target }}/release/mamediff mamediff-${{ needs.github-release.outputs.version }}.${{ matrix.platform.target }}
-          gh release upload ${{ needs.github-release.outputs.version }} \
+          gh release upload v${{ needs.github-release.outputs.version }} \
             mamediff-${{ needs.github-release.outputs.version }}.${{ matrix.platform.target }}
 
   macos-binary:
@@ -81,7 +81,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           mv target/${{ matrix.target }}/release/mamediff mamediff-${{ needs.github-release.outputs.version }}.${{ matrix.target }}
-          gh release upload ${{ needs.github-release.outputs.version }} \
+          gh release upload v${{ needs.github-release.outputs.version }} \
             mamediff-${{ needs.github-release.outputs.version }}.${{ matrix.target }}
 
   publish-crates:
