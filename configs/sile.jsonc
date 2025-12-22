@@ -78,6 +78,7 @@
               "Under 80 characters. ",
               "No explanations or commentary or ``` ... ``` format.'",
               "  -e 'git log --oneline -10'",
+              "  --enable-agents-md",
               "| git commit -F -",
             ],
           ],
