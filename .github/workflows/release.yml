@@ -15,7 +15,7 @@ jobs:
       version: ${{ steps.get_version.outputs.VERSION }}
     steps:
       - name: Checkout sources
-        uses: actions/checkout@v5
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
       - name: Get the version
         id: get_version
@@ -42,7 +42,7 @@ jobs:
     needs: github-release
     steps:
       - name: Checkout sources
-        uses: actions/checkout@v5
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
       - name: Install dependent packages
         run: sudo apt install -y musl-tools
@@ -69,7 +69,7 @@ jobs:
         target: ["aarch64-apple-darwin"]
     steps:
       - name: Checkout sources
-        uses: actions/checkout@v5
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
       - run: rustup update stable
       - run: rustup default stable
@@ -95,13 +95,13 @@ jobs:
       id-token: write
     steps:
       - name: Checkout sources
-        uses: actions/checkout@v5
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
       - run: rustup update stable
       - run: rustup default stable
 
       - name: Authenticate with crates.io
-        uses: rust-lang/crates-io-auth-action@v1
+        uses: rust-lang/crates-io-auth-action@bbd81622f20ce9e2dd9622e3218b975523e45bbe # v1.0.4
         id: auth
 
       - name: Publish to crates.io
